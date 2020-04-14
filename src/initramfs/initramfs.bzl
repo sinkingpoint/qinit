@@ -1,3 +1,7 @@
+"""
+Builds an initramfs from a given set of libraries and binaries
+"""
+
 def to_path(f):
     return f.path
 
