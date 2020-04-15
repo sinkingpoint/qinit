@@ -39,6 +39,8 @@ def _initramfs_impl(ctx):
         use_default_shell_env = True,
     )
 
+    return OutputGroupInfo(out = [ctx.outputs.out])
+
 initramfs = rule(
     implementation = _initramfs_impl,
     attrs = {

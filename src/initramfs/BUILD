@@ -12,7 +12,8 @@ py_binary(
 initramfs(
     name = "initramfs",
     bins = [
-        "//src/coreutils/echo"
+        "//src/coreutils/echo",
+        "//src/sh",
     ],
     libs = [
         "vendor/ld-linux-x86-64.so.2",
@@ -23,7 +24,8 @@ initramfs(
         "vendor/libpthread.so.0",
         "vendor/librt.so.1",
         "vendor/libstdc++.so.6",
+        "vendor/libtinfo.so.6",
     ],
     init_script = "init.sh",
-    out = "initramfs.cpio.gz"
+    out = "initramfs.igz"
 )

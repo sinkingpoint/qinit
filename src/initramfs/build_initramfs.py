@@ -4,6 +4,8 @@ import pathlib
 import shutil
 import subprocess
 import os.path
+import os
+import stat
 
 def mkdir(base_dir, dir):
     pathlib.Path("{}{}".format(base_dir, dir)).mkdir(parents=True, exist_ok=True)
@@ -13,15 +15,20 @@ def main(bins, libs, init, output_file, compress):
     mkdir(base_dir, "/bin")
     mkdir(base_dir, "/lib64")
     files = []
+    files.append("./bin")
+    files.append("./lib64")
     for exe in bins:
         shutil.copy(exe, base_dir+"/bin")
+        os.chmod("{}/bin/{}".format(base_dir, os.path.basename(exe)), 0o755)
         files.append("./bin/{}".format(os.path.basename(exe)))
     
     for lib in libs:
         shutil.copy(lib, base_dir+"/lib64")
+        os.chmod("{}/lib64/{}".format(base_dir, os.path.basename(lib)), 0o777)
         files.append("./lib64/{}".format(os.path.basename(lib)))
     
     shutil.copyfile(init, base_dir+"/init")
+    os.chmod(base_dir+"/init", 0o755)
     files.append("./init")
     p = subprocess.Popen(['cpio', '-H', 'newc', '-o'], stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, cwd=base_dir)
     output = p.communicate(input='\n'.join(files).encode('utf-8'))[0]

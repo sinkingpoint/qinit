@@ -1,3 +1,3 @@
 #!/bin/sh
 
-echo "cats and dogs"
+echo "cats and dogs 2"
