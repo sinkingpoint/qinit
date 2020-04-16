@@ -1,5 +1,7 @@
 extern crate nix;
 
+pub mod strings;
+
 pub mod io {
     pub const STDIN_FD: i32 = 0;
     pub const STDOUT_FD: i32 = 1;
