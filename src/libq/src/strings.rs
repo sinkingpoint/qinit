@@ -1,25 +1,26 @@
 use std::str::Chars;
+use std::fmt;
 
 enum QuoteType {
-    SINGLE,
-    DOUBLE,
-    NONE
+    Single,
+    Double,
+    None
 }
 
 impl QuoteType {
     fn from_char(chr: char) -> QuoteType {
         match chr {
-            '\'' => QuoteType::SINGLE,
-            '\"' => QuoteType::DOUBLE,
-            _ => QuoteType::NONE,
+            '\'' => QuoteType::Single,
+            '\"' => QuoteType::Double,
+            _ => QuoteType::None,
         }
     }
 
     fn get_char(&self) -> char {
         match &self {
-            QuoteType::SINGLE => '\'',
-            QuoteType::DOUBLE => '"',
-            QuoteType::NONE => '\0',
+            QuoteType::Single => '\'',
+            QuoteType::Double => '"',
+            QuoteType::None => '\0',
         }
     }
 }
@@ -34,20 +35,62 @@ struct Token {
 impl Token {
     fn skip_whitespace(&self) -> bool {
         return match self.in_quotes {
-            QuoteType::NONE => true,
+            QuoteType::None => true,
             _ => false
         }
     }
 }
 
+pub enum TokenizationError {
+    UnclosedQuote,
+    InvalidEscapeChar,
+    Done,
+}
+
+impl TokenizationError {
+    pub fn is_continuable(&self) -> bool{
+        match self {
+            TokenizationError::UnclosedQuote | TokenizationError::Done => true,
+            TokenizationError::InvalidEscapeChar => false,
+        }
+    }
+}
+
+impl fmt::Display for TokenizationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TokenizationError::UnclosedQuote => write!(f, "Unclosed Quote"),
+            TokenizationError::InvalidEscapeChar => write!(f, "Invalid Escape Char"),
+            TokenizationError::Done => write!(f, "Done")
+        }
+    }
+}
+
 pub struct Tokenizer<'a> {
-    iter: std::iter::Peekable<Chars<'a>>
+    base: &'a str,
+    iter: std::iter::Peekable<Chars<'a>>,
+    last_err: Option<TokenizationError>
 }
 
 impl<'a> Tokenizer<'a> {
     pub fn new(corpus: &'a str) -> Tokenizer{
         return Tokenizer {
+            base: corpus,
             iter: corpus.chars().peekable(),
+            last_err: None,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.iter = self.base.chars().peekable();
+    }
+
+    pub fn try_tokenize(&mut self) -> Result<Vec<String>, &TokenizationError> {
+        let tokens = self.collect();
+        self.reset();
+        return match &self.last_err {
+            Some(err) => Err(err),
+            None => Ok(tokens)
         }
     }
 }
@@ -60,7 +103,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             build: "".to_string(),
             started: false,
             ended: false,
-            in_quotes: QuoteType::NONE
+            in_quotes: QuoteType::None
         };
 
         // If the current token hasn't started, lets skip whitespace until we get to the start
@@ -74,10 +117,9 @@ impl<'a> Iterator for Tokenizer<'a> {
             current_token.started = true;
             let new_char = self.iter.next().unwrap();
             if new_char == '"' || new_char == '\''{
-                let new_quote = QuoteType::from_char(new_char);
                 current_token.in_quotes = match current_token.in_quotes {
-                    QuoteType::NONE => new_quote,
-                    _ if new_char == current_token.in_quotes.get_char() => QuoteType::NONE,
+                    QuoteType::None => QuoteType::from_char(new_char),
+                    _ if new_char == current_token.in_quotes.get_char() => QuoteType::None,
                     _ => {
                         current_token.build.push(new_char);
                         current_token.in_quotes
@@ -97,8 +139,8 @@ impl<'a> Iterator for Tokenizer<'a> {
                         't' => '\t',
                         '0' => '\0',
                         _ => {
-                            // TODO: Handle invalid escape chars here
-                            panic!("Invalid escape char: \\{}", esc_char);
+                            self.last_err = Some(TokenizationError::InvalidEscapeChar);
+                            return None;
                         }
                     };
                     current_token.build.push(actual_char);
@@ -124,13 +166,22 @@ impl<'a> Iterator for Tokenizer<'a> {
             if self.iter.peek().is_none() {
                 // We're at the end of the string
                 // If we're still in a quote, we've got an error, so TODO: actually make that an error
-                if current_token.started {
-                    return Some(current_token.build);
+                match current_token.in_quotes {
+                    QuoteType::Single | QuoteType::Double => {
+                        self.last_err = Some(TokenizationError::UnclosedQuote);
+                        return None;
+                    },
+                    QuoteType::None => {
+                        if current_token.started {
+                            return Some(current_token.build);
+                        }
+                        return None;
+                    }
                 }
-                return None;
             }
             else {
-                return None; // Here we should handle the case where we're at the end of the string, but not at the end of a token
+                self.last_err = Some(TokenizationError::Done);
+                return None;
             }
         }
     }
