@@ -1,57 +1,13 @@
 extern crate nix;
 extern crate libq;
 
-use nix::sys::signal;
-use nix::unistd;
 use std::env;
 
 mod process;
 mod builtins;
+mod shell;
 
-fn _init_shell() -> process::Shell{
-    let is_interactive = match unistd::isatty(libq::io::STDIN_FD) {
-        Ok(tty) => tty,
-        Err(errno) => {
-            panic!("STDIN is being weird: {}", errno);
-        }
-    };
-
-    let my_pgid = unistd::getpgrp();
-    if is_interactive {
-        let mut fg_pgid = match unistd::tcgetpgrp(libq::io::STDIN_FD) {
-            Ok(is_fg) => is_fg,
-            Err(errno) => {
-                panic!("STDIN is being weird: {}", errno);
-            }
-        };
-
-        while fg_pgid != my_pgid {
-            signal::kill(my_pgid, signal::SIGTTIN).unwrap();
-            fg_pgid = match unistd::tcgetpgrp(libq::io::STDIN_FD) {
-                Ok(is_fg) => is_fg,
-                Err(errno) => {
-                    panic!("STDIN is being weird: {}", errno);
-                }
-            };
-        }
-
-        unsafe {
-            signal::signal(signal::SIGINT, signal::SigHandler::SigIgn).unwrap();
-            signal::signal(signal::SIGQUIT, signal::SigHandler::SigIgn).unwrap();
-            signal::signal(signal::SIGTSTP, signal::SigHandler::SigIgn).unwrap();
-            signal::signal(signal::SIGTTIN, signal::SigHandler::SigIgn).unwrap();
-            signal::signal(signal::SIGTTOU, signal::SigHandler::SigIgn).unwrap();
-        }
-
-        let my_pid = unistd::getpid();
-        unistd::setpgid(my_pid, my_pid).expect("Failed to set PGID for shell");
-        unistd::tcsetpgrp(libq::io::STDIN_FD, my_pid).expect("Failed to become the foreground process");
-    }
-
-    return process::Shell::new(is_interactive, my_pgid, libq::io::STDIN_FD);
-}
-
-fn process_line(shell: &process::Shell, tokens: &Vec<String>) -> Option<u32> {
+fn process_line(shell: &shell::Shell, tokens: &Vec<String>) -> Option<u32> {
     let mut pipeline = Vec::new();
     let mut current_process = process::Process::new();
 
@@ -77,7 +33,7 @@ fn process_line(shell: &process::Shell, tokens: &Vec<String>) -> Option<u32> {
 
 const VERSION: &str = "0.0.1";
 
-fn print_prompt(shell: &process::Shell, continue_prompt: bool) {
+fn print_prompt(shell: &shell::Shell, continue_prompt: bool) {
     if continue_prompt {
         shell.write("> ");
     }
@@ -90,7 +46,7 @@ fn print_prompt(shell: &process::Shell, continue_prompt: bool) {
 }
 
 fn main() {
-    let mut shell = _init_shell();
+    let mut shell = shell::Shell::new();
     let reader = std::io::stdin();
     let mut current_buffer = String::new();
     let mut at_eof = false;

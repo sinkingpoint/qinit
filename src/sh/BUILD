@@ -5,6 +5,7 @@ rust_binary(
     srcs = [
         "src/main.rs",
         "src/process.rs",
+        "src/shell.rs",
         "src/builtins.rs"
     ],
     deps = [
