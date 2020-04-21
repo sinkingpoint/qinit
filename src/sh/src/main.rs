@@ -1,7 +1,6 @@
 extern crate nix;
 extern crate libq;
 
-use std::io::Write;
 use nix::sys::signal;
 use nix::unistd;
 use std::env;
@@ -52,7 +51,7 @@ fn _init_shell() -> process::Shell{
     return process::Shell::new(is_interactive, my_pgid, libq::io::STDIN_FD);
 }
 
-fn process_line(shell: &process::Shell, tokens: &Vec<String>) -> Option<process::Pipeline> {
+fn process_line(shell: &process::Shell, tokens: &Vec<String>) -> Option<u32> {
     let mut pipeline = Vec::new();
     let mut current_process = process::Process::new();
 
@@ -73,24 +72,21 @@ fn process_line(shell: &process::Shell, tokens: &Vec<String>) -> Option<process:
     }
 
     pipeline.push(current_process);
-    return Some(process::Pipeline::new(pipeline, Some(shell.parent_pgid)));
+    return None;
 }
 
 const VERSION: &str = "0.0.1";
 
 fn print_prompt(shell: &process::Shell, continue_prompt: bool) {
-    let this_argv0 = env::args().next().unwrap();
-    let this_exe = std::path::Path::new(&this_argv0);
-    let prompt = format!("{}-{}$ ", this_exe.file_name().unwrap().to_string_lossy(), VERSION);
-    if shell.is_interactive {
-        if !continue_prompt {
-            print!("{}", prompt);
-        }
-        else {
-            print!("> ");
-        }
+    if continue_prompt {
+        shell.write("> ");
     }
-    std::io::stdout().flush().expect("Failed writing to stdout");
+    else {
+        let this_argv0 = env::args().next().unwrap();
+        let this_exe = std::path::Path::new(&this_argv0);
+        let prompt = format!("{}-{}$ ", this_exe.file_name().unwrap().to_string_lossy(), VERSION);
+        shell.write(&prompt);
+    }
 }
 
 fn main() {
@@ -123,11 +119,11 @@ fn main() {
                 //Process Tokens
                 current_buffer.clear();
                 match process_line(&shell, &tokens) {
-                    Some(pipeline) => pipeline.start(&mut shell, true),
+                    Some(pipeline) => {},
                     None => {}
                 }
 
-                match shell.exitcode {
+                match shell.has_exitted() {
                     Some(exitcode) => break,
                     None => {}
                 }
@@ -135,7 +131,5 @@ fn main() {
         }
     }
 
-    if shell.is_interactive {
-        println!("\n\nGoodbye");
-    }
+    shell.write("\n\nGoodbye");
 }

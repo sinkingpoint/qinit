@@ -3,16 +3,16 @@ extern crate nix;
 use nix::unistd::{fork, ForkResult, Pid, getpid, setpgid, tcsetpgrp, execvp};
 use nix::sys::signal;
 use std::ffi::{CStr, CString};
-use nix::sys::wait::{waitpid, WaitPidFlag};
 use std::collections::HashMap;
+use std::io::Write;
 use builtins;
 
 pub struct Shell {
-    pub is_interactive: bool,
-    pub parent_pgid: Pid,
+    is_interactive: bool,
+    parent_pgid: Pid,
     terminal_fd: i32,
     builtins: HashMap<String, builtins::Builtin>,
-    pub exitcode: Option<u8>,
+    exitcode: Option<u8>,
 }
 
 impl Shell {
@@ -28,6 +28,14 @@ impl Shell {
         }
     }
 
+    pub fn get_parent_pgid(&self) -> Pid {
+        return self.parent_pgid;
+    }
+
+    pub fn is_interactive(&self) -> bool {
+        return self.is_interactive;
+    }
+
     pub fn is_builtin(&self, name: &String) -> bool{
         return self.builtins.contains_key(name);
     }
@@ -38,6 +46,17 @@ impl Shell {
 
     pub fn exit(&mut self, code: u8) {
         self.exitcode = Some(code);
+    }
+
+    pub fn write(&self, text: &str) {
+        if self.is_interactive() {
+            print!("{}", text);
+        }
+        std::io::stdout().flush().expect("Failed writing to stdout");
+    }
+
+    pub fn has_exitted(&self) -> Option<u8> {
+        return self.exitcode;
     }
 }
 
@@ -87,40 +106,6 @@ impl Process {
             },
             Err(e) => {
                 panic!("Failed to exec: {}", e);
-            }
-        }
-    }
-}
-
-pub struct Pipeline {
-    processes: Vec<Process>,
-    pgid: Option<Pid>
-}
-
-impl Pipeline {
-    pub fn new(pipeline: Vec<Process>, pgid: Option<Pid>) -> Pipeline{
-        return Pipeline {
-            processes: pipeline,
-            pgid: pgid
-        };
-    }
-
-    pub fn start(&self, shell: &mut Shell, foreground: bool) {
-        for process in &self.processes {
-            if shell.is_builtin(&process.proc_name) {
-                shell.run_builtin(&process.proc_name, &process.argv);
-                continue;
-            }
-
-            match fork() {
-                Ok(ForkResult::Parent { child, .. }) => {
-                    waitpid(child, Some(WaitPidFlag::WUNTRACED | WaitPidFlag::__WALL)).expect("Failed waiting for child");
-                    tcsetpgrp(shell.terminal_fd, shell.parent_pgid);
-                }
-                Ok(ForkResult::Child) => {
-                    process.launch(shell, self.pgid.unwrap(), foreground);
-                },
-                Err(_) => println!("Fork failed"),
             }
         }
     }
