@@ -1,13 +1,12 @@
 extern crate nix;
 
-use nix::unistd::{fork, ForkResult, Pid, getpid, setpgid, tcsetpgrp, execvp};
-use nix::sys::signal;
 use std::ffi::{CStr, CString};
+use nix::unistd::execvp;
 use shell;
 
 pub struct Process {
-    proc_name: String,
-    argv: Vec<String>
+    pub proc_name: String,
+    pub argv: Vec<String>
 }
 
 impl Process {

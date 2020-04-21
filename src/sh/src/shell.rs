@@ -6,8 +6,8 @@ use builtins;
 
 pub struct Shell {
     is_interactive: bool,
-    parent_pgid: Pid,
-    terminal_fd: i32,
+    pub parent_pgid: Pid,
+    pub terminal_fd: i32,
     builtins: HashMap<String, builtins::Builtin>,
     exitcode: Option<u8>,
 }
@@ -95,7 +95,7 @@ impl Shell {
         return self.builtins.contains_key(name);
     }
 
-    pub fn run_builtin(&mut self, name: &String, argv: &Vec<String>) -> Result<u8, ()> {
+    pub fn run_builtin(&mut self, name: &String, argv: &Vec<String>) -> Result<i32, ()> {
         return self.builtins.get(name).unwrap()(self, argv);
     }
 

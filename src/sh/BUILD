@@ -6,7 +6,8 @@ rust_binary(
         "src/main.rs",
         "src/process.rs",
         "src/shell.rs",
-        "src/builtins.rs"
+        "src/builtins.rs",
+        "src/ast.rs"
     ],
     deps = [
         "//src/libq",
