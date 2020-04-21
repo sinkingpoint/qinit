@@ -7,6 +7,7 @@ use nix::unistd;
 use std::env;
 
 mod process;
+mod builtins;
 
 fn _init_shell() -> process::Shell{
     let is_interactive = match unistd::isatty(libq::io::STDIN_FD) {
@@ -77,22 +78,28 @@ fn process_line(shell: &process::Shell, tokens: &Vec<String>) -> Option<process:
 
 const VERSION: &str = "0.0.1";
 
-fn main() {
-    let shell = _init_shell();
+fn print_prompt(shell: &process::Shell, continue_prompt: bool) {
     let this_argv0 = env::args().next().unwrap();
     let this_exe = std::path::Path::new(&this_argv0);
     let prompt = format!("{}-{}$ ", this_exe.file_name().unwrap().to_string_lossy(), VERSION);
-    let reader = std::io::stdin();
-    let mut current_buffer = String::new();
-    let mut at_eof = false;
-    while !at_eof {
-        if current_buffer == "" {
+    if shell.is_interactive {
+        if !continue_prompt {
             print!("{}", prompt);
         }
         else {
             print!("> ");
         }
-        std::io::stdout().flush().expect("Failed writing to stdout");
+    }
+    std::io::stdout().flush().expect("Failed writing to stdout");
+}
+
+fn main() {
+    let mut shell = _init_shell();
+    let reader = std::io::stdin();
+    let mut current_buffer = String::new();
+    let mut at_eof = false;
+    while !at_eof {
+        print_prompt(&shell, current_buffer != "");
         let mut new_line = String::new();
         match reader.read_line(&mut new_line) {
             Ok(0) => at_eof = true,
@@ -116,12 +123,19 @@ fn main() {
                 //Process Tokens
                 current_buffer.clear();
                 match process_line(&shell, &tokens) {
-                    Some(pipeline) => pipeline.start(&shell, true),
+                    Some(pipeline) => pipeline.start(&mut shell, true),
+                    None => {}
+                }
+
+                match shell.exitcode {
+                    Some(exitcode) => break,
                     None => {}
                 }
             }
         }
     }
 
-    println!("\n\nGoodbye");
+    if shell.is_interactive {
+        println!("\n\nGoodbye");
+    }
 }

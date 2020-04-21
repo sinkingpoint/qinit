@@ -4,7 +4,8 @@ rust_binary(
     name = "sh",
     srcs = [
         "src/main.rs",
-        "src/process.rs"
+        "src/process.rs",
+        "src/builtins.rs"
     ],
     deps = [
         "//src/libq",

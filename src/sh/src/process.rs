@@ -4,20 +4,40 @@ use nix::unistd::{fork, ForkResult, Pid, getpid, setpgid, tcsetpgrp, execvp};
 use nix::sys::signal;
 use std::ffi::{CStr, CString};
 use nix::sys::wait::{waitpid, WaitPidFlag};
+use std::collections::HashMap;
+use builtins;
 
 pub struct Shell {
-    is_interactive: bool,
+    pub is_interactive: bool,
     pub parent_pgid: Pid,
     terminal_fd: i32,
+    builtins: HashMap<String, builtins::Builtin>,
+    pub exitcode: Option<u8>,
 }
 
 impl Shell {
     pub fn new(interactive: bool, pgid: Pid, terminal_fd: i32) -> Shell {
+        let mut builtin_map = HashMap::new();
+        builtin_map.insert(String::from("exit"), builtins::exit as builtins::Builtin);
         return Shell {
             is_interactive: interactive,
             parent_pgid: pgid,
-            terminal_fd: terminal_fd
+            terminal_fd: terminal_fd,
+            builtins: builtin_map,
+            exitcode: None,
         }
+    }
+
+    pub fn is_builtin(&self, name: &String) -> bool{
+        return self.builtins.contains_key(name);
+    }
+
+    pub fn run_builtin(&mut self, name: &String, argv: &Vec<String>) -> Result<u8, ()> {
+        return self.builtins.get(name).unwrap()(self, argv);
+    }
+
+    pub fn exit(&mut self, code: u8) {
+        self.exitcode = Some(code);
     }
 }
 
@@ -41,7 +61,7 @@ impl Process {
         self.argv.push(arg.clone());
     }
 
-    pub fn launch(&self, shell: &Shell, pgid: Pid, foreground: bool) {
+    pub fn launch(&self, shell: &mut Shell, pgid: Pid, foreground: bool) {
         if shell.is_interactive {
             let pid = getpid();
             setpgid(pid, pgid).expect("Failed to set pgid");
@@ -65,8 +85,8 @@ impl Process {
         match execvp(&c_path, argv) {
             Ok(_) => {
             },
-            Err(_) => {
-                panic!("Failed to exec!");
+            Err(e) => {
+                panic!("Failed to exec: {}", e);
             }
         }
     }
@@ -85,8 +105,13 @@ impl Pipeline {
         };
     }
 
-    pub fn start(&self, shell: &Shell, foreground: bool) {
+    pub fn start(&self, shell: &mut Shell, foreground: bool) {
         for process in &self.processes {
+            if shell.is_builtin(&process.proc_name) {
+                shell.run_builtin(&process.proc_name, &process.argv);
+                continue;
+            }
+
             match fork() {
                 Ok(ForkResult::Parent { child, .. }) => {
                     waitpid(child, Some(WaitPidFlag::WUNTRACED | WaitPidFlag::__WALL)).expect("Failed waiting for child");
