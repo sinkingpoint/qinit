@@ -5,6 +5,7 @@ pub mod strings;
 pub mod io {
     pub const STDIN_FD: i32 = 0;
     pub const STDOUT_FD: i32 = 1;
+    pub const STDERR_FD: i32 = 2;
     pub fn full_write_bytes(fd: std::os::unix::io::RawFd, buf: &[u8]) -> nix::Result<usize>{
         let mut count: usize = 0;
         while count < buf.len() {

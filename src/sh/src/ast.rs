@@ -1,19 +1,17 @@
 use shell;
-use process;
-use nix::unistd::{fork, ForkResult, Pid, tcsetpgrp};
-use nix::sys::wait::{waitpid, WaitPidFlag};
+use nix::unistd::Pid;
 
 pub trait ASTNode {
-    fn execute(&self, &mut shell::Shell) -> i32;
+    fn execute(&self, &mut shell::Shell, Option<Pid>, &shell::IOTriple) -> i32;
     fn ingest_token(&mut self, &String);
 }
 
 pub struct ParseError {
-    error: String,
-    continuable: bool, // If an error is continuable, we will continue reading until we hit a valid and complete statement, or a non continable error
+    pub error: String,
+    pub continuable: bool, // If an error is continuable, we will continue reading until we hit a valid and complete statement, or a non continable error
 }
 
-pub fn parse_into_ast(tokens: &Vec<String>, shell: &shell::Shell) -> Result<impl ASTNode, ParseError> {
+pub fn parse_into_ast(tokens: &Vec<String>) -> Result<impl ASTNode, ParseError> {
     if tokens.len() == 0 {
         return Err(ParseError{
             error: "Empty Statement".to_string(),
@@ -21,8 +19,8 @@ pub fn parse_into_ast(tokens: &Vec<String>, shell: &shell::Shell) -> Result<impl
         });
     }
 
-    let mut pipeline: Vec<ProcessNode> = Vec::new();
-    let mut current_process: ProcessNode = ProcessNode::new(shell.get_parent_pgid(), true);
+    let mut pipeline: PipelineNode = PipelineNode::new();
+    let mut current_process: ProcessNode = ProcessNode::new();
     
     for token in tokens {
         match token.as_str() {
@@ -30,49 +28,44 @@ pub fn parse_into_ast(tokens: &Vec<String>, shell: &shell::Shell) -> Result<impl
             "while" => {}, // TODO: While Statements 
             "&&" => {}, // TODO: And statements
             "||" => {}, // TODO: Or Statements
-            "|" => {},  // TODO: Pipes
+            "|" => {
+                pipeline.processes.push(current_process);
+                current_process = ProcessNode::new();
+            },
             "&" => {},  // TODO: Background processes
             _ => {
                 current_process.ingest_token(token);
             },
         }
     }
-    pipeline.push(current_process);
-    return Ok(PipelineNode{
-        processes: pipeline
-    });
+    pipeline.processes.push(current_process);
+    return Ok(pipeline);
 }
 
 struct ProcessNode {
-    process: process::Process,
-    pgid: Pid,
+    proc_name: String,
+    argv: Vec<String>,
     foreground: bool,
 }
 
 impl ProcessNode {
-    fn new(pgid: Pid, foreground: bool) -> ProcessNode{
+    fn new() -> ProcessNode{
         return ProcessNode{
-            process: process::Process::new(),
-            pgid: pgid,
-            foreground: foreground,
+            proc_name: String::new(),
+            argv: Vec::new(),
+            foreground: true,
         };
     }
 
-    fn is_builtin(&self, shell: &shell::Shell) -> bool {
-        return shell.is_builtin(&self.process.proc_name)
+    fn to_process(&self) -> shell::Process {
+        return shell::Process::new(self.proc_name.clone(), self.argv.iter().map(|a| { a.to_owned().clone() }).collect(), self.foreground);
     }
 }
 
 impl ASTNode for ProcessNode {
-    fn execute(&self, shell: &mut shell::Shell) -> i32 {
-        if self.is_builtin(shell) {
-            return shell.run_builtin(&self.process.proc_name, &self.process.argv).unwrap();
-        }
-        else {
-            // Launches a process using execve. Not responsible for forking or anything
-            self.process.launch(shell, self.foreground);
-            return 0; // process.launch execve's, so we shouldn't ever get here. 
-        }
+    fn execute(&self, shell: &mut shell::Shell, group: Option<Pid>, streams: &shell::IOTriple) -> i32 {
+        let process = self.to_process();
+        return process.execute(shell, group, streams);
     }
 
     fn ingest_token(&mut self, token: &String) {
@@ -81,37 +74,32 @@ impl ASTNode for ProcessNode {
                 self.foreground = false
             },
             _ => {
-                self.process.add_argv(&token);
+                if self.proc_name == "" {
+                    self.proc_name = token.clone();
+                }
+                self.argv.push(token.clone());
             }
         }
     }
 }
 
 struct PipelineNode {
-    processes: Vec<ProcessNode>
+    processes: Vec<ProcessNode>,
+}
+
+impl PipelineNode {
+    fn new() -> PipelineNode{
+        return PipelineNode {
+            processes: Vec::new(),
+        };
+    }
 }
 
 impl ASTNode for PipelineNode {
-    fn execute(&self, shell: &mut shell::Shell) -> i32 {
-        for process in &self.processes {
-            if process.is_builtin(shell) {
-                process.execute(shell);
-                continue;
-            }
-
-            match fork() {
-                Ok(ForkResult::Parent { child, .. }) => {
-                    waitpid(child, Some(WaitPidFlag::WUNTRACED | WaitPidFlag::__WALL)).expect("Failed waiting for child");
-                    tcsetpgrp(shell.terminal_fd, shell.parent_pgid);
-                }
-                Ok(ForkResult::Child) => {
-                    process.execute(shell);
-                },
-                Err(_) => println!("Fork failed"),
-            }
-        }
-
-        return 0;
+    fn execute(&self, shell: &mut shell::Shell, group: Option<Pid>, streams: &shell::IOTriple) -> i32 {
+        let processes = self.processes.iter().map(|process| { process.to_process() }).collect();
+        let mut job = shell::Job::new(processes);
+        return job.execute(shell, group, streams);
     }
 
     fn ingest_token(&mut self, _token: &String) {

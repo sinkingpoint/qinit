@@ -4,7 +4,6 @@ rust_binary(
     name = "sh",
     srcs = [
         "src/main.rs",
-        "src/process.rs",
         "src/shell.rs",
         "src/builtins.rs",
         "src/ast.rs"

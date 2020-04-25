@@ -3,7 +3,6 @@ extern crate libq;
 
 use std::env;
 
-mod process;
 mod builtins;
 mod shell;
 mod ast;
@@ -56,13 +55,15 @@ fn main() {
                 if tokens.len() == 0 {
                     continue;
                 }
-                match ast::parse_into_ast(&tokens, &shell) {
+                match ast::parse_into_ast(&tokens) {
                     Ok(ast) => {
-                        ast.execute(&mut shell);
+                        ast.execute(&mut shell, None, &shell::IOTriple::new());
                     },
-                    Err(_err) => {
-                        eprintln!("Error!!!");
-                        current_buffer.clear();
+                    Err(err) => {
+                        if !err.continuable {
+                            eprintln!("Error: {}", err.error);
+                            current_buffer.clear();
+                        }
                     }
                 }
 
