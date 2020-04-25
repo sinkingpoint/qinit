@@ -121,10 +121,10 @@ impl<'a> Iterator for Tokenizer<'a> {
                     QuoteType::None => QuoteType::from_char(new_char),
                     _ if new_char == current_token.in_quotes.get_char() => QuoteType::None,
                     _ => {
-                        current_token.build.push(new_char);
                         current_token.in_quotes
                     }
-                }
+                };
+                current_token.build.push(new_char);
             }
             else if new_char == '\\' {
                 // We're got an escape char next
