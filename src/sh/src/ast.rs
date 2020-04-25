@@ -3,12 +3,17 @@ use nix::unistd::Pid;
 
 pub trait ASTNode {
     fn execute(&self, &mut shell::Shell, Option<Pid>, &shell::IOTriple) -> i32;
-    fn ingest_token(&mut self, &String) -> bool;
+    fn ingest_token(&mut self, &String) -> Result<bool, ParseError>;
+    fn is_complete(&self) -> bool;
+}
+
+trait ASTBlock {
+    fn ingest_node(&mut self, Box<dyn ASTNode>) -> bool;
 }
 
 pub struct ParseError {
     pub error: String,
-    pub continuable: bool, // If an error is continuable, we will continue reading until we hit a valid and complete statement, or a non continable error
+    pub continuable: bool, // If an error is continuable, we will continue reading until we hit a valid and complete statement, or a non continuable error
 }
 
 /// Given a token, removes outer matching quote pairs from it
@@ -47,21 +52,30 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
         });
     }
 
-    let mut head = Box::new(ASTHead{
-        nodes: Vec::new()
-    });
-    let mut current_node: Box<dyn ASTNode> = Box::new(PipelineNode::new());
+    let mut head = Box::new(ASTHead::new());
+    let mut current_node: Box<dyn ASTNode> = match tokens.first() {
+        Some(_) => Box::new(PipelineNode::new()),
+        None => Box::new(PipelineNode::new())
+    };
     
     for token in tokens {
         match token.as_str() {
-            "if" => {}, // TODO: If Statements
-            "while" => {}, // TODO: While Statements 
+            "if" if current_node.is_complete() => {}, // TODO: If Statements
+            "while" if current_node.is_complete() => {}, // TODO: While Statements 
             "&&" => {}, // TODO: And statements
             "||" => {}, // TODO: Or Statements
             _ => {
-                if !current_node.ingest_token(&parse_out_quotes(token)) {
-                    head.nodes.push(current_node);
-                    current_node = Box::new(PipelineNode::new());
+                match current_node.ingest_token(&parse_out_quotes(token)) {
+                    Ok(_) => {},
+                    Err(err) => {
+                        if err.continuable {
+                            head.nodes.push(current_node);
+                            current_node = Box::new(PipelineNode::new());
+                        }
+                        else {
+                            return Err(err);
+                        }
+                    }
                 }
             },
         }
@@ -74,6 +88,14 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
 
 struct ASTHead {
     nodes: Vec<Box<dyn ASTNode>>
+}
+
+impl ASTHead {
+    fn new() -> ASTHead {
+        return ASTHead{
+            nodes: Vec::new()
+        };
+    }
 }
 
 impl ASTNode for ASTHead {
@@ -89,27 +111,12 @@ impl ASTNode for ASTHead {
         };
     }
 
-    fn ingest_token(&mut self, _token: &String) -> bool {
+    fn ingest_token(&mut self, _token: &String) -> Result<bool, ParseError> {
+        return Ok(false);
+    }
+
+    fn is_complete(&self) -> bool {
         return false;
-    }
-}
-
-struct OrNode {
-    left_side: Box<dyn ASTNode>,
-    right_side: Box<dyn ASTNode>
-}
-
-impl ASTNode for OrNode {
-    fn execute(&self, shell: &mut shell::Shell, pgid: Option<Pid>, streams: &shell::IOTriple) -> i32 {
-        let left_status = self.left_side.execute(shell, pgid, streams);
-        if left_status != 0 {
-            return self.right_side.execute(shell, pgid, streams);
-        }
-        return left_status;
-    }
-
-    fn ingest_token(&mut self, _token: &String) -> bool {
-        return true;
     }
 }
 
@@ -139,13 +146,17 @@ impl ASTNode for ProcessNode {
         return process.execute(shell, group, streams);
     }
 
-    fn ingest_token(&mut self, token: &String) -> bool{
+    fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError>{
         match token.as_str() {
             "|" => {
-                return false
+                return Err(ParseError{
+                    error: String::from("Pipe signals end of process ingestion"),
+                    continuable: true
+                });
             },
             "&" => {
-                self.foreground = false
+                self.foreground = false;
+                return Ok(true);
             },
             _ => {
                 if self.proc_name == "" {
@@ -154,7 +165,11 @@ impl ASTNode for ProcessNode {
                 self.argv.push(token.clone());
             }
         }
-        return true;
+        return Ok(true);
+    }
+
+    fn is_complete(&self) -> bool {
+        return false;
     }
 }
 
@@ -179,27 +194,45 @@ impl ASTNode for PipelineNode {
         return job.execute(shell, group, streams);
     }
 
-    fn ingest_token(&mut self, token: &String) -> bool {
+    fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError> {
         match token.as_str() {
             "\n" | ";" => {
-                return false; // If we hit a ; or a \n, we're at the end of the whole pipeline
+                return Err(ParseError{
+                    error: String::from("End of Pipeline"),
+                    continuable: true
+                }); // If we hit a ; or a \n, we're at the end of the whole pipeline
             },
             _ => {}
         }
 
         if self.finished {
             let mut node = ProcessNode::new();
-            if node.ingest_token(token) {
-                self.processes.push(node);
-                self.finished = false;
-                return true;
+            match node.ingest_token(token) {
+                Ok(_) => {
+                    self.processes.push(node);
+                    self.finished = false;
+                    return Ok(true);
+                }
+                Err(err) => {
+                    return Err(err);
+                }
             }
         }
         else {
-            self.finished = !self.processes.last_mut().unwrap().ingest_token(token);
+            self.finished = match self.processes.last_mut().unwrap().ingest_token(token) {
+                Ok(_) => false,
+                Err(err) if err.continuable => true,
+                Err(err) => {
+                    return Err(err);
+                }
+            };
         }
 
-        return true;
+        return Ok(true);
+    }
+
+    fn is_complete(&self) -> bool {
+        return self.finished;
     }
 }
 
