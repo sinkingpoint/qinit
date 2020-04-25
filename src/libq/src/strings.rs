@@ -108,6 +108,10 @@ impl<'a> Iterator for Tokenizer<'a> {
 
         // If the current token hasn't started, lets skip whitespace until we get to the start
         while self.iter.peek().is_some() && self.iter.peek().unwrap().is_whitespace() {
+            if self.iter.peek() == Some(&'\n') {
+                self.iter.next();
+                return Some(String::from("\n"));
+            }
             self.iter.next();
             continue;
         }
@@ -134,6 +138,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                         '\'' => '\'',
                         '\"' => '\"',
                         '\\' => '\\',
+                        '\n' => ' ',
                         'r' => '\r',
                         'n' => '\n',
                         't' => '\t',

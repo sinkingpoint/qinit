@@ -7,8 +7,6 @@ mod builtins;
 mod shell;
 mod ast;
 
-use ast::ASTNode;
-
 const VERSION: &str = "0.0.1";
 
 fn print_prompt(shell: &shell::Shell, continue_prompt: bool) {

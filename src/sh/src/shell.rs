@@ -293,7 +293,7 @@ impl Job {
             shell.put_job_in_background(self);
         }
 
-        return 0;
+        return self.processes[0].status.unwrap();
     }
 }
 

@@ -3,7 +3,7 @@ use nix::unistd::Pid;
 
 pub trait ASTNode {
     fn execute(&self, &mut shell::Shell, Option<Pid>, &shell::IOTriple) -> i32;
-    fn ingest_token(&mut self, &String);
+    fn ingest_token(&mut self, &String) -> bool;
 }
 
 pub struct ParseError {
@@ -39,7 +39,7 @@ fn parse_out_quotes(token: &String) -> String {
     return build;
 }
 
-pub fn parse_into_ast(tokens: &Vec<String>) -> Result<impl ASTNode, ParseError> {
+pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseError> {
     if tokens.len() == 0 {
         return Err(ParseError{
             error: "Empty Statement".to_string(),
@@ -47,8 +47,10 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<impl ASTNode, ParseError> 
         });
     }
 
-    let mut pipeline: PipelineNode = PipelineNode::new();
-    let mut current_process: ProcessNode = ProcessNode::new();
+    let mut head = Box::new(ASTHead{
+        nodes: Vec::new()
+    });
+    let mut current_node: Box<dyn ASTNode> = Box::new(PipelineNode::new());
     
     for token in tokens {
         match token.as_str() {
@@ -56,18 +58,59 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<impl ASTNode, ParseError> 
             "while" => {}, // TODO: While Statements 
             "&&" => {}, // TODO: And statements
             "||" => {}, // TODO: Or Statements
-            "|" => {
-                pipeline.processes.push(current_process);
-                current_process = ProcessNode::new();
-            },
-            "&" => {},  // TODO: Background processes
             _ => {
-                current_process.ingest_token(&parse_out_quotes(token));
+                if !current_node.ingest_token(&parse_out_quotes(token)) {
+                    head.nodes.push(current_node);
+                    current_node = Box::new(PipelineNode::new());
+                }
             },
         }
     }
-    pipeline.processes.push(current_process);
-    return Ok(pipeline);
+
+    head.nodes.push(current_node);
+
+    return Ok(head);
+}
+
+struct ASTHead {
+    nodes: Vec<Box<dyn ASTNode>>
+}
+
+impl ASTNode for ASTHead {
+    fn execute(&self, shell: &mut shell::Shell, pgid: Option<Pid>, streams: &shell::IOTriple) -> i32 {
+        let mut exit_codes = Vec::new();
+        for node in self.nodes.iter() {
+            exit_codes.push(node.execute(shell, pgid, streams));
+        }
+
+        return match exit_codes.last() {
+            None => 0,
+            Some(code) => *code
+        };
+    }
+
+    fn ingest_token(&mut self, _token: &String) -> bool {
+        return false;
+    }
+}
+
+struct OrNode {
+    left_side: Box<dyn ASTNode>,
+    right_side: Box<dyn ASTNode>
+}
+
+impl ASTNode for OrNode {
+    fn execute(&self, shell: &mut shell::Shell, pgid: Option<Pid>, streams: &shell::IOTriple) -> i32 {
+        let left_status = self.left_side.execute(shell, pgid, streams);
+        if left_status != 0 {
+            return self.right_side.execute(shell, pgid, streams);
+        }
+        return left_status;
+    }
+
+    fn ingest_token(&mut self, _token: &String) -> bool {
+        return true;
+    }
 }
 
 struct ProcessNode {
@@ -96,8 +139,11 @@ impl ASTNode for ProcessNode {
         return process.execute(shell, group, streams);
     }
 
-    fn ingest_token(&mut self, token: &String) {
+    fn ingest_token(&mut self, token: &String) -> bool{
         match token.as_str() {
+            "|" => {
+                return false
+            },
             "&" => {
                 self.foreground = false
             },
@@ -108,17 +154,20 @@ impl ASTNode for ProcessNode {
                 self.argv.push(token.clone());
             }
         }
+        return true;
     }
 }
 
 struct PipelineNode {
     processes: Vec<ProcessNode>,
+    finished: bool,
 }
 
 impl PipelineNode {
     fn new() -> PipelineNode{
         return PipelineNode {
             processes: Vec::new(),
+            finished: true
         };
     }
 }
@@ -130,8 +179,27 @@ impl ASTNode for PipelineNode {
         return job.execute(shell, group, streams);
     }
 
-    fn ingest_token(&mut self, _token: &String) {
-        
+    fn ingest_token(&mut self, token: &String) -> bool {
+        match token.as_str() {
+            "\n" | ";" => {
+                return false; // If we hit a ; or a \n, we're at the end of the whole pipeline
+            },
+            _ => {}
+        }
+
+        if self.finished {
+            let mut node = ProcessNode::new();
+            if node.ingest_token(token) {
+                self.processes.push(node);
+                self.finished = false;
+                return true;
+            }
+        }
+        else {
+            self.finished = !self.processes.last_mut().unwrap().ingest_token(token);
+        }
+
+        return true;
     }
 }
 
