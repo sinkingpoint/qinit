@@ -230,6 +230,10 @@ impl Job {
     }
 
     pub fn execute(&mut self, shell: &mut Shell, group: Option<Pid>, streams: &IOTriple) -> i32{
+        if self.processes.len() == 0 {
+            return 0; // Short circuit in the naive case where we have an empty Job
+        }
+
         let mut iter = self.processes.iter_mut().peekable();
         let mut infile = streams.stdin;
         let mut outfile: RawFd;
