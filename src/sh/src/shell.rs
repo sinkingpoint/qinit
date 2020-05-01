@@ -7,6 +7,7 @@ use std::ffi::{CStr, CString};
 use nix::unistd::{fork, ForkResult, Pid, tcsetpgrp, tcgetpgrp, pipe, execvp, dup2, close, getpid, setpgid, getpgrp, isatty};
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use libq::io::{STDIN_FD, STDOUT_FD, STDERR_FD};
+use std::env;
 
 pub struct IOTriple {
     /// An IOTriple represents the 3 standard IO streams of a Unix process
@@ -60,6 +61,19 @@ impl Process {
         };
     }
 
+    /// Attempts to execute this process as a builtin (Which _should not_ be in a forked child)
+    /// If the builtin exists, returns Ok(exit_code), otherwise, returns Err(())
+    pub fn try_execute_as_builtin(&mut self, shell: &mut Shell, streams: &IOTriple) -> Result<i32, ()>{
+        if shell.is_builtin(&self.proc_name) {
+            let exit_code = shell.run_builtin(&self.proc_name, &self.argv, streams);
+            self.status = Some(exit_code);
+            self.completed = true;
+            return Ok(exit_code);
+        }
+
+        return Err(());
+    }
+
     /// Executes this process, in the context of the given shell, in the given process group
     /// We expect a `fork` to have happened before this process runs so any persistance inside here
     /// doesn't actually work because we've diverged from the shell process (So any accounting _must_
@@ -67,65 +81,60 @@ impl Process {
     /// Because this process exevp's, or panics in the event that doesn't work, this function can actually
     /// never exit
     pub fn execute(&self, shell: &mut Shell, group: Option<Pid>, streams: &IOTriple) -> i32{
-        if shell.is_builtin(&self.proc_name) {
-            return shell.run_builtin(&self.proc_name, &self.argv).unwrap();
+        if shell.is_interactive() {
+            // If we're interactive, then we start a new process group (If one isn't given),
+            // put ourselves into it, and take the foreground from the shell
+            let pid = getpid();
+            let pgid = match group {
+                None => pid,
+                Some(group_id) => group_id
+            };
+            setpgid(pid, pgid).expect("Failed to open a new process group");
+            if self.foreground {
+                tcsetpgrp(shell.terminal_fd, pid).expect("Failed to go into foreground");
+            }
+
+            // The shell ignores most of these signals, so here we restore the default handlers
+            unsafe {
+                signal::signal(signal::SIGINT, signal::SigHandler::SigDfl).unwrap();
+                signal::signal(signal::SIGQUIT, signal::SigHandler::SigDfl).unwrap();
+                signal::signal(signal::SIGTSTP, signal::SigHandler::SigDfl).unwrap();
+                signal::signal(signal::SIGTTIN, signal::SigHandler::SigDfl).unwrap();
+                signal::signal(signal::SIGTTOU, signal::SigHandler::SigDfl).unwrap();
+                signal::signal(signal::SIGCHLD, signal::SigHandler::SigDfl).unwrap();
+            }
         }
-        else {
-            if shell.is_interactive() {
-                // If we're interactive, then we start a new process group (If one isn't given),
-                // put ourselves into it, and take the foreground from the shell
-                let pid = getpid();
-                let pgid = match group {
-                    None => pid,
-                    Some(group_id) => group_id
-                };
-                setpgid(pid, pgid).expect("Failed to open a new process group");
-                if self.foreground {
-                    tcsetpgrp(shell.terminal_fd, pid).expect("Failed to go into foreground");
-                }
 
-                // The shell ignores most of these signals, so here we restore the default handlers
-                unsafe {
-                    signal::signal(signal::SIGINT, signal::SigHandler::SigDfl).unwrap();
-                    signal::signal(signal::SIGQUIT, signal::SigHandler::SigDfl).unwrap();
-                    signal::signal(signal::SIGTSTP, signal::SigHandler::SigDfl).unwrap();
-                    signal::signal(signal::SIGTTIN, signal::SigHandler::SigDfl).unwrap();
-                    signal::signal(signal::SIGTTOU, signal::SigHandler::SigDfl).unwrap();
-                    signal::signal(signal::SIGCHLD, signal::SigHandler::SigDfl).unwrap();
-                }
-            }
-
-            // Duplicate the IO streams into the system standard paths
-            // Note: We _must_ close the IOTriple streams here if they're non standard to avoid keeping pipes open
-            // This means the IOTriple isn't valid after this execution
-            if streams.stdin != STDIN_FD {
-                dup2(streams.stdin, STDIN_FD).expect("Failed to duplicate input stream");
-                close(streams.stdin).unwrap();
-            }
-
-            if streams.stdout != STDOUT_FD {
-                dup2(streams.stdout, STDOUT_FD).expect("Failed to duplicate output stream");
-                close(streams.stdout).unwrap();
-            }
-
-            if streams.stderr != STDERR_FD {
-                dup2(streams.stderr, STDERR_FD).expect("Failed to duplicate error stream");
-                close(streams.stderr).unwrap();
-            }
-
-            // Blastoff! Here we do some mangling to turn the UTF-8 Strings we have as args into CStrings
-            let c_path = CString::new(self.proc_name.as_str()).unwrap();
-            let cstr_argv: Vec<Vec<u8>> = self.argv.iter().map(|arg| CString::new(arg.as_str()).unwrap().into_bytes_with_nul()).collect();
-            let argv = &cstr_argv.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
-            match execvp(&c_path, argv) {
-                Ok(_) => {
-                },
-                Err(e) => {
-                    panic!("Failed to exec: {}", e);
-                }
-            }
-            return 0; // This just makes the compiler happy. We shouldn't ever get here
+        // Duplicate the IO streams into the system standard paths
+        // Note: We _must_ close the IOTriple streams here if they're non standard to avoid keeping pipes open
+        // This means the IOTriple isn't valid after this execution
+        if streams.stdin != STDIN_FD {
+            dup2(streams.stdin, STDIN_FD).expect("Failed to duplicate input stream");
+            close(streams.stdin).unwrap();
         }
+
+        if streams.stdout != STDOUT_FD {
+            dup2(streams.stdout, STDOUT_FD).expect("Failed to duplicate output stream");
+            close(streams.stdout).unwrap();
+        }
+
+        if streams.stderr != STDERR_FD {
+            dup2(streams.stderr, STDERR_FD).expect("Failed to duplicate error stream");
+            close(streams.stderr).unwrap();
+        }
+
+        // Blastoff! Here we do some mangling to turn the UTF-8 Strings we have as args into CStrings
+        let c_path = CString::new(self.proc_name.as_str()).unwrap();
+        let cstr_argv: Vec<Vec<u8>> = self.argv.iter().map(|arg| CString::new(arg.as_str()).unwrap().into_bytes_with_nul()).collect();
+        let argv = &cstr_argv.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
+        match execvp(&c_path, argv) {
+            Ok(_) => {
+            },
+            Err(e) => {
+                panic!("Failed to exec: {}", e);
+            }
+        }
+        return 0; // This just makes the compiler happy. We shouldn't ever get here
     }
 }
 
@@ -254,34 +263,43 @@ impl Job {
                 outfile = streams.stdout;
             }
 
-            match fork() {
-                Ok(ForkResult::Parent { child, .. }) => {
-                    if shell.is_interactive() {
-                        self.pgid = match self.pgid {
-                            None => Some(child),
-                            Some(_) => self.pgid
-                        };
-                        process.pid = Some(child);
-
-                        setpgid(child, self.pgid.unwrap()).expect("Failed to start new process group");
+            match process.try_execute_as_builtin(shell, &IOTriple{
+                stdin: infile,
+                stdout: outfile,
+                stderr: streams.stderr
+            }) {
+                Ok(_exit_code) => {},
+                Err(()) => {
+                    match fork() {
+                        Ok(ForkResult::Parent { child, .. }) => {
+                            if shell.is_interactive() {
+                                self.pgid = match self.pgid {
+                                    None => Some(child),
+                                    Some(_) => self.pgid
+                                };
+                                process.pid = Some(child);
+        
+                                setpgid(child, self.pgid.unwrap()).expect("Failed to start new process group");
+                            }
+                        }
+                        Ok(ForkResult::Child) => {
+                            process.execute(shell, group, &IOTriple{
+                                stdin: infile,
+                                stdout: outfile,
+                                stderr: streams.stderr,
+                            });
+                        },
+                        Err(_) => println!("Fork failed"),
+                    }
+        
+                    if infile != streams.stdin {
+                        close(infile).unwrap();
+                    }
+        
+                    if outfile != streams.stdout {
+                        close(outfile).unwrap();
                     }
                 }
-                Ok(ForkResult::Child) => {
-                    process.execute(shell, group, &IOTriple{
-                        stdin: infile,
-                        stdout: outfile,
-                        stderr: streams.stderr,
-                    });
-                },
-                Err(_) => println!("Fork failed"),
-            }
-
-            if infile != streams.stdin {
-                close(infile).unwrap();
-            }
-
-            if outfile != streams.stdout {
-                close(outfile).unwrap();
             }
 
             infile = pipe_source;
@@ -301,12 +319,36 @@ impl Job {
     }
 }
 
+pub struct Variable {
+    /// Represents a variable in the shell, with a name and a value
+
+    /// The name of the variable, without the $ set by e.g. `cats=value`
+    name: String,
+
+    /// The Value of the variable
+    value: String,
+
+    /// Whether this variable should be passed onto child processes
+    environment: bool,
+}
+
+impl Variable {
+    pub fn new(name: String, value: String, environment: bool) -> Variable{
+        return Variable{
+            name: name,
+            value: value,
+            environment: environment
+        };
+    }
+}
+
 pub struct Shell {
     is_interactive: bool,
     pub parent_pgid: Pid,
     pub terminal_fd: i32,
     builtins: HashMap<String, builtins::Builtin>,
     exitcode: Option<u8>,
+    variables: HashMap<String, Variable>
 }
 
 impl Shell {
@@ -352,19 +394,36 @@ impl Shell {
 
         let mut builtin_map = HashMap::new();
         builtin_map.insert(String::from("exit"), builtins::exit as builtins::Builtin);
+
+        let mut variables_map = HashMap::new();
+        for (key, value) in env::vars() {
+            variables_map.insert(key.clone(), Variable{
+                name: key.clone(),
+                value: value,
+                environment: true
+            });
+        }
+
         return Shell {
             is_interactive: is_interactive,
             parent_pgid: my_pgid,
             terminal_fd: libq::io::STDIN_FD,
             builtins: builtin_map,
             exitcode: None,
+            variables: variables_map
         }
     }
 
     pub fn put_job_in_foreground(&self, job: &mut Job) {
-        tcsetpgrp(self.terminal_fd, job.pgid.unwrap()).expect("Failed to put job into foreground");
-        job.wait();
-        tcsetpgrp(self.terminal_fd, self.parent_pgid).expect("Failed to get job control back from child process");
+        match job.pgid {
+            // Some jobs don't have PGIDs (e.g. pipelines with builtins)
+            Some(pgid) => {
+                tcsetpgrp(self.terminal_fd, job.pgid.unwrap()).expect("Failed to put job into foreground");
+                job.wait();
+                tcsetpgrp(self.terminal_fd, self.parent_pgid).expect("Failed to get job control back from child process");
+            },
+            None => {}
+        }
     }
 
     pub fn put_job_in_background(&self, _job: &Job) {
@@ -379,8 +438,12 @@ impl Shell {
         return self.builtins.contains_key(name);
     }
 
-    pub fn run_builtin(&mut self, name: &String, argv: &Vec<String>) -> Result<i32, ()> {
-        return self.builtins.get(name).unwrap()(self, argv);
+    pub fn set_variable(&mut self, var: Variable) {
+        self.variables.insert(var.name.clone(), var);
+    }
+
+    pub fn run_builtin(&mut self, name: &String, argv: &Vec<String>, streams: &IOTriple) -> i32 {
+        return self.builtins.get(name).unwrap()(self, argv, streams);
     }
 
     pub fn exit(&mut self, code: u8) {
