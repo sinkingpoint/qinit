@@ -2,6 +2,9 @@ extern crate nix;
 extern crate libq;
 
 use std::env;
+use std::io;
+use std::fs::File;
+use std::io::BufRead;
 
 mod builtins;
 mod shell;
@@ -9,27 +12,69 @@ mod ast;
 
 const VERSION: &str = "0.0.1";
 
-fn print_prompt(shell: &shell::Shell, continue_prompt: bool) {
+trait LineReader {
+    fn next_line(&mut self, &mut String) -> io::Result<usize>;
+}
+
+struct InputFile {
+    stream: io::BufReader<File>
+}
+
+impl InputFile {
+    fn new(f: File) -> InputFile {
+        return InputFile{
+            stream: io::BufReader::new(f),
+        };
+    }
+}
+
+impl LineReader for io::Stdin {
+    fn next_line(&mut self, dest: &mut String) -> io::Result<usize> {
+        return self.read_line(dest);
+    }
+}
+
+impl LineReader for InputFile {
+    fn next_line(&mut self, dest: &mut String) -> io::Result<usize> {
+        return self.stream.read_line(dest);
+    }
+}
+
+fn print_prompt(shell: &shell::Shell, process_name: &String, continue_prompt: bool) {
     if continue_prompt {
         shell.write("> ");
     }
     else {
-        let this_argv0 = env::args().next().unwrap();
-        let this_exe = std::path::Path::new(&this_argv0);
+        let this_exe = std::path::Path::new(process_name);
         let prompt = format!("{}-{}$ ", this_exe.file_name().unwrap().to_string_lossy(), VERSION);
         shell.write(&prompt);
     }
 }
 
 fn main() {
-    let mut shell = shell::Shell::new();
-    let reader = std::io::stdin();
+    let argv: Vec<String> = env::args().collect();
+    let is_repl = argv.len() == 1;
+    let mut shell = shell::Shell::new(is_repl);
+    let mut reader: Box<dyn LineReader>;
+    if !is_repl {
+        let file = match File::open(argv[1].clone()) {
+            Ok(f) => f,
+            Err(err) => {
+                eprintln!("Couldn't open file {}: {}", argv[1], err);
+                return;
+            }
+        };
+        reader = Box::new(InputFile::new(file));
+    }
+    else {
+        reader = Box::new(io::stdin());
+    }
     let mut current_buffer = String::new();
     let mut at_eof = false;
     while !at_eof {
-        print_prompt(&shell, current_buffer != "");
         let mut new_line = String::new();
-        match reader.read_line(&mut new_line) {
+        print_prompt(&shell, &argv[0], current_buffer != "");
+        match reader.next_line(&mut new_line) {
             Ok(0) => at_eof = true,
             Ok(_) => {},
             Err(ioerr) => {

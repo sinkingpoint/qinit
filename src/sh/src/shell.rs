@@ -475,6 +475,7 @@ impl Variable {
 }
 
 pub struct Shell {
+    is_repl: bool,
     is_interactive: bool,
     pub parent_pgid: Pid,
     pub terminal_fd: i32,
@@ -484,7 +485,7 @@ pub struct Shell {
 }
 
 impl Shell {
-    pub fn new() -> Shell {
+    pub fn new(is_repl: bool) -> Shell {
         let is_interactive = match isatty(libq::io::STDIN_FD) {
             Ok(tty) => tty,
             Err(errno) => {
@@ -534,6 +535,7 @@ impl Shell {
         }
 
         return Shell {
+            is_repl: is_repl,
             is_interactive: is_interactive,
             parent_pgid: my_pgid,
             terminal_fd: libq::io::STDIN_FD,
@@ -590,7 +592,7 @@ impl Shell {
     }
 
     pub fn write(&self, text: &str) {
-        if self.is_interactive() {
+        if self.is_interactive() && self.is_repl {
             print!("{}", text);
         }
         std::io::stdout().flush().expect("Failed writing to stdout");
