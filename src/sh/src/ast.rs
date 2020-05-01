@@ -14,34 +14,6 @@ pub struct ParseError {
     pub continuable: bool, // If an error is continuable, we will continue reading until we hit a valid and complete statement, or a non continuable error
 }
 
-/// Given a token, removes outer matching quote pairs from it
-/// ## Examples:
-/// | Token           | Return        |
-/// |-----------------|---------------|
-/// | "abcd"          | abcd          |
-/// | "abcd'efg'"     | abcd'efg'     |
-/// | dogs' and cats' | dogs and cats |
-fn parse_out_quotes(token: &String) -> String {
-    let mut build = String::new();
-    let mut in_quotes_char = '\0';
-    for chr in token.chars() {
-        if chr == '\'' || chr == '\"' {
-            in_quotes_char = match in_quotes_char {
-                '\0' => chr,
-                _ if chr == in_quotes_char => '\0',
-                _ => {
-                    build.push(chr);
-                    in_quotes_char
-                }
-            };
-        }
-        else {
-            build.push(chr);
-        }
-    }
-    return build;
-}
-
 pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseError> {
     if tokens.len() == 0 {
         return Err(ParseError{
@@ -96,7 +68,7 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
             "&&" => {}, // TODO: And statements
             "||" => {}, // TODO: Or Statements
             _ => {
-                match current_node.ingest_token(&parse_out_quotes(token)) {
+                match current_node.ingest_token(token) {
                     Ok(_) => {},
                     Err(err) => {
                         if err.continuable {
@@ -151,7 +123,7 @@ impl ASTNode for ASTHead {
         };
     }
 
-    fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError> {
+    fn ingest_token(&mut self, _token: &String) -> Result<bool, ParseError> {
         return Err(ParseError{
             error: "Failed to ingest token - Head objects don't take tokens!",
             continuable: false

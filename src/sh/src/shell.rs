@@ -37,6 +37,8 @@ pub struct Process {
     argv: Vec<String>,
     /// An Option containing a Pid. Will exist if the process has been `execute`d
     pid: Option<Pid>,
+    /// true if `execute` or `try_execute_as_builtin` has been called
+    started: bool,
     /// True iff the process has been started, and has completed
     completed: bool,
     /// True iff the process has been started, but stopped and can be continued
@@ -54,6 +56,7 @@ impl Process {
             proc_name: proc_name,
             argv: argv,
             pid: None,
+            started: false,
             completed: false,
             stopped: false,
             status: None,
@@ -67,11 +70,19 @@ impl Process {
         if shell.is_builtin(&self.proc_name) {
             let exit_code = shell.run_builtin(&self.proc_name, &self.argv, streams);
             self.status = Some(exit_code);
+            self.started = true;
             self.completed = true;
             return Ok(exit_code);
         }
 
         return Err(());
+    }
+
+    fn cement_args(&mut self, shell: &Shell) -> Result<(), String>{
+        for index in 0..self.argv.len() {
+            self.argv[index] = do_string_interpolation(&self.argv[index], shell)?;
+        }
+        return Ok(());
     }
 
     /// Executes this process, in the context of the given shell, in the given process group
@@ -136,6 +147,109 @@ impl Process {
         }
         return 0; // This just makes the compiler happy. We shouldn't ever get here
     }
+}
+
+struct VariableBuilder {
+    build: String,
+    in_braces: bool,
+    done: bool,
+}
+
+impl VariableBuilder {
+    fn new() -> VariableBuilder {
+        return VariableBuilder{
+            build: String::new(),
+            in_braces: false,
+            done: false
+        }
+    }
+
+    fn ingest_char(&mut self, c: char) -> Result<(), String>{
+        if self.done || 
+           (c == '$' && self.build.len() > 0) || 
+           (c == '?' && self.build.len() > 0) ||
+           (c == '{' && self.build.len() > 0) ||
+           (c == '}' && !self.in_braces) || 
+           (c == '{' && self.in_braces){
+            return Err(format!("Invalid char: {}", c));
+        }
+
+        if c == '{' {
+            self.in_braces = true;
+        }
+        else if c == '}' {
+            self.in_braces = false;
+            self.done = true;
+        }
+        else if c == '$' || c == '?' {
+            self.build.push(c);
+            self.done = true;
+        }
+        else {
+            self.build.push(c);
+        }
+
+        return Ok(());
+    }
+
+    fn could_be_done(&self) -> bool{
+        return !self.in_braces || self.done
+    }
+}
+
+fn do_string_interpolation(token: &String, shell: &Shell) -> Result<String, &'static str> {
+    let mut build = String::new();
+    let mut in_quotes_char = '\0';
+    let mut var_build: Option<VariableBuilder> = None;
+    for chr in token.chars() {
+        if chr == '\'' || chr == '\"' {
+            in_quotes_char = match in_quotes_char {
+                '\0' => chr,
+                _ if chr == in_quotes_char => '\0',
+                _ => {
+                    build.push(chr);
+                    in_quotes_char
+                }
+            };
+        }
+        else if chr == '$' && in_quotes_char != '\'' && var_build.is_none(){
+            var_build = Some(VariableBuilder::new());
+        }
+        else {
+            match &mut var_build {
+                Some(builder) => {
+                    match builder.ingest_char(chr) {
+                        Ok(()) => {},
+                        Err(_err) => {
+                            return Err("Substitution Error")
+                        }
+                    }
+
+                    if builder.done {
+                        build.push_str(&shell.get_variable(&builder.build));
+                        var_build = None;
+                    }
+                },
+                None => {
+                    build.push(chr);
+                }
+            }
+        }
+    }
+
+    match var_build {
+        Some(builder) => {
+            if builder.could_be_done() {
+                build.push_str(&shell.get_variable(&builder.build));
+            }
+            else {
+                return Err("Unclosed variable substitution");
+            }
+        },
+        None => {}
+    }
+
+    return Ok(build);
 }
 
 pub struct Job {
@@ -230,12 +344,12 @@ impl Job {
 
     // Returns true if all the processes in this pipeline are stopped or completed
     fn is_stopped(&self) -> bool{
-        return self.processes.iter().all(|process| {process.stopped || process.completed});
+        return self.processes.iter().all(|process| {!process.started || process.stopped || process.completed});
     }
 
     // Returns true if all the processes in this pipeline are completed
     fn is_completed(&self) -> bool {
-        return self.processes.iter().all(|process| {process.completed});
+        return self.processes.iter().all(|process| {!process.started || process.completed});
     }
 
     pub fn execute(&mut self, shell: &mut Shell, group: Option<Pid>, streams: &IOTriple) -> i32{
@@ -248,7 +362,11 @@ impl Job {
         let mut outfile: RawFd;
         let mut pipe_source: RawFd;
         self.pgid = group;
+        let mut broken = false;
         while let Some(process) = iter.next() {
+            if broken {
+                break;
+            }
             if iter.peek().is_some() {
                 match pipe() {
                     Ok((src, dest)) => {
@@ -270,28 +388,41 @@ impl Job {
             }) {
                 Ok(_exit_code) => {},
                 Err(()) => {
-                    match fork() {
-                        Ok(ForkResult::Parent { child, .. }) => {
-                            if shell.is_interactive() {
-                                self.pgid = match self.pgid {
-                                    None => Some(child),
-                                    Some(_) => self.pgid
-                                };
-                                process.pid = Some(child);
-        
-                                setpgid(child, self.pgid.unwrap()).expect("Failed to start new process group");
+                    match process.cement_args(shell) {
+                        Err(err) => {
+                            eprintln!("{}", err);
+                            broken = true;
+                        }
+                        Ok(()) => {
+                            process.started = true;
+                            match fork() {
+                                Ok(ForkResult::Parent { child, .. }) => {
+                                    if shell.is_interactive() {
+                                        self.pgid = match self.pgid {
+                                            None => Some(child),
+                                            Some(_) => self.pgid
+                                        };
+                                        process.pid = Some(child);
+                
+                                        setpgid(child, self.pgid.unwrap()).expect("Failed to start new process group");
+                                    }
+                                }
+                                Ok(ForkResult::Child) => {
+                                    process.execute(shell, group, &IOTriple{
+                                        stdin: infile,
+                                        stdout: outfile,
+                                        stderr: streams.stderr,
+                                    });
+                                },
+                                Err(_) => {
+                                    broken = true;
+                                    process.started = false;
+                                    eprintln!("Fork failed");
+                                }
                             }
                         }
-                        Ok(ForkResult::Child) => {
-                            process.execute(shell, group, &IOTriple{
-                                stdin: infile,
-                                stdout: outfile,
-                                stderr: streams.stderr,
-                            });
-                        },
-                        Err(_) => println!("Fork failed"),
                     }
-        
+                
                     if infile != streams.stdin {
                         close(infile).unwrap();
                     }
