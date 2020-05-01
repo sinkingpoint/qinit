@@ -10,7 +10,7 @@ pub trait ASTNode: fmt::Display{
 }
 
 pub struct ParseError {
-    pub error: String,
+    pub error: &'static str,
     pub continuable: bool, // If an error is continuable, we will continue reading until we hit a valid and complete statement, or a non continuable error
 }
 
@@ -45,7 +45,7 @@ fn parse_out_quotes(token: &String) -> String {
 pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseError> {
     if tokens.len() == 0 {
         return Err(ParseError{
-            error: "Empty Statement".to_string(),
+            error: "Empty Statement",
             continuable: false,
         });
     }
@@ -116,7 +116,7 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
     if inside_block {
         if !current_block_ref.is_complete() {
             return Err(ParseError{
-                error: String::from("Incomplete block"),
+                error: "Incomplete block",
                 continuable: true
             });
         }
@@ -153,7 +153,7 @@ impl ASTNode for ASTHead {
 
     fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError> {
         return Err(ParseError{
-            error: String::from(format!("Failed to ingest token: {} - Head objects don't take tokens!", token)),
+            error: "Failed to ingest token - Head objects don't take tokens!",
             continuable: false
         });
     }
@@ -221,7 +221,7 @@ impl ASTNode for IfNode {
             ConditionalBuildState::Body if token == "fi" => ConditionalBuildState::Done,
             _ => {
                 return Err(ParseError{
-                    error: String::from(format!("Unexpected token: {} in state: {:?}", token, self.state)),
+                    error: "Unexpected token!",
                     continuable: false
                 });
             }
@@ -249,7 +249,7 @@ impl ASTNode for IfNode {
             },
             ConditionalBuildState::Done => {
                 return Err(ParseError{
-                    error: String::from("Expected token `fi`"),
+                    error: "Expected token `fi`",
                     continuable: false,
                 });
             }
@@ -302,7 +302,7 @@ impl ASTNode for ProcessNode {
         match token.as_str() {
             "|" => {
                 return Err(ParseError{
-                    error: String::from("Pipe signals end of process ingestion"),
+                    error: "Pipe signals end of process ingestion",
                     continuable: true
                 });
             },
@@ -326,7 +326,7 @@ impl ASTNode for ProcessNode {
 
     fn ingest_node(&mut self, _node: Box<dyn ASTNode>) -> Result<bool, ParseError> {
         return Err(ParseError{
-            error: String::from("Process nodes can't contain other nodes"),
+            error: "Process nodes can't contain other nodes",
             continuable: false
         });
     }
@@ -363,7 +363,7 @@ impl ASTNode for PipelineNode {
         match token.as_str() {
             "\n" | ";" => {
                 return Err(ParseError{
-                    error: String::from("End of Pipeline"),
+                    error: "End of Pipeline",
                     continuable: true
                 }); // If we hit a ; or a \n, we're at the end of the whole pipeline
             },
@@ -402,7 +402,7 @@ impl ASTNode for PipelineNode {
 
     fn ingest_node(&mut self, _node: Box<dyn ASTNode>) -> Result<bool, ParseError> {
         return Err(ParseError{
-            error: String::from("Pipeline nodes can't contain other nodes"),
+            error: "Pipeline nodes can't contain other nodes",
             continuable: false
         });
     }
