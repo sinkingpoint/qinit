@@ -118,15 +118,21 @@ impl<'a> Iterator for Tokenizer<'a> {
 
         // We're at non whitespace, so lets start ingesting chars
         while !current_token.ended && self.iter.peek().is_some() {
-            if self.iter.peek() == Some(&';') {
+            if self.iter.peek() == Some(&';') || self.iter.peek() == Some(&'#'){
                 if current_token.started && current_token.in_quotes.get_char() == QuoteType::None.get_char(){
                     // If we hit a ; and we've got a token, return the token
                     return Some(current_token.build);
                 }
-                else if !current_token.started {
+                else if !current_token.started && self.iter.peek() == Some(&';'){
                     // If we haven't started a token, just consume and return the ;
                     self.iter.next();
                     return Some(String::from(";"));
+                }
+                else {
+                    // We've hit a #, so consume until the end of the line, and return the new line
+                    self.iter.next();
+                    while self.iter.peek().is_some() && self.iter.next().unwrap() != '\n' {}
+                    return Some(String::from("\n")); 
                 }
             }
             current_token.started = true;
