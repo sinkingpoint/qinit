@@ -346,7 +346,7 @@ pub struct Shell {
     is_interactive: bool,
     pub parent_pgid: Pid,
     pub terminal_fd: i32,
-    builtins: HashMap<String, builtins::Builtin>,
+    builtins: HashMap<&'static str, builtins::Builtin>,
     exitcode: Option<u8>,
     variables: HashMap<String, Variable>
 }
@@ -392,9 +392,6 @@ impl Shell {
             tcsetpgrp(libq::io::STDIN_FD, my_pid).expect("Failed to become the foreground process");
         }
 
-        let mut builtin_map = HashMap::new();
-        builtin_map.insert(String::from("exit"), builtins::exit as builtins::Builtin);
-
         let mut variables_map = HashMap::new();
         for (key, value) in env::vars() {
             variables_map.insert(key.clone(), Variable{
@@ -408,7 +405,7 @@ impl Shell {
             is_interactive: is_interactive,
             parent_pgid: my_pgid,
             terminal_fd: libq::io::STDIN_FD,
-            builtins: builtin_map,
+            builtins: builtins::get_builtin_registry(),
             exitcode: None,
             variables: variables_map
         }
@@ -418,7 +415,7 @@ impl Shell {
         match job.pgid {
             // Some jobs don't have PGIDs (e.g. pipelines with builtins)
             Some(pgid) => {
-                tcsetpgrp(self.terminal_fd, job.pgid.unwrap()).expect("Failed to put job into foreground");
+                tcsetpgrp(self.terminal_fd, pgid).expect("Failed to put job into foreground");
                 job.wait();
                 tcsetpgrp(self.terminal_fd, self.parent_pgid).expect("Failed to get job control back from child process");
             },
@@ -434,15 +431,18 @@ impl Shell {
         return self.is_interactive;
     }
 
-    pub fn is_builtin(&self, name: &String) -> bool{
+    pub fn is_builtin(&self, name: &str) -> bool{
         return self.builtins.contains_key(name);
     }
 
     pub fn set_variable(&mut self, var: Variable) {
+        if var.environment {
+            env::set_var(var.name.clone(), var.value.clone());
+        }
         self.variables.insert(var.name.clone(), var);
     }
 
-    pub fn run_builtin(&mut self, name: &String, argv: &Vec<String>, streams: &IOTriple) -> i32 {
+    pub fn run_builtin(&mut self, name: &str, argv: &Vec<String>, streams: &IOTriple) -> i32 {
         return self.builtins.get(name).unwrap()(self, argv, streams);
     }
 

@@ -1,6 +1,14 @@
 use shell;
+use std::collections::HashMap;
 
 pub type Builtin = fn(&mut shell::Shell, &Vec<String>, &shell::IOTriple) -> i32;
+
+pub fn get_builtin_registry() -> HashMap<&'static str, Builtin> {
+    let mut registry = HashMap::new();
+    registry.insert("exit", exit as Builtin);
+    registry.insert("export", export as Builtin);
+    return registry;
+}
 
 pub fn exit(shell: &mut shell::Shell, _argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
     shell.exit(0);
@@ -8,7 +16,9 @@ pub fn exit(shell: &mut shell::Shell, _argv: &Vec<String>, _streams: &shell::IOT
 }
 
 pub fn export(shell: &mut shell::Shell, argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
-    for token in argv.iter() {
+    let mut iter = argv.iter();
+    iter.next(); // Skip first token, because that'll be "export"
+    for token in iter {
         let parts: Vec<&str> = token.split('=').collect();
 
         let (name, value) = match parts.len() {
