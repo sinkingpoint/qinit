@@ -23,7 +23,7 @@ fn _set_variables(shell: &mut shell::Shell, argv: &Vec<String>, environment: boo
         let parts: Vec<&str> = token.split('=').collect();
 
         let (name, value) = match parts.len() {
-            1 => (String::from(parts[0]), String::new()),
+            1 => (String::from(parts[0]), String::from(shell.get_variable(parts[0]))),
             2 => (String::from(parts[0]), String::from(parts[1])),
             _ => {
                 return 1

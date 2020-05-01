@@ -442,6 +442,13 @@ impl Shell {
         self.variables.insert(var.name.clone(), var);
     }
 
+    pub fn get_variable(&self, name: &str) -> &str {
+        return match self.variables.get(name) {
+            Some(var) => var.value.as_str(),
+            None => ""
+        };
+    }
+
     pub fn run_builtin(&mut self, name: &str, argv: &Vec<String>, streams: &IOTriple) -> i32 {
         return self.builtins.get(name).unwrap()(self, argv, streams);
     }
