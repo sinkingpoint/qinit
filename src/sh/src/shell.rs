@@ -82,6 +82,7 @@ impl Process {
         for index in 0..self.argv.len() {
             self.argv[index] = do_string_interpolation(&self.argv[index], shell)?;
         }
+        self.proc_name = self.argv[0].clone();
         return Ok(());
     }
 
