@@ -27,7 +27,7 @@ pub mod io {
         return Ok(count);
     }
 
-    pub fn full_write_str(fd: std::os::unix::io::RawFd, buf: String) -> nix::Result<usize>{
+    pub fn full_write_str(fd: std::os::unix::io::RawFd, buf: &String) -> nix::Result<usize>{
         return full_write_bytes(fd, buf.as_bytes());
     }
 }

@@ -13,5 +13,5 @@ fn main() {
         buffer.push(b'\n');
     }
 
-    libq::io::full_write(libq::io::STDOUT_FD, &buffer);
+    libq::io::full_write_bytes(libq::io::STDOUT_FD, &buffer[..]).unwrap();
 }
