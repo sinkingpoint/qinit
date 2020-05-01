@@ -7,17 +7,18 @@ pub fn get_builtin_registry() -> HashMap<&'static str, Builtin> {
     let mut registry = HashMap::new();
     registry.insert("exit", exit as Builtin);
     registry.insert("export", export as Builtin);
+    registry.insert("local", local as Builtin);
     return registry;
 }
 
-pub fn exit(shell: &mut shell::Shell, _argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
+fn exit(shell: &mut shell::Shell, _argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
     shell.exit(0);
     return 0;
 }
 
-pub fn export(shell: &mut shell::Shell, argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
+fn _set_variables(shell: &mut shell::Shell, argv: &Vec<String>, environment: bool) -> i32 {
     let mut iter = argv.iter();
-    iter.next(); // Skip first token, because that'll be "export"
+    iter.next(); // Skip first token, because that'll be the builtin name
     for token in iter {
         let parts: Vec<&str> = token.split('=').collect();
 
@@ -29,8 +30,15 @@ pub fn export(shell: &mut shell::Shell, argv: &Vec<String>, _streams: &shell::IO
             }
         };
 
-        shell.set_variable(shell::Variable::new(name, value, true));
+        shell.set_variable(shell::Variable::new(name, value, environment));
     }
-
     return 0;
+}
+
+fn export(shell: &mut shell::Shell, argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
+    return _set_variables(shell, argv, true)
+}
+
+fn local(shell: &mut shell::Shell, argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
+    return _set_variables(shell, argv, false)
 }
