@@ -51,25 +51,30 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
     }
 
     let mut head: Box<dyn ASTNode> = Box::new(ASTHead::new());
+    let head_ref: &mut Box<dyn ASTNode> = &mut head;
+    let mut inside_block = false;
     let mut current_node: Box<dyn ASTNode> = match tokens.first() {
         Some(_) => Box::new(PipelineNode::new()),
         None => Box::new(PipelineNode::new())
     };
     let mut current_block: Box<dyn ASTNode> = Box::new(ASTHead::new());
-    let mut current_block_ref: &mut Box<dyn ASTNode> = &mut head;
+    let mut current_block_ref: &mut Box<dyn ASTNode> = head_ref;
     
     for token in tokens {
         match token.as_str() {
             "if" if current_node.as_ref().is_complete() => {
                 current_block = Box::new(IfNode::new()) as Box<dyn ASTNode>;
                 current_block_ref = &mut current_block;
+                inside_block = true;
             }, // TODO: If Statements
             "while" if current_node.as_ref().is_complete() => {}, // TODO: While Statements
             "then" | "fi" | "do" | "done" => {
+                current_block_ref.ingest_node(current_node)?;
                 match current_block_ref.ingest_token(token) {
                     Ok(_) => {},
                     Err(err) if err.continuable => {
-                        current_block_ref = &mut head;
+                        current_block_ref = head_ref;
+                        inside_block = false;
                     },
                     Err(err) => {
                         return Err(err);
@@ -77,12 +82,13 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
                 }
 
                 if current_block_ref.is_complete() {
-                    head.ingest_node(current_block)?;
+                    head_ref.ingest_node(current_block)?;
                     current_block = match tokens.first() {
                         Some(_) => Box::new(PipelineNode::new()),
                         None => Box::new(PipelineNode::new())
                     };
-                    current_block_ref = &mut head;
+                    current_block_ref = head_ref;
+                    inside_block = false;
                 }
 
                 current_node = Box::new(PipelineNode::new());
@@ -106,11 +112,15 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
         }
     }
 
-    match current_block_ref.ingest_node(current_node) {
-        Ok(_) => {},
-        Err(err) => {
-            return Err(err);
+    current_block_ref.ingest_node(current_node)?;
+    if inside_block {
+        if !current_block_ref.is_complete() {
+            return Err(ParseError{
+                error: String::from("Incomplete block"),
+                continuable: true
+            });
         }
+        head.ingest_node(current_block)?;
     }
 
     return Ok(head);
@@ -141,8 +151,11 @@ impl ASTNode for ASTHead {
         };
     }
 
-    fn ingest_token(&mut self, _token: &String) -> Result<bool, ParseError> {
-        return Ok(false);
+    fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError> {
+        return Err(ParseError{
+            error: String::from(format!("Failed to ingest token: {} - Head objects don't take tokens!", token)),
+            continuable: false
+        });
     }
 
     fn is_complete(&self) -> bool {
@@ -158,12 +171,7 @@ impl ASTNode for ASTHead {
 impl fmt::Display for ASTHead {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for node in self.nodes.iter() {
-            match write!(f, "- {}", node) {
-                Ok(_) => {},
-                Err(err) => {
-                    return Err(err);
-                }
-            }
+            write!(f, "{}", node)?;
         }
         return Ok(());
     }
@@ -255,11 +263,11 @@ impl fmt::Display for IfNode {
         for node in &self.condition {
             write!(f, "{}; ", node)?;
         }
-        f.write_str(" then\n")?;
+        f.write_str("then\n")?;
         for node in &self.body {
             write!(f, "{}; ", node)?;
         }
-        f.write_str("\ndone")?;
+        f.write_str("\nfi")?;
         return Ok(());
     }
 }
@@ -402,13 +410,13 @@ impl ASTNode for PipelineNode {
 
 impl fmt::Display for PipelineNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut i = 0;
         for node in self.processes.iter() {
-            match write!(f, "{} | ", node) {
-                Ok(_) => {},
-                Err(err) => {
-                    return Err(err);
-                }
+            write!(f, "{}", node)?;
+            if i == self.processes.len() {
+                write!(f, " | ")?;
             }
+            i += 1;
         }
         return Ok(());
     }

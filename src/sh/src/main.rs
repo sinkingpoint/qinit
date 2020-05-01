@@ -49,16 +49,19 @@ fn main() {
             },
             Ok(tokens) => {
                 //Process Tokens
-                current_buffer.clear();
                 if tokens.len() == 0 {
                     continue;
                 }
                 match ast::parse_into_ast(&tokens) {
                     Ok(ast) => {
+                        current_buffer.clear();
                         ast.execute(&mut shell, None, &shell::IOTriple::new());
                     },
                     Err(err) => {
-                        if !err.continuable {
+                        if err.continuable {
+                            current_buffer.push('\n');
+                        }
+                        else {
                             eprintln!("Error: {}", err.error);
                             current_buffer.clear();
                         }
