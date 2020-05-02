@@ -4,7 +4,8 @@ rust_library(
     name = "libq",
     srcs = [
         "src/lib.rs",
-        "src/strings.rs"
+        "src/strings.rs",
+        "src/io.rs"
     ],
     deps = [
         "//src/cargo:nix",

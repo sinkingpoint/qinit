@@ -12,9 +12,9 @@ use builtins;
 
 pub struct IOTriple {
     /// An IOTriple represents the 3 standard IO streams of a Unix process
-    stdin: RawFd,
-    stdout: RawFd,
-    stderr: RawFd,
+    pub stdin: RawFd,
+    pub stdout: RawFd,
+    pub stderr: RawFd,
 }
 
 impl IOTriple {
