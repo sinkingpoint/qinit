@@ -22,6 +22,15 @@ rust_binary(
     srcs = ["cat/src/main.rs"],
     visibility = ["//visibility:public",],
     deps = [
+        "//src/cargo:clap"
+    ],
+)
+
+rust_binary(
+    name = "mount",
+    srcs = ["mount/src/main.rs"],
+    visibility = ["//visibility:public",],
+    deps = [
         "//src/cargo:nix",
         "//src/cargo:clap"
     ],
