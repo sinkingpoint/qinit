@@ -1,0 +1,18 @@
+"""
+cargo-raze workspace build file.
+
+DO NOT EDIT! Replaced on runs of cargo-raze
+"""
+package(default_visibility = ["//visibility:public"])
+
+licenses([
+  "notice" # See individual crates for specific licenses
+])
+alias(
+    name = "clap",
+    actual = "//src/cargo/vendor/clap-2.33.0:clap",
+)
+alias(
+    name = "nix",
+    actual = "//src/cargo/vendor/nix-0.17.0:nix",
+)

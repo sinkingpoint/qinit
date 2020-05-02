@@ -7,7 +7,7 @@ rust_library(
         "src/strings.rs"
     ],
     deps = [
-        "//src/libq/cargo:nix",
+        "//src/cargo:nix",
     ],
     visibility = ["//visibility:public",],
 )

@@ -12,7 +12,7 @@ rust_binary(
     srcs = ["mknod/src/main.rs"],
     visibility = ["//visibility:public",],
     deps = [
-        "//src/libq/cargo:nix",
-        "//src/coreutils/cargo:clap"
+        "//src/cargo:nix",
+        "//src/cargo:clap"
     ],
 )

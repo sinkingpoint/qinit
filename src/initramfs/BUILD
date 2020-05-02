@@ -13,6 +13,7 @@ initramfs(
     name = "initramfs",
     bins = [
         "//src/coreutils:echo",
+        "//src/coreutils:mknod",
         "//src/sh",
     ],
     libs = [

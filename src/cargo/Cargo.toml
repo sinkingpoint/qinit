@@ -1,0 +1,21 @@
+[package]
+name = "cargo"
+version = "0.1.0"
+authors = ["sinkingpoint <colin@quirl.co.nz>"]
+edition = "2018"
+
+[dependencies]
+nix = "0.17.0"
+clap = "2.33.0"
+
+[lib]
+path = "fake_lib.rs"
+
+[raze]
+workspace_path = "//src/cargo"
+output_buildfile_suffix = "BUILD.bazel"
+
+[raze.crates.libc.'0.2.69']
+additional_flags = [
+    "--cfg=libc_align"
+]

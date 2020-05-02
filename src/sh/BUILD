@@ -10,7 +10,7 @@ rust_binary(
     ],
     deps = [
         "//src/libq",
-        "//src/libq/cargo:nix"
+        "//src/cargo:nix"
     ],
     visibility = ["//visibility:public",],
 )
