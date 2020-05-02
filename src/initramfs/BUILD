@@ -12,8 +12,11 @@ py_binary(
 initramfs(
     name = "initramfs",
     bins = [
+        "//src/coreutils:cat",
         "//src/coreutils:echo",
         "//src/coreutils:mknod",
+        "//src/coreutils:mkdir",
+        "//src/coreutils:mount",
         "//src/sh",
     ],
     libs = [

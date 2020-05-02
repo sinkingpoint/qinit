@@ -1,7 +1,9 @@
 extern crate nix;
 extern crate clap;
+extern crate libq;
 
-use nix::sys::stat::{mknod, SFlag, Mode, makedev};
+use libq::qnix::to_mode;
+use nix::sys::stat::{mknod, SFlag, makedev};
 use clap::{Arg, App};
 
 fn is_int(val: String) -> Result<(), String> {
@@ -9,16 +11,6 @@ fn is_int(val: String) -> Result<(), String> {
         Ok(_) => return Ok(()),
         Err(_) => return Err(String::from("Must be a number"))
     };
-}
-
-fn to_mode(mode: String) -> Result<Mode, String> {
-    if let Ok(bits) = u32::from_str_radix(&mode, 8) {
-        if let Some(mode) = Mode::from_bits(bits) {
-            return Ok(mode);
-        }
-    }
-    
-    return Err(format!("Invalid mode: {}", mode));
 }
 
 fn main() {

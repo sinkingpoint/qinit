@@ -12,6 +12,7 @@ rust_binary(
     srcs = ["mknod/src/main.rs"],
     visibility = ["//visibility:public",],
     deps = [
+        "//src/libq",
         "//src/cargo:nix",
         "//src/cargo:clap"
     ],
@@ -31,6 +32,17 @@ rust_binary(
     srcs = ["mount/src/main.rs"],
     visibility = ["//visibility:public",],
     deps = [
+        "//src/cargo:nix",
+        "//src/cargo:clap"
+    ],
+)
+
+rust_binary(
+    name = "mkdir",
+    srcs = ["mkdir/src/main.rs"],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/libq",
         "//src/cargo:nix",
         "//src/cargo:clap"
     ],

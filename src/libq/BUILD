@@ -5,7 +5,8 @@ rust_library(
     srcs = [
         "src/lib.rs",
         "src/strings.rs",
-        "src/io.rs"
+        "src/io.rs",
+        "src/qnix.rs"
     ],
     deps = [
         "//src/cargo:nix",

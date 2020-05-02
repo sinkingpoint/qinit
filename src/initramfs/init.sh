@@ -2,6 +2,10 @@
 
 export PATH=/bin
 
-echo "cats and dogs 2"
+mkdir /proc
+mount -t proc proc /proc
+cat /proc/cmdline | read cmdline
+
+echo $cmdline
 
 sh
