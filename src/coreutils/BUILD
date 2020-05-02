@@ -16,3 +16,13 @@ rust_binary(
         "//src/cargo:clap"
     ],
 )
+
+rust_binary(
+    name = "cat",
+    srcs = ["cat/src/main.rs"],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:nix",
+        "//src/cargo:clap"
+    ],
+)
