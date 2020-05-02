@@ -22,48 +22,36 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
         });
     }
 
-    let mut head: Box<dyn ASTNode> = Box::new(ASTHead::new());
-    let head_ref: &mut Box<dyn ASTNode> = &mut head;
-    let mut inside_block = false;
-    let mut current_node: Box<dyn ASTNode> = match tokens.first() {
-        Some(_) => Box::new(PipelineNode::new()),
-        None => Box::new(PipelineNode::new())
-    };
-    let mut current_block: Box<dyn ASTNode> = Box::new(ASTHead::new());
-    let mut current_block_ref: &mut Box<dyn ASTNode> = head_ref;
+    let mut current_node: Box<dyn ASTNode> = Box::new(PipelineNode::new());
+    let mut block_stack:Vec<Box<dyn ASTNode>> = Vec::new();
+    block_stack.push(Box::new(ASTHead::new()));
     
     for token in tokens {
         match token.as_str() {
             "if" if current_node.as_ref().is_complete() => {
-                current_block = Box::new(IfNode::new()) as Box<dyn ASTNode>;
-                current_block_ref = &mut current_block;
-                inside_block = true;
+                block_stack.push(Box::new(IfNode::new()) as Box<dyn ASTNode>);
             }, // TODO: If Statements
             "while" if current_node.as_ref().is_complete() => {}, // TODO: While Statements
             "then" | "fi" | "do" | "done" => {
-                current_block_ref.ingest_node(current_node)?;
-                match current_block_ref.ingest_token(token) {
+                block_stack.last_mut().unwrap().ingest_node(current_node)?;
+                current_node = Box::new(PipelineNode::new());
+                match block_stack.last_mut().unwrap().ingest_token(token) {
                     Ok(_) => {},
                     Err(err) if err.continuable => {
-                        current_block_ref = head_ref;
-                        inside_block = false;
+                        let new_block = block_stack.pop().unwrap();
+                        let last_block = block_stack.last_mut().unwrap();
+                        last_block.ingest_node(new_block)?;
                     },
                     Err(err) => {
                         return Err(err);
                     }
                 }
 
-                if current_block_ref.is_complete() {
-                    head_ref.ingest_node(current_block)?;
-                    current_block = match tokens.first() {
-                        Some(_) => Box::new(PipelineNode::new()),
-                        None => Box::new(PipelineNode::new())
-                    };
-                    current_block_ref = head_ref;
-                    inside_block = false;
+                if block_stack.last_mut().unwrap().is_complete() {
+                    let new_block = block_stack.pop().unwrap();
+                    let last_block = block_stack.last_mut().unwrap();
+                    last_block.ingest_node(new_block)?;
                 }
-
-                current_node = Box::new(PipelineNode::new());
             },
             "&&" => {}, // TODO: And statements
             "||" => {}, // TODO: Or Statements
@@ -72,7 +60,7 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
                     Ok(_) => {},
                     Err(err) => {
                         if err.continuable {
-                            current_block_ref.ingest_node(current_node)?;
+                            block_stack.last_mut().unwrap().ingest_node(current_node)?;
                             current_node = Box::new(PipelineNode::new());
                         }
                         else {
@@ -84,18 +72,26 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
         }
     }
 
-    current_block_ref.ingest_node(current_node)?;
-    if inside_block {
-        if !current_block_ref.is_complete() {
+    block_stack.last_mut().unwrap().ingest_node(current_node)?;
+    if block_stack.len() == 2 {
+        if !block_stack.last_mut().unwrap().is_complete() {
             return Err(ParseError{
                 error: "Incomplete block",
                 continuable: true
             });
         }
-        head.ingest_node(current_block)?;
+        let new_block = block_stack.pop().unwrap();
+        let last_block = block_stack.last_mut().unwrap();
+        last_block.ingest_node(new_block)?;
+    }
+    else if block_stack.len() > 1 {
+        return Err(ParseError{
+            error: "Unclosed block",
+            continuable: true
+        });
     }
 
-    return Ok(head);
+    return Ok(block_stack.pop().unwrap());
 }
 
 struct ASTHead {
