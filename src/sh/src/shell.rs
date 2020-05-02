@@ -1,13 +1,14 @@
 use std::io::Write;
-use nix::sys::signal;
 use std::collections::HashMap;
-use builtins;
 use std::os::unix::io::RawFd;
+use std::env;
 use std::ffi::{CStr, CString};
+use nix::sys::signal;
 use nix::unistd::{fork, ForkResult, Pid, tcsetpgrp, tcgetpgrp, pipe, execvp, dup2, close, getpid, setpgid, getpgrp, isatty};
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
+use nix::errno::Errno::{ENOENT,ECHILD};
 use libq::io::{STDIN_FD, STDOUT_FD, STDERR_FD};
-use std::env;
+use builtins;
 
 pub struct IOTriple {
     /// An IOTriple represents the 3 standard IO streams of a Unix process
@@ -143,10 +144,17 @@ impl Process {
             Ok(_) => {
             },
             Err(e) => {
-                panic!("Failed to exec: {}", e);
+                if let Some(errno) = e.as_errno() {
+                    if errno == ENOENT {
+                        eprintln!("No such command: {}", self.proc_name);
+                    }
+                }
+                else {
+                    panic!("Failed to exec: {}", e);
+                }
             }
         }
-        return 0; // This just makes the compiler happy. We shouldn't ever get here
+        return 1;
     }
 }
 
@@ -332,7 +340,14 @@ impl Job {
                 }
             },
             Err(err) => {
-                eprintln!("Failed to wait: {}", err);
+                if let Some(errno) = err.as_errno() {
+                    if errno != ECHILD {
+                        eprintln!("Failed to wait: {}", err);
+                    }
+                }
+                else {
+                    eprintln!("Failed to wait: {}", err);
+                }
                 return true;
             }
         }
@@ -398,15 +413,15 @@ impl Job {
                             process.started = true;
                             match fork() {
                                 Ok(ForkResult::Parent { child, .. }) => {
-                                    if shell.is_interactive() {
+                                    if shell.is_interactive {
                                         self.pgid = match self.pgid {
                                             None => Some(child),
                                             Some(_) => self.pgid
                                         };
-                                        process.pid = Some(child);
                 
                                         setpgid(child, self.pgid.unwrap()).expect("Failed to start new process group");
                                     }
+                                    process.pid = Some(child);
                                 }
                                 Ok(ForkResult::Child) => {
                                     process.execute(shell, group, &IOTriple{
@@ -425,11 +440,11 @@ impl Job {
                     }
                 
                     if infile != streams.stdin {
-                        close(infile).unwrap();
+                        close(infile).expect("Failed to close input stream");
                     }
         
                     if outfile != streams.stdout {
-                        close(outfile).unwrap();
+                        close(outfile).expect("Failed to close output stream");
                     }
                 }
             }
@@ -447,7 +462,12 @@ impl Job {
             shell.put_job_in_background(self);
         }
 
-        return self.processes[0].status.unwrap();
+        if let Some(status) = self.processes[0].status {
+            return status;
+        }
+        else {
+            return 255; // Somethings gone wrong in the pipeline. ENOENT or something, so just bail
+        }
     }
 }
 
@@ -486,43 +506,47 @@ pub struct Shell {
 
 impl Shell {
     pub fn new(is_repl: bool) -> Shell {
-        let is_interactive = match isatty(libq::io::STDIN_FD) {
+        let shell_terminal = STDERR_FD;
+        // let is_interactive = false;
+        let mut is_interactive = match isatty(shell_terminal) {
             Ok(tty) => tty,
             Err(errno) => {
                 panic!("STDIN is being weird: {}", errno);
             }
         };
     
-        let my_pgid = getpgrp();
+        let mut my_pgid = getpgrp();
         if is_interactive {
-            let mut fg_pgid = match tcgetpgrp(libq::io::STDIN_FD) {
-                Ok(is_fg) => is_fg,
-                Err(errno) => {
-                    panic!("STDIN is being weird: {}", errno);
-                }
-            };
-    
-            while fg_pgid != my_pgid {
-                signal::kill(my_pgid, signal::SIGTTIN).unwrap();
-                fg_pgid = match tcgetpgrp(libq::io::STDIN_FD) {
-                    Ok(is_fg) => is_fg,
-                    Err(errno) => {
-                        panic!("STDIN is being weird: {}", errno);
+            while {
+                let fg_pgid = match tcgetpgrp(STDOUT_FD) {
+                    Ok(fg_pgid) => fg_pgid,
+                    Err(_errno) => {
+                        is_interactive = false;
+                        Pid::from_raw(-1)
                     }
                 };
+                my_pgid = getpgrp();
+                is_interactive && fg_pgid != my_pgid
+            } {
+                signal::kill(Pid::from_raw(-my_pgid.as_raw()), signal::SIGTTIN).unwrap();
             }
-    
-            unsafe {
-                signal::signal(signal::SIGINT, signal::SigHandler::SigIgn).unwrap();
-                signal::signal(signal::SIGQUIT, signal::SigHandler::SigIgn).unwrap();
-                signal::signal(signal::SIGTSTP, signal::SigHandler::SigIgn).unwrap();
-                signal::signal(signal::SIGTTIN, signal::SigHandler::SigIgn).unwrap();
-                signal::signal(signal::SIGTTOU, signal::SigHandler::SigIgn).unwrap();
+
+            if !is_interactive {
+                eprintln!("Failed to start job control. Continuing without it");
             }
-    
-            let my_pid = getpid();
-            setpgid(my_pid, my_pid).expect("Failed to set PGID for shell");
-            tcsetpgrp(libq::io::STDIN_FD, my_pid).expect("Failed to become the foreground process");
+            else {
+                unsafe {
+                    signal::signal(signal::SIGINT, signal::SigHandler::SigIgn).unwrap();
+                    signal::signal(signal::SIGQUIT, signal::SigHandler::SigIgn).unwrap();
+                    signal::signal(signal::SIGTSTP, signal::SigHandler::SigIgn).unwrap();
+                    signal::signal(signal::SIGTTIN, signal::SigHandler::SigIgn).unwrap();
+                    signal::signal(signal::SIGTTOU, signal::SigHandler::SigIgn).unwrap();
+                }
+        
+                let my_pid = getpid();
+                setpgid(my_pid, my_pid).expect("Failed to set PGID for shell");
+                tcsetpgrp(shell_terminal, my_pid).expect("Failed to become the foreground process");
+            }
         }
 
         let mut variables_map = HashMap::new();

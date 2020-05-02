@@ -9,6 +9,10 @@ licenses([
   "notice" # See individual crates for specific licenses
 ])
 alias(
+    name = "clap",
+    actual = "//src/coreutils/cargo/vendor/clap-2.33.0:clap",
+)
+alias(
     name = "nix",
-    actual = "//src/libq/cargo/vendor/nix-0.17.0:nix",
+    actual = "//src/coreutils/cargo/vendor/nix-0.17.0:nix",
 )

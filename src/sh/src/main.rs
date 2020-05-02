@@ -52,6 +52,7 @@ fn print_prompt(shell: &shell::Shell, process_name: &String, continue_prompt: bo
 }
 
 fn main() {
+    env::set_var("RUST_BACKTRACE", "full");
     let argv: Vec<String> = env::args().collect();
     let is_repl = argv.len() == 1;
     let mut shell = shell::Shell::new(is_repl);

@@ -6,7 +6,7 @@ DO NOT EDIT! Replaced on runs of cargo-raze
 package(default_visibility = [
   # Public for visibility by "@raze__crate__version//" targets.
   #
-  # Prefer access through "//src/libq/cargo", which limits external
+  # Prefer access through "//src/coreutils/cargo", which limits external
   # visibility to explicit Cargo.toml dependencies.
   "//visibility:public",
 ])
@@ -32,10 +32,10 @@ rust_library(
     edition = "2015",
     srcs = glob(["**/*.rs"]),
     deps = [
-        "//src/libq/cargo/vendor/bitflags-1.2.1:bitflags",
-        "//src/libq/cargo/vendor/cfg-if-0.1.10:cfg_if",
-        "//src/libq/cargo/vendor/libc-0.2.69:libc",
-        "//src/libq/cargo/vendor/void-1.0.2:void",
+        "//src/coreutils/cargo/vendor/bitflags-1.2.1:bitflags",
+        "//src/coreutils/cargo/vendor/cfg-if-0.1.10:cfg_if",
+        "//src/coreutils/cargo/vendor/libc-0.2.69:libc",
+        "//src/coreutils/cargo/vendor/void-1.0.2:void",
     ],
     rustc_flags = [
         "--cap-lints=allow",

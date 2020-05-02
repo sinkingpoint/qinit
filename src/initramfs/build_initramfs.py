@@ -11,10 +11,10 @@ def mkdir(base_dir, dir):
     pathlib.Path("{}{}".format(base_dir, dir)).mkdir(parents=True, exist_ok=True)
 
 def main(bins, libs, init, output_file, compress):
-    base_dir = tempfile.mkdtemp()
+    base_dir = '/tmp/initramfs'
     mkdir(base_dir, "/bin")
     mkdir(base_dir, "/lib64")
-    files = []
+    files = ['./dev/urandom']
     files.append("./bin")
     files.append("./lib64")
     for exe in bins:
