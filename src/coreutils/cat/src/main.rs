@@ -5,7 +5,7 @@ use std::fs::File;
 
 fn main() {
     let args = App::new("cat")
-                    .version("1.0")
+                    .version("1.1")
                     .author("Colin D. <colin@quirl.co.nz>")
                     .about("concatenate files and print on the standard output")
                     .arg(Arg::with_name("number-nonblank").short("b").long("number-nonblank").help("Print line numbers for non blank lines. Overrides -n").overrides_with("number"))
@@ -18,6 +18,7 @@ fn main() {
 
     let number_nonblank = args.is_present("number-nonblank");
     let number = number_nonblank || args.is_present("number");
+    let show_ends = args.is_present("show-ends");
     let squeeze_blank = args.is_present("squeeze-blank");
     let show_tabs = args.is_present("show-tabs");
     let files = args.values_of("files").unwrap();
@@ -65,6 +66,9 @@ fn main() {
             }
 
             output.push_str(line.as_str());
+            if show_ends {
+                output.push('$');
+            }
             println!("{}", output);
         }
     }
