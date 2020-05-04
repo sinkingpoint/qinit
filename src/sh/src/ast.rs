@@ -42,9 +42,6 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
     block_stack.push(Box::new(ASTHead::new()));
     
     for token in tokens {
-        if token.trim().len() == 0 {
-            continue;
-        }
         match token.as_str() {
             "if" if current_node.as_ref().is_complete() => {
                 block_stack.push(Box::new(IfNode::new()) as Box<dyn ASTNode>);
@@ -55,17 +52,17 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
             "case" if current_node.as_ref().is_complete() => {
                 block_stack.push(Box::new(CaseNode::new()) as Box<dyn ASTNode>);
             },
-            "while" if current_node.as_ref().is_complete() => {}, // TODO: While Statements
-            "then" | "fi" | "do" | "done" | "in" | ";;" => {
+            "then" | "fi" | "do" | "done" | "in" | ";;" | "esac" => {
                 block_stack.last_mut().unwrap().ingest_node(current_node)?;
                 current_node = Box::new(PipelineNode::new());
+                
                 match block_stack.last_mut().unwrap().ingest_token(token) {
-                    Ok(_) => {},
-                    Err(err) if err.continuable => {
+                    Ok(true) => {
                         let new_block = block_stack.pop().unwrap();
                         let last_block = block_stack.last_mut().unwrap();
                         last_block.ingest_node(new_block)?;
                     },
+                    Ok(false) => {},
                     Err(err) => {
                         return Err(err);
                     }
@@ -80,21 +77,19 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
             "&&" => {}, // TODO: And statements
             "||" => {}, // TODO: Or Statements
             _ => {
-                let mut node = match block_stack.last_mut() {
+                let node = match block_stack.last_mut() {
                     Some(node) if node.takes_tokens() => node,
                     _ => &mut current_node
                 };
 
                 match node.ingest_token(token) {
-                    Ok(_) => {},
+                    Ok(true) => {
+                        block_stack.last_mut().unwrap().ingest_node(current_node)?;
+                        current_node = Box::new(PipelineNode::new());
+                    },
+                    Ok(false) => {},
                     Err(err) => {
-                        if err.continuable {
-                            block_stack.last_mut().unwrap().ingest_node(current_node)?;
-                            current_node = Box::new(PipelineNode::new());
-                        }
-                        else {
-                            return Err(err);
-                        }
+                        return Err(err);
                     }
                 }
             },
@@ -170,6 +165,7 @@ impl fmt::Display for ASTHead {
 }
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 enum ConditionalBuildState {
     Variable,
     Condition,
@@ -249,15 +245,18 @@ impl ASTNode for CaseNode {
     }
 
     fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError> {
+        if token.trim() == "" {
+            return Ok(false); // Skip whitespace chars
+        }
         match &self.state {
             ConditionalBuildState::Variable => {
                 if self.variable == "" {
                     self.variable = token.clone();
-                    return Ok(true);
+                    return Ok(false);
                 }
                 else if token == "in" {
                     self.state = ConditionalBuildState::Condition;
-                    return Ok(true);
+                    return Ok(false);
                 }
                 return Err(ParseError::new("Expected `in`", false));
             }
@@ -265,7 +264,7 @@ impl ASTNode for CaseNode {
                 if token.ends_with(")") {
                     self.cases.push(Case::new(token.trim_end_matches(")").to_string()));
                     self.state = ConditionalBuildState::Body;
-                    return Ok(true);
+                    return Ok(false);
                 }
                 else if token == "esac" {
                     self.state = ConditionalBuildState::Done;
@@ -276,9 +275,9 @@ impl ASTNode for CaseNode {
             ConditionalBuildState::Body => {
                 if token == ";;" {
                     self.state = ConditionalBuildState::Condition;
-                    return Ok(true);
+                    return Ok(false);
                 }
-                return Err(ParseError::from_string(format!("Unexpected token `{}`", token), false));
+                return Err(ParseError::from_string(format!("Unexpected token `{}`. Expected start of new case", token), false));
             },
             _ => {
                 return Err(ParseError::from_string(format!("Unexpected token `{}`", token), false));
@@ -308,11 +307,11 @@ impl ASTNode for CaseNode {
 
 impl fmt::Display for CaseNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "case {} in\n", self.variable)?;
+        writeln!(f, "case Value( {} ) in\n", self.variable)?;
         for case in &self.cases {
-            writeln!(f, "{})", case.glob)?;
+            writeln!(f, "Case( Glob( {} ), ", case.glob)?;
             for node in &case.body {
-                writeln!(f, "{}", node)?;
+                writeln!(f, "Statement( {} )", node)?;
             }
             writeln!(f, ";;")?;
         }
@@ -370,6 +369,9 @@ impl ASTNode for ForNode {
     }
 
     fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError> {
+        if token.trim() == "" {
+            return Ok(false); // Skip whitespace chars
+        }
         match &self.state {
             ConditionalBuildState::Variable => {
                 match token.as_str() {
@@ -378,12 +380,14 @@ impl ASTNode for ForNode {
                             return Err(ParseError::new("Expecting variable in for", false));
                         }
                         self.state = ConditionalBuildState::Condition;
+                        return Ok(false);
                     },
                     _ => {
                         if self.variable != "" {
                             return Err(ParseError::new("Expecting `in`", false));
                         }
                         self.variable = token.clone();
+                        return Ok(false);
                     }
                 }
             },
@@ -396,6 +400,7 @@ impl ASTNode for ForNode {
                         self.iter.push(token.to_string());
                     }
                 }
+                return Ok(false);
             },
             ConditionalBuildState::EndCondition => {
                 match token.as_str() {
@@ -403,17 +408,19 @@ impl ASTNode for ForNode {
                         self.state = ConditionalBuildState::Body;
                     },
                     _ => {
-                        return Err(ParseError::new("Unexpected token. Expected `do`", false));
+                        return Err(ParseError::from_string(format!("Unexpected token `{}`. Expected `do`", token), false));
                     }
                 }
+                return Ok(false);
             },
             ConditionalBuildState::Body => {
                 match token.as_str() {
                     "done" => {
                         self.state = ConditionalBuildState::Done;
+                        return Ok(true);
                     },
                     _ => {
-                        return Err(ParseError::new("Unexpected token. Expected `do`", false));
+                        return Err(ParseError::from_string(format!("Unexpected token `{}`. Expected `done`", token), false));
                     }
                 }
             },
@@ -424,7 +431,6 @@ impl ASTNode for ForNode {
                 return Err(ParseError::new("Unexpected state Done", false));
             }
         };
-        return Ok(true);
     }
 
     fn is_complete(&self) -> bool {
@@ -449,13 +455,13 @@ impl ASTNode for ForNode {
 
 impl fmt::Display for ForNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("for ")?;
+        write!(f, "for Variable( {} ) in ", self.variable)?;
         for node in &self.iter {
-            write!(f, "{} ", node)?;
+            write!(f, "Element( {} ) ", node)?;
         }
         f.write_str("do\n")?;
         for node in &self.body {
-            write!(f, "{}; ", node)?;
+            writeln!(f, "{}; ", node)?;
         }
         f.write_str("\ndone")?;
         return Ok(());
@@ -502,7 +508,7 @@ impl ASTNode for IfNode {
             }
         };
 
-        return Ok(true);
+        return Ok(self.state == ConditionalBuildState::Done);
     }
 
     fn is_complete(&self) -> bool {
@@ -538,11 +544,11 @@ impl fmt::Display for IfNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("if ")?;
         for node in &self.condition {
-            write!(f, "{}; ", node)?;
+            write!(f, "Condition( {} ); ", node)?;
         }
         f.write_str("then\n")?;
         for node in &self.body {
-            write!(f, "{}; ", node)?;
+            write!(f, "Body(\n{};\n) ", node)?;
         }
         f.write_str("\nfi")?;
         return Ok(());
@@ -578,7 +584,7 @@ impl ASTNode for ProcessNode {
     fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError>{
         match token.as_str() {
             "|" => {
-                return Err(ParseError::new("Pipe signals end of process ingestion", true));
+                return Ok(true);
             },
             "&" => {
                 self.foreground = false;
@@ -591,7 +597,7 @@ impl ASTNode for ProcessNode {
                 self.argv.push(token.clone());
             }
         }
-        return Ok(true);
+        return Ok(false);
     }
 
     fn is_complete(&self) -> bool {
@@ -609,7 +615,7 @@ impl ASTNode for ProcessNode {
 
 impl fmt::Display for ProcessNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        return write!(f, "{}", self.argv[..].join(" "));
+        return write!(f, "Process( {} )", self.argv[..].join(" "));
     }
 }
 
@@ -637,7 +643,8 @@ impl ASTNode for PipelineNode {
     fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError> {
         match token.as_str() {
             "\n" | ";" => {
-                return Err(ParseError::new("End of Pipeline", true)); // If we hit a ; or a \n, we're at the end of the whole pipeline
+                self.finished = true;
+                return Ok(true); // If we hit a ; or a \n, we're at the end of the whole pipeline
             },
             _ => {}
         }
@@ -648,7 +655,7 @@ impl ASTNode for PipelineNode {
                 Ok(_) => {
                     self.processes.push(node);
                     self.finished = false;
-                    return Ok(true);
+                    return Ok(false);
                 }
                 Err(err) => {
                     return Err(err);
@@ -657,15 +664,15 @@ impl ASTNode for PipelineNode {
         }
         else {
             self.finished = match self.processes.last_mut().unwrap().ingest_token(token) {
-                Ok(_) => false,
-                Err(err) if err.continuable => true,
+                Ok(true) => true,
+                Ok(false) => false,
                 Err(err) => {
                     return Err(err);
                 }
             };
         }
 
-        return Ok(true);
+        return Ok(false);
     }
 
     fn is_complete(&self) -> bool {
@@ -684,6 +691,7 @@ impl ASTNode for PipelineNode {
 impl fmt::Display for PipelineNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut i = 0;
+        writeln!(f, "Pipeline(")?;
         for node in self.processes.iter() {
             write!(f, "{}", node)?;
             if i == self.processes.len() {
@@ -691,6 +699,7 @@ impl fmt::Display for PipelineNode {
             }
             i += 1;
         }
+        writeln!(f, "\n)")?;
         return Ok(());
     }
 }

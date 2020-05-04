@@ -27,7 +27,7 @@ fn main() {
                     .arg(Arg::with_name("mode").short("m").long("mode").help("set file mode (ala chmod). umask").takes_value(true).default_value("775"))
                     .arg(Arg::with_name("parent").short("p").long("parents").help("Create parent directories as needed"))
                     .arg(Arg::with_name("verbose").short("v").long("verbose").help("Print out a line for every directory created"))
-                    .arg(Arg::with_name("directories").takes_value(true).value_name("DIRECTORY").index(1).required(true))
+                    .arg(Arg::with_name("directories").takes_value(true).multiple(true).value_name("DIRECTORY").index(1).required(true))
                     .get_matches();
 
     let directories = args.values_of("directories").unwrap();
