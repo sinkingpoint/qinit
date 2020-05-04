@@ -1,5 +1,6 @@
 extern crate nix;
 extern crate libq;
+extern crate regex;
 
 use std::env;
 use std::io;

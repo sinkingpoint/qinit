@@ -1,6 +1,7 @@
 use shell;
 use std::str::Chars;
 use std::iter::Peekable;
+use regex::Regex;
 
 struct VariableBuilder {
     build: String,
@@ -48,6 +49,63 @@ impl VariableBuilder {
     fn could_be_done(&self) -> bool{
         return !self.in_braces || self.done
     }
+}
+
+fn glob_to_regex(glob: &String) -> String {
+    let mut result = String::new();
+    let mut iter = glob.chars().peekable();
+    while let Some(chr) = iter.next() {
+        match chr {
+            '*' => {
+                result.push_str(".*");
+            },
+            '?' => {
+                result.push('.');
+            },
+            '[' => {
+                let mut build = String::new();
+                if iter.peek().is_some() && iter.peek().unwrap() != &'!' {
+                    build.push(iter.next().unwrap());
+                }
+
+                if iter.peek().is_some() && iter.peek().unwrap() != &']' {
+                    build.push(iter.next().unwrap());
+                }
+
+                while iter.peek().is_some() && iter.peek().unwrap() != &']' {
+                    build.push(iter.next().unwrap());
+                }
+
+                if iter.peek().is_none() {
+                    result.push_str("\\[");
+                }
+                else {
+                    iter.next(); // Skip the ]
+                    build = build.replace("\\", "\\\\");
+                    if build.starts_with("!") {
+                        build = build.replacen("!", "^", 1);
+                    }
+                    else if build.starts_with("^") {
+                        build.insert(0, '\\');
+                    }
+                    result.push_str(&format!("[{}]", build));
+                }
+            },
+            '(' | ')' | ']' | '{' | '}' | '+' | '-' | '|' | '^' | '$' | '\\' | '.' | '&' | '~' | '#' | ' ' | '\t' | '\n' | '\r' => {
+                result.push_str(&format!("\\{}", chr));
+            },
+            _ => {
+                result.push(chr);
+            }
+        }
+    }
+
+    return format!("^{}$", result);
+}
+
+pub fn match_glob(glob: &String, value: &String) -> bool {
+    let glob_regex = Regex::new(&glob_to_regex(glob)).unwrap();
+    return glob_regex.is_match(&value);
 }
 
 #[derive(Debug)]

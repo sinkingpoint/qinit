@@ -42,6 +42,9 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
     block_stack.push(Box::new(ASTHead::new()));
     
     for token in tokens {
+        if token.trim().len() == 0 {
+            continue;
+        }
         match token.as_str() {
             "if" if current_node.as_ref().is_complete() => {
                 block_stack.push(Box::new(IfNode::new()) as Box<dyn ASTNode>);
@@ -49,8 +52,11 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
             "for" if current_node.as_ref().is_complete() => {
                 block_stack.push(Box::new(ForNode::new()) as Box<dyn ASTNode>);
             },
+            "case" if current_node.as_ref().is_complete() => {
+                block_stack.push(Box::new(CaseNode::new()) as Box<dyn ASTNode>);
+            },
             "while" if current_node.as_ref().is_complete() => {}, // TODO: While Statements
-            "then" | "fi" | "do" | "done" | "in" => {
+            "then" | "fi" | "do" | "done" | "in" | ";;" => {
                 block_stack.last_mut().unwrap().ingest_node(current_node)?;
                 current_node = Box::new(PipelineNode::new());
                 match block_stack.last_mut().unwrap().ingest_token(token) {
@@ -171,6 +177,148 @@ enum ConditionalBuildState {
     Body,
     EndBody,
     Done
+}
+
+struct Case {
+    glob: String,
+    body: Vec<Box<dyn ASTNode>>
+}
+
+impl Case {
+    fn new(glob:String) -> Case {
+        return Case {
+            glob: glob,
+            body: Vec::new()
+        }
+    }
+
+    fn execute(&self, shell: &mut shell::Shell, pgid: Option<Pid>, streams: &shell::IOTriple) -> i32 {
+        let mut ret_value = 0;
+        for statement in &self.body {
+            ret_value = statement.execute(shell, pgid, streams);
+        }
+
+        return ret_value;
+    }
+}
+
+struct CaseNode {
+    state: ConditionalBuildState,
+    variable: String,
+    cases: Vec<Case>
+}
+
+impl CaseNode {
+    fn new() -> CaseNode {
+        return CaseNode {
+            state: ConditionalBuildState::Variable,
+            variable: String::new(),
+            cases: Vec::new()
+        };
+    }
+}
+
+impl ASTNode for CaseNode {
+    fn execute(&self, shell: &mut shell::Shell, pgid: Option<Pid>, streams: &shell::IOTriple) -> i32 {
+        let value = strings::do_value_pipeline(&self.variable, shell).unwrap().join(" ");
+        let mut default = None;
+        for case in &self.cases {
+            if case.glob == "*" {
+                default = Some(case);
+                continue;
+            }
+
+            if strings::match_glob(&case.glob, &value) {
+                return case.execute(shell, pgid, streams);
+            }
+        }
+
+        // If we fall through, then execute the default one if it exists
+        if let Some(default_case) = default {
+            return default_case.execute(shell, pgid, streams);
+        }
+
+        return -1;
+    }
+
+    fn takes_tokens(&self) -> bool {
+        return match &self.state {
+            ConditionalBuildState::Variable | ConditionalBuildState::Condition => true,
+            _ => false
+        };
+    }
+
+    fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError> {
+        match &self.state {
+            ConditionalBuildState::Variable => {
+                if self.variable == "" {
+                    self.variable = token.clone();
+                    return Ok(true);
+                }
+                else if token == "in" {
+                    self.state = ConditionalBuildState::Condition;
+                    return Ok(true);
+                }
+                return Err(ParseError::new("Expected `in`", false));
+            }
+            ConditionalBuildState::Condition => {
+                if token.ends_with(")") {
+                    self.cases.push(Case::new(token.trim_end_matches(")").to_string()));
+                    self.state = ConditionalBuildState::Body;
+                    return Ok(true);
+                }
+                else if token == "esac" {
+                    self.state = ConditionalBuildState::Done;
+                    return Ok(true);
+                }
+                return Err(ParseError::from_string(format!("Parse error near {}", token), false));
+            },
+            ConditionalBuildState::Body => {
+                if token == ";;" {
+                    self.state = ConditionalBuildState::Condition;
+                    return Ok(true);
+                }
+                return Err(ParseError::from_string(format!("Unexpected token `{}`", token), false));
+            },
+            _ => {
+                return Err(ParseError::from_string(format!("Unexpected token `{}`", token), false));
+            }
+        }
+    }
+
+    fn is_complete(&self) -> bool {
+        return match &self.state {
+            ConditionalBuildState::Done => true,
+            _ => false
+        };
+    }
+
+    fn ingest_node(&mut self, node: Box<dyn ASTNode>) -> Result<bool, ParseError> {
+        match &self.state {
+            ConditionalBuildState::Body => {
+                self.cases.last_mut().unwrap().body.push(node);
+                return Ok(true);
+            },
+            _ => {}
+        }
+
+        return Ok(true);
+    }
+}
+
+impl fmt::Display for CaseNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "case {} in\n", self.variable)?;
+        for case in &self.cases {
+            writeln!(f, "{})", case.glob)?;
+            for node in &case.body {
+                writeln!(f, "{}", node)?;
+            }
+            writeln!(f, ";;")?;
+        }
+        writeln!(f, "esac")?;
+        return Ok(());
+    }
 }
 
 struct ForNode {
@@ -296,8 +444,6 @@ impl ASTNode for ForNode {
         }
 
         return Ok(true);
-
-        // return Err(ParseError::new("Unexpected node in non body", false));
     }
 }
 

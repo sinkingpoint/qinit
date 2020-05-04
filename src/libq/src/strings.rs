@@ -126,13 +126,22 @@ impl<'a> Iterator for Tokenizer<'a> {
                 else if !current_token.started && self.iter.peek() == Some(&';'){
                     // If we haven't started a token, just consume and return the ;
                     self.iter.next();
-                    return Some(String::from(";"));
+                    let mut build = String::from(";");
+                    // ;; is a special meaning in case statements, so just make sure this isn't that
+                    if self.iter.peek().is_some() && self.iter.peek() == Some(&';') {
+                        self.iter.next();
+                        build.push(';');
+                    }
+                    return Some(build);
                 }
-                else {
+                else if self.iter.peek() == Some(&'#') && current_token.in_quotes.get_char() == QuoteType::None.get_char() {
                     // We've hit a #, so consume until the end of the line, and return the new line
                     self.iter.next();
                     while self.iter.peek().is_some() && self.iter.next().unwrap() != '\n' {}
                     return Some(String::from("\n")); 
+                }
+                else {
+                    current_token.build.push(self.iter.next().unwrap());
                 }
             }
             current_token.started = true;
