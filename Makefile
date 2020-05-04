@@ -6,7 +6,7 @@ initramfs:
 
 .PHONY: run
 run: initramfs
-	qemu-system-x86_64 -kernel bin/vmlinux -initrd bazel-bin/src/initramfs/initramfs.igz -serial stdio -append "console=ttyAMA0 console=ttyS0" --enable-kvm
+	qemu-system-x86_64 -kernel bin/vmlinux -initrd bazel-bin/src/initramfs/initramfs.igz -serial stdio -append "console=ttyAMA0 console=ttyS0 root='elena you need to check when your blood test is'" --enable-kvm
 
 .PHONY: debug
 debug:

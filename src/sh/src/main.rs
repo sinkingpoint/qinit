@@ -9,6 +9,7 @@ use std::io::BufRead;
 mod builtins;
 mod shell;
 mod ast;
+mod strings;
 
 const VERSION: &str = "0.0.1";
 

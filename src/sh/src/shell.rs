@@ -9,6 +9,7 @@ use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use nix::errno::Errno::{ENOENT,ECHILD};
 use libq::io::{STDIN_FD, STDOUT_FD, STDERR_FD};
 use builtins;
+use strings;
 
 pub struct IOTriple {
     /// An IOTriple represents the 3 standard IO streams of a Unix process
@@ -80,8 +81,13 @@ impl Process {
     }
 
     fn cement_args(&mut self, shell: &Shell) -> Result<(), String>{
-        for index in 0..self.argv.len() {
-            self.argv[index] = do_string_interpolation(&self.argv[index], shell)?;
+        let mut new_argv = Vec::new();
+        for arg in &self.argv {
+            new_argv.append(&mut strings::do_value_pipeline(&arg, shell)?);
+        }
+        self.argv = new_argv;
+        if self.argv.len() == 0 {
+            panic!("Word splitting failed apparently");
         }
         self.proc_name = self.argv[0].clone();
         return Ok(());
@@ -156,109 +162,6 @@ impl Process {
         }
         return 1;
     }
-}
-
-struct VariableBuilder {
-    build: String,
-    in_braces: bool,
-    done: bool,
-}
-
-impl VariableBuilder {
-    fn new() -> VariableBuilder {
-        return VariableBuilder{
-            build: String::new(),
-            in_braces: false,
-            done: false
-        }
-    }
-
-    fn ingest_char(&mut self, c: char) -> Result<(), String>{
-        if self.done || 
-           (c == '$' && self.build.len() > 0) || 
-           (c == '?' && self.build.len() > 0) ||
-           (c == '{' && self.build.len() > 0) ||
-           (c == '}' && !self.in_braces) || 
-           (c == '{' && self.in_braces){
-            return Err(format!("Invalid char: {}", c));
-        }
-
-        if c == '{' {
-            self.in_braces = true;
-        }
-        else if c == '}' {
-            self.in_braces = false;
-            self.done = true;
-        }
-        else if c == '$' || c == '?' {
-            self.build.push(c);
-            self.done = true;
-        }
-        else {
-            self.build.push(c);
-        }
-
-        return Ok(());
-    }
-
-    fn could_be_done(&self) -> bool{
-        return !self.in_braces || self.done
-    }
-}
-
-fn do_string_interpolation(token: &String, shell: &Shell) -> Result<String, &'static str> {
-    let mut build = String::new();
-    let mut in_quotes_char = '\0';
-    let mut var_build: Option<VariableBuilder> = None;
-    for chr in token.chars() {
-        if chr == '\'' || chr == '\"' {
-            in_quotes_char = match in_quotes_char {
-                '\0' => chr,
-                _ if chr == in_quotes_char => '\0',
-                _ => {
-                    build.push(chr);
-                    in_quotes_char
-                }
-            };
-        }
-        else if chr == '$' && in_quotes_char != '\'' && var_build.is_none(){
-            var_build = Some(VariableBuilder::new());
-        }
-        else {
-            match &mut var_build {
-                Some(builder) => {
-                    match builder.ingest_char(chr) {
-                        Ok(()) => {},
-                        Err(_err) => {
-                            return Err("Substitution Error")
-                        }
-                    }
-
-                    if builder.done {
-                        build.push_str(&shell.get_variable(&builder.build));
-                        var_build = None;
-                    }
-                },
-                None => {
-                    build.push(chr);
-                }
-            }
-        }
-    }
-
-    match var_build {
-        Some(builder) => {
-            if builder.could_be_done() {
-                build.push_str(&shell.get_variable(&builder.build));
-            }
-            else {
-                return Err("Unclosed variable substitution");
-            }
-        },
-        None => {}
-    }
-
-    return Ok(build);
 }
 
 pub struct Job {

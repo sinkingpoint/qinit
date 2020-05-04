@@ -56,7 +56,8 @@ impl VariableBuilder {
 pub enum QuoteType {
     None,
     Single,
-    Double
+    Double,
+    Meta // Meta quotes are quotes that have started a quote block. 
 }
 
 impl QuoteType {
@@ -74,14 +75,16 @@ impl Clone for QuoteType {
         return match self {
             QuoteType::None => QuoteType::None,
             QuoteType::Single => QuoteType::Single,
-            QuoteType::Double => QuoteType::Double
+            QuoteType::Double => QuoteType::Double,
+            QuoteType::Meta => QuoteType::Meta
         }
     }
 }
 
 pub struct StringIterWithQuoteContext<'a> {
     base_iter: Peekable<Chars<'a>>,
-    current_quote: QuoteType
+    current_quote: QuoteType,
+    include_quotes: bool
 }
 
 pub struct CharWithQuoteContext {
@@ -99,10 +102,11 @@ impl CharWithQuoteContext {
 }
 
 impl StringIterWithQuoteContext<'_> {
-    fn new<'a>(base: &'a String) -> StringIterWithQuoteContext<'a> {
+    fn new<'a>(base: &'a String, include_quotes: bool) -> StringIterWithQuoteContext<'a> {
         return StringIterWithQuoteContext {
             base_iter: base.chars().peekable(),
-            current_quote: QuoteType::None
+            current_quote: QuoteType::None,
+            include_quotes: include_quotes
         }
     }
 }
@@ -130,9 +134,15 @@ impl Iterator for StringIterWithQuoteContext<'_> {
                     let new_quote = QuoteType::from_chr(quote);
                     if self.current_quote == QuoteType::None {
                         self.current_quote = new_quote;
+                        if self.include_quotes {
+                            return Some(CharWithQuoteContext::new(quote, QuoteType::Meta));
+                        }
                     }
                     else if new_quote == self.current_quote {
                         self.current_quote = QuoteType::None;
+                        if self.include_quotes {
+                            return Some(CharWithQuoteContext::new(quote, QuoteType::Meta));
+                        }
                     }
                     else {
                         return Some(CharWithQuoteContext::new(quote, self.current_quote));
@@ -150,32 +160,39 @@ impl Iterator for StringIterWithQuoteContext<'_> {
 
 impl<'a> From<&'a String> for StringIterWithQuoteContext<'a> {
     fn from(s: &'a String) -> StringIterWithQuoteContext<'a> {
-        return StringIterWithQuoteContext::new(s);
+        return StringIterWithQuoteContext::new(s, false);
     }
 }
 
 pub trait IntoStringIterWithQuoteContext {
-    fn chars_with_quotes<'a>(&'a self) -> StringIterWithQuoteContext<'a>;
+    fn chars_with_quotes<'a>(&'a self, include_quotes: bool) -> StringIterWithQuoteContext<'a>;
 }
 
 impl IntoStringIterWithQuoteContext for String {
-    fn chars_with_quotes<'a>(&'a self) -> StringIterWithQuoteContext<'a> {
-        return StringIterWithQuoteContext::new(self);
+    fn chars_with_quotes<'a>(&'a self, include_quotes: bool) -> StringIterWithQuoteContext<'a> {
+        return StringIterWithQuoteContext::new(self, include_quotes);
     }
 }
 
-pub fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<String, &'static str> {
+fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<String, &'static str> {
     let mut build = String::new();
     let mut var_build: Option<VariableBuilder> = None;
-    for nchr in token.chars_with_quotes() {
+    for nchr in token.chars_with_quotes(true) {
         let chr = nchr.chr;
-        let context = nchr.context;
-        if chr == '$' && context != QuoteType::Single && var_build.is_none(){
+        if chr == '$' && nchr.context != QuoteType::Single && var_build.is_none(){
             var_build = Some(VariableBuilder::new());
         }
         else {
             match &mut var_build {
                 Some(builder) => {
+                    if nchr.context == QuoteType::Meta {
+                        // We've hit a quote, terminate the variable
+                        build.push_str(&shell.get_variable(&builder.build));
+                        build.push(chr);
+                        var_build = None;
+                        continue;
+                    }
+                    
                     match builder.ingest_char(chr) {
                         Ok(()) => {},
                         Err(_err) => {
@@ -210,3 +227,32 @@ pub fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<S
     return Ok(build);
 }
 
+fn do_word_splitting(token: &String) -> Vec<String> {
+    let mut build = String::new();
+    let mut words = Vec::new();
+    for nchr in token.chars_with_quotes(false) {
+        let chr = nchr.chr;
+        let context = nchr.context;
+
+        if chr.is_whitespace() && context == QuoteType::None {
+            if build.len() > 0 {
+                words.push(build);
+            }
+            build = String::new();
+        }
+        else {
+            build.push(chr);
+        }
+    }
+
+    words.push(build);
+
+    return words;
+}
+
+pub fn do_value_pipeline(token: &String, shell: &shell::Shell) -> Result<Vec<String>, &'static str> {
+    return match do_string_interpolation(token, shell) {
+        Ok(s) => Ok(do_word_splitting(&s)),
+        Err(e) => Err(e)
+    }
+}

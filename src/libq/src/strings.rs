@@ -147,27 +147,6 @@ impl<'a> Iterator for Tokenizer<'a> {
                 };
                 current_token.build.push(new_char);
             }
-            else if new_char == '\\' {
-                // We're got an escape char next
-                if self.iter.peek().is_some() {
-                    let esc_char = self.iter.next().unwrap();
-                    let actual_char = match esc_char {
-                        '\'' => '\'',
-                        '\"' => '\"',
-                        '\\' => '\\',
-                        '\n' => ' ',
-                        'r' => '\r',
-                        'n' => '\n',
-                        't' => '\t',
-                        '0' => '\0',
-                        _ => {
-                            self.last_err = Some(TokenizationError::InvalidEscapeChar);
-                            return None;
-                        }
-                    };
-                    current_token.build.push(actual_char);
-                }
-            }
             else if new_char.is_whitespace() {
                 if current_token.skip_whitespace() {
                     current_token.ended = true;

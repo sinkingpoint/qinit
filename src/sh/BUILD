@@ -6,6 +6,7 @@ rust_binary(
         "src/main.rs",
         "src/shell.rs",
         "src/builtins.rs",
+        "src/strings.rs",
         "src/ast.rs"
     ],
     deps = [
