@@ -33,7 +33,8 @@ rust_binary(
     visibility = ["//visibility:public",],
     deps = [
         "//src/cargo:nix",
-        "//src/cargo:clap"
+        "//src/cargo:clap",
+        "//src/libq",
     ],
 )
 
@@ -45,5 +46,14 @@ rust_binary(
         "//src/libq",
         "//src/cargo:nix",
         "//src/cargo:clap"
+    ],
+)
+
+rust_binary(
+    name = "blkid",
+    srcs = ["blkid/src/main.rs"],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/libq",
     ],
 )
