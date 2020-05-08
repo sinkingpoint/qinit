@@ -197,6 +197,7 @@ impl Job {
         match status {
             Ok(event) => {
                 match event {
+                    // If the processes exitted, then we just mark it
                     WaitStatus::Exited(pid, code) => {
                         match self.find_process_by_pid(pid) {
                             Some(process) => {
@@ -210,6 +211,7 @@ impl Job {
                             }
                         }
                     },
+                    // Otherwise we have to find the signal num and mark it
                     WaitStatus::Signaled(pid, signal, _) => {
                         match self.find_process_by_pid(pid) {
                             Some(process) => {
@@ -410,7 +412,6 @@ pub struct Shell {
 impl Shell {
     pub fn new(is_repl: bool) -> Shell {
         let shell_terminal = STDERR_FD;
-        // let is_interactive = false;
         let mut is_interactive = match isatty(shell_terminal) {
             Ok(tty) => tty,
             Err(errno) => {
