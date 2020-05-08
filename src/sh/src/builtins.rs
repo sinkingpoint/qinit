@@ -4,6 +4,7 @@ use libq::io::{RawFdReader};
 use std::os::unix::io::FromRawFd;
 use std::io::{BufRead, BufReader};
 use std::collections::{HashMap,VecDeque};
+use strings;
 
 pub type Builtin = fn(&mut shell::Shell, &Vec<String>, &shell::IOTriple) -> i32;
 
@@ -25,12 +26,21 @@ fn _set_variables(shell: &mut shell::Shell, argv: &Vec<String>, environment: boo
     let mut iter = argv.iter();
     iter.next(); // Skip first token, because that'll be the builtin name
     for token in iter {
-        let parts: Vec<&str> = token.split('=').collect();
+        let parts: Vec<&str> = token.splitn(2, "=").collect();
 
         let (name, value) = match parts.len() {
             1 => (String::from(parts[0]), String::from(shell.get_variable(parts[0]))),
-            2 => (String::from(parts[0]), String::from(parts[1])),
+            2 => {
+                match strings::do_value_pipeline(&String::from(parts[1]), shell) {
+                    Ok(words) => (String::from(parts[0]), words.join(" ")),
+                    Err(err) => {
+                        eprintln!("Bad Substitution: {}", parts[1]);
+                        continue;
+                    }
+                }
+            },
             _ => {
+                eprintln!("Bad Substitution: {}", token);
                 return 1
             }
         };

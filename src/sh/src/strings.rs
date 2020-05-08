@@ -259,7 +259,7 @@ impl IntoStringIterWithQuoteContext for String {
     }
 }
 
-fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<String, &'static str> {
+fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<String, String> {
     let mut build = String::new();
     let mut var_build: Option<VariableBuilder> = None;
     for nchr in token.chars_with_quotes(true) {
@@ -270,18 +270,23 @@ fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<Strin
         else {
             match &mut var_build {
                 Some(builder) => {
-                    if nchr.context == QuoteType::Meta {
-                        // We've hit a quote, terminate the variable
-                        build.push_str(builder.resolve(shell));
-                        build.push(chr);
-                        var_build = None;
-                        continue;
+                    if nchr.context == QuoteType::Meta || nchr.chr.is_whitespace() || nchr.chr == ',' || nchr.chr == '.' {
+                        // We've hit a quote, or some whitespace, terminate the variable
+                        if builder.could_be_done() {
+                            build.push_str(builder.resolve(shell));
+                            build.push(chr);
+                            var_build = None;
+                            continue;
+                        }
+                        else {
+                            return Err(format!("Parse error"));
+                        }
                     }
                     
                     match builder.ingest_char(chr) {
                         Ok(()) => {},
-                        Err(_err) => {
-                            return Err("Substitution Error")
+                        Err(err) => {
+                            return Err(format!("Substitution Error: {}", err));
                         }
                     }
 
@@ -303,7 +308,7 @@ fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<Strin
                 build.push_str(builder.resolve(shell));
             }
             else {
-                return Err("Unclosed variable substitution");
+                return Err(String::from("Unclosed variable substitution"));
             }
         },
         None => {}
@@ -335,7 +340,7 @@ fn do_word_splitting(token: &String) -> Vec<String> {
     return words;
 }
 
-pub fn do_value_pipeline(token: &String, shell: &shell::Shell) -> Result<Vec<String>, &'static str> {
+pub fn do_value_pipeline(token: &String, shell: &shell::Shell) -> Result<Vec<String>, String> {
     return match do_string_interpolation(token, shell) {
         Ok(s) => Ok(do_word_splitting(&s)),
         Err(e) => Err(e)
