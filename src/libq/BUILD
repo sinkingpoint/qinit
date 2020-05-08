@@ -6,7 +6,13 @@ rust_library(
         "src/lib.rs",
         "src/strings.rs",
         "src/io.rs",
-        "src/qnix.rs"
+        "src/qnix.rs",
+        "src/blkid/mod.rs",
+        "src/blkid/btrfs.rs",
+        "src/blkid/device.rs",
+        "src/blkid/ext.rs",
+        "src/blkid/fat.rs",
+        "src/blkid/superblock.rs"
     ],
     deps = [
         "//src/cargo:nix",

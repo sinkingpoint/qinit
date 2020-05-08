@@ -1,6 +1,7 @@
 use std::os::unix::io::{FromRawFd, RawFd};
 use nix::unistd::{write, read};
-use std::io::{Read, Error, ErrorKind};
+use std::io::{self, Read, Error, ErrorKind};
+use std::path::PathBuf;
 
 pub const STDIN_FD: RawFd = 0;
 pub const STDOUT_FD: RawFd = 1;
@@ -55,4 +56,26 @@ impl Read for RawFdReader {
             }
         }
     }
+}
+
+pub fn read_struct<T, R: Read>(mut read: R) -> io::Result<T> {
+    let num_bytes = ::std::mem::size_of::<T>();
+    unsafe {
+        let mut s = std::mem::MaybeUninit::<T>::uninit();
+        let buffer = std::slice::from_raw_parts_mut((&mut s).as_ptr() as *mut T as *mut u8, num_bytes);
+        match read.read_exact(buffer) {
+            Ok(()) => Ok(s.assume_init()),
+            Err(e) => {
+                ::std::mem::forget(s);
+                Err(e)
+            }
+        }
+    }
+}
+
+pub fn to_absolute_from_relative(base: &PathBuf, rel_path: &PathBuf) -> Result<PathBuf, Error> {
+    let mut new_path = PathBuf::new();
+    new_path.push(base);
+    new_path.push(rel_path);
+    return new_path.canonicalize();
 }

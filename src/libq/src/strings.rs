@@ -1,5 +1,6 @@
 use std::str::Chars;
 use std::fmt;
+use std::ffi::{CStr, CString};
 
 enum QuoteType {
     Single,
@@ -198,4 +199,30 @@ impl<'a> Iterator for Tokenizer<'a> {
             }
         }
     }
+}
+
+pub fn cstr_to_string(s: &[u8]) -> Result<String, ()> {
+    let mut bytes = Vec::new();
+    for i in 0..s.len() {
+        bytes.push(s[i]);
+        if s[i] == 0 {
+            break;
+        }
+    }
+
+    if bytes.len() == 1 {
+        return Err(());
+    }
+
+    if bytes.len() > 0 && bytes.last().unwrap() != &0 {
+        bytes.push(0);
+    }
+
+    if let Ok(cstr) = CStr::from_bytes_with_nul(&bytes) {
+        let cstring = CString::from(cstr);
+        if let Ok(s) = cstring.into_string() {
+            return Ok(s);
+        }
+    }
+    return Err(());
 }
