@@ -107,12 +107,15 @@ impl<'a> Iterator for Tokenizer<'a> {
             in_quotes: QuoteType::None
         };
 
+        let mut had_whitespace = false;
+
         // If the current token hasn't started, lets skip whitespace until we get to the start
         while self.iter.peek().is_some() && self.iter.peek().unwrap().is_whitespace() {
             if self.iter.peek() == Some(&'\n') {
                 self.iter.next();
                 return Some(String::from("\n"));
             }
+            had_whitespace = true;
             self.iter.next();
             continue;
         }
@@ -120,7 +123,7 @@ impl<'a> Iterator for Tokenizer<'a> {
         // We're at non whitespace, so lets start ingesting chars
         while !current_token.ended && self.iter.peek().is_some() {
             if self.iter.peek() == Some(&';') || self.iter.peek() == Some(&'#') || self.iter.peek() == Some(&'\n') {
-                if current_token.started && current_token.in_quotes.get_char() == QuoteType::None.get_char(){
+                if self.iter.peek() == Some(&';') && current_token.started && current_token.in_quotes.get_char() == QuoteType::None.get_char(){
                     // If we hit a ; and we've got a token, return the token
                     return Some(current_token.build);
                 }
@@ -136,16 +139,15 @@ impl<'a> Iterator for Tokenizer<'a> {
                     return Some(build);
                 }
                 else if self.iter.peek() == Some(&'#') && current_token.in_quotes.get_char() == QuoteType::None.get_char() {
-                    // We've hit a #, so consume until the end of the line, and return the new line
-                    self.iter.next();
-                    while self.iter.peek().is_some() && self.iter.next().unwrap() != '\n' {}
-                    return Some(String::from("\n")); 
+                    if had_whitespace {
+                        self.iter.next();
+                        // We've hit a # that was preceded by whitespace, so consume until the end of the line, and return the new line
+                        while self.iter.peek().is_some() && self.iter.next().unwrap() != '\n' {}
+                        return Some(String::from("\n")); 
+                    }
                 }
                 else if self.iter.peek() == Some(&'\n') && current_token.in_quotes.get_char() == QuoteType::None.get_char() {
                     return Some(current_token.build);
-                }
-                else {
-                    current_token.build.push(self.iter.next().unwrap());
                 }
             }
             current_token.started = true;

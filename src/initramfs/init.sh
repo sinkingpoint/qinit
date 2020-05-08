@@ -15,7 +15,7 @@ cat /proc/cmdline | read cmdline
 
 for word in $cmdline; do
     case $word in
-        root=*) echo "root" $word ;;
+        root=*) echo "root" ${word} ;;
         *) echo $word ;;
     esac
 done

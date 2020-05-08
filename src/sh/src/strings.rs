@@ -7,6 +7,9 @@ struct VariableBuilder {
     build: String,
     in_braces: bool,
     done: bool,
+
+    // Variable substitution options
+    ltrim: Option<String>
 }
 
 impl VariableBuilder {
@@ -14,7 +17,8 @@ impl VariableBuilder {
         return VariableBuilder{
             build: String::new(),
             in_braces: false,
-            done: false
+            done: false,
+            ltrim: None
         }
     }
 
@@ -23,6 +27,8 @@ impl VariableBuilder {
            (c == '$' && self.build.len() > 0) || 
            (c == '?' && self.build.len() > 0) ||
            (c == '{' && self.build.len() > 0) ||
+           (c == '#' && self.build.len() == 0) ||
+           (c == '#' && !self.in_braces) ||
            (c == '}' && !self.in_braces) || 
            (c == '{' && self.in_braces){
             return Err(format!("Invalid char: {}", c));
@@ -39,8 +45,19 @@ impl VariableBuilder {
             self.build.push(c);
             self.done = true;
         }
+        else if c == '#' {
+            if self.ltrim.is_some() {
+                return Err(String::from("Invalid char: #"));
+            }
+            self.ltrim = Some(String::new());
+        }
         else {
-            self.build.push(c);
+            if self.ltrim.is_some() {
+                self.ltrim.as_mut().unwrap().push(c);
+            }
+            else {
+                self.build.push(c);
+            }
         }
 
         return Ok(());
@@ -48,6 +65,16 @@ impl VariableBuilder {
 
     fn could_be_done(&self) -> bool{
         return !self.in_braces || self.done
+    }
+
+    fn resolve<'a>(&self, shell: &'a shell::Shell) -> &'a str {
+        let var = shell.get_variable(&self.build);
+        if self.ltrim.is_none() {
+            return var;
+        }
+
+        let ltrim = self.ltrim.as_ref().unwrap();
+        return var.trim_start_matches(ltrim.as_str());
     }
 }
 
@@ -245,7 +272,7 @@ fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<Strin
                 Some(builder) => {
                     if nchr.context == QuoteType::Meta {
                         // We've hit a quote, terminate the variable
-                        build.push_str(&shell.get_variable(&builder.build));
+                        build.push_str(builder.resolve(shell));
                         build.push(chr);
                         var_build = None;
                         continue;
@@ -259,7 +286,7 @@ fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<Strin
                     }
 
                     if builder.done {
-                        build.push_str(&shell.get_variable(&builder.build));
+                        build.push_str(builder.resolve(shell));
                         var_build = None;
                     }
                 },
@@ -273,7 +300,7 @@ fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<Strin
     match var_build {
         Some(builder) => {
             if builder.could_be_done() {
-                build.push_str(&shell.get_variable(&builder.build));
+                build.push_str(builder.resolve(shell));
             }
             else {
                 return Err("Unclosed variable substitution");
