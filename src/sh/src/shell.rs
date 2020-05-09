@@ -495,7 +495,7 @@ impl Shell {
     }
 
     pub fn is_builtin(&self, name: &str) -> bool{
-        return self.builtins.contains_key(name);
+        return self.builtins.contains_key(name) || name.contains("=");
     }
 
     pub fn set_variable(&mut self, var: Variable) {
@@ -513,6 +513,10 @@ impl Shell {
     }
 
     pub fn run_builtin(&mut self, name: &str, argv: &Vec<String>, streams: &IOTriple) -> i32 {
+        if name.contains("=") {
+            // This is a `local` builtin, to support a=b syntax
+            return self.builtins.get("local").unwrap()(self, argv, streams);
+        }
         return self.builtins.get(name).unwrap()(self, argv, streams);
     }
 

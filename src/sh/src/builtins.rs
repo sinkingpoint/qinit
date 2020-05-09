@@ -23,8 +23,10 @@ fn exit(shell: &mut shell::Shell, _argv: &Vec<String>, _streams: &shell::IOTripl
 }
 
 fn _set_variables(shell: &mut shell::Shell, argv: &Vec<String>, environment: bool) -> i32 {
-    let mut iter = argv.iter();
-    iter.next(); // Skip first token, because that'll be the builtin name
+    let mut iter = argv.iter().peekable();
+    if iter.peek().is_some() && iter.peek() == Some(&&String::from("local")) || iter.peek() == Some(&&String::from("export")) {
+        iter.next(); // Skip first token, because that'll be the builtin name
+    }
     for token in iter {
         let parts: Vec<&str> = token.splitn(2, "=").collect();
 
