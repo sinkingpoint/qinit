@@ -14,7 +14,207 @@ pub fn get_builtin_registry() -> HashMap<&'static str, Builtin> {
     registry.insert("export", export as Builtin);
     registry.insert("read", read as Builtin);
     registry.insert("local", local as Builtin);
+    registry.insert("[", comparison as Builtin);
     return registry;
+}
+
+trait ComparisonOperator {
+    fn as_string(&self) -> String;
+    fn requires_two_args(&self) -> bool;
+    fn execute(&self, left: &Option<&String>, right: &Option<&String>) -> bool;
+}
+
+struct EqualsComparison{}
+impl ComparisonOperator for EqualsComparison {
+    fn as_string(&self) -> String {
+        return String::from("==");
+    }
+
+    fn requires_two_args(&self) -> bool {
+        return true;
+    }
+
+    fn execute(&self, left: &Option<&String>, right: &Option<&String>) -> bool{
+        return left.unwrap() == right.unwrap();
+    }
+}
+
+struct NotEqualsComparison{}
+impl ComparisonOperator for NotEqualsComparison {
+    fn as_string(&self) -> String {
+        return String::from("!=");
+    }
+
+    fn requires_two_args(&self) -> bool {
+        return true;
+    }
+
+    fn execute(&self, left: &Option<&String>, right: &Option<&String>) -> bool{
+        return left.unwrap() != right.unwrap();
+    }
+}
+
+struct NullComparison{}
+impl ComparisonOperator for NullComparison {
+    fn as_string(&self) -> String {
+        return String::from("-n");
+    }
+
+    fn requires_two_args(&self) -> bool {
+        return false;
+    }
+
+    fn execute(&self, _left: &Option<&String>, right: &Option<&String>) -> bool{
+        return right.unwrap() == "";
+    }
+}
+
+struct NotNullComparison{}
+impl ComparisonOperator for NotNullComparison {
+    fn as_string(&self) -> String {
+        return String::from("-z");
+    }
+
+    fn requires_two_args(&self) -> bool {
+        return false;
+    }
+
+    fn execute(&self, _left: &Option<&String>, right: &Option<&String>) -> bool{
+        return right.unwrap() != "";
+    }
+}
+
+#[derive(PartialEq)]
+#[derive(Debug)]
+enum ComparisonState {
+    Left,
+    Comparison,
+    Right,
+    Done
+}
+
+#[derive(Debug)]
+struct ComparisonBuilder {
+    state: ComparisonState,
+    left: Option<String>,
+    comparison: Option<String>,
+    right: Option<String>
+}
+
+impl ComparisonBuilder {
+    fn new() -> ComparisonBuilder{
+        return ComparisonBuilder{
+            state: ComparisonState::Left,
+            left: None,
+            comparison: None,
+            right: None,
+        }
+    }
+
+    fn ingest_token(&mut self, token: &String) -> Result<(), ()> {
+        if token.starts_with("-") && self.state == ComparisonState::Left{
+            self.comparison = Some(token.clone());
+            self.state = ComparisonState::Right;
+        }
+        else if self.state == ComparisonState::Left {
+            self.left = Some(token.clone());
+            self.state = ComparisonState::Comparison;
+        }
+        else if self.state == ComparisonState::Comparison {
+            self.comparison = Some(token.clone());
+            self.state = ComparisonState::Right;
+        }
+        else if self.state == ComparisonState::Right {
+            self.right = Some(token.clone());
+            self.state = ComparisonState::Done;
+        }
+        else if self.state == ComparisonState::Done && token == &String::from("]"){}
+        else {
+            return Err(());
+        }
+
+        return Ok(());
+    }
+
+    fn is_done(&self) -> bool {
+        return self.state == ComparisonState::Done;
+    }
+
+    fn execute(&self, shell: &shell::Shell) -> i32 {
+        let comparisons: Vec<&dyn ComparisonOperator> = vec![
+            &EqualsComparison{},
+            &NotEqualsComparison{},
+            &NullComparison{},
+            &NotNullComparison{}
+        ];
+
+        for comparison in comparisons.iter() {
+            if &comparison.as_string() == self.comparison.as_ref().unwrap() {
+                let left = match &self.left {
+                    None => None,
+                    Some(left) => {
+                        match strings::do_value_pipeline(&left, shell) {
+                            Ok(words) => Some(words.join(" ")),
+                            Err(err) => {
+                                eprintln!("Bad Subtitution: {}", err);
+                                return 128;
+                            }
+                        }
+                    }
+                };
+
+                let right = match &self.right {
+                    None => None,
+                    Some(right) => {
+                        match strings::do_value_pipeline(&right, shell) {
+                            Ok(words) => Some(words.join(" ")),
+                            Err(err) => {
+                                eprintln!("Bad Subtitution: {}", err);
+                                return 128;
+                            }
+                        }
+                    }
+                };
+
+                if comparison.requires_two_args() && left.is_none() {
+                    eprintln!("Parsing failed near {}: {:?}", comparison.as_string(), &self);
+                    return 128;
+                }
+
+                if comparison.execute(&left.as_ref(), &right.as_ref()) {
+                    return 0;
+                }
+                return 1;
+            }
+        }
+
+        println!("Unknown operation: {}", self.comparison.as_ref().unwrap());
+        return 127;
+    }
+}
+
+fn comparison(shell: &mut shell::Shell, argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
+    if argv.last().is_some() && argv.last() != Some(&String::from("]")) {
+        eprintln!("[: ] expected");
+        return 2;
+    }
+
+    let mut iter = argv.iter();
+    iter.next(); // Skip the [
+    let mut builder = ComparisonBuilder::new();
+    for token in iter {
+        if let Err(()) = builder.ingest_token(token) {
+            eprintln!("Parsing failed near {} {:?}", token, builder);
+            return 128;
+        }
+    }
+
+    if !builder.is_done() {
+        eprintln!("Missing operands");
+        return 128;
+    }
+
+    return builder.execute(shell);
 }
 
 fn exit(shell: &mut shell::Shell, _argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
@@ -35,7 +235,7 @@ fn _set_variables(shell: &mut shell::Shell, argv: &Vec<String>, environment: boo
             2 => {
                 match strings::do_value_pipeline(&String::from(parts[1]), shell) {
                     Ok(words) => (String::from(parts[0]), words.join(" ")),
-                    Err(err) => {
+                    Err(_err) => {
                         eprintln!("Bad Substitution: {}", parts[1]);
                         continue;
                     }
