@@ -6,6 +6,7 @@ use strings;
 pub trait ASTNode: fmt::Display{
     fn execute(&self, &mut shell::Shell, Option<Pid>, &shell::IOTriple) -> i32;
     fn ingest_token(&mut self, &String) -> Result<bool, ParseError>;
+    fn is_started(&self) -> bool;
     fn is_complete(&self) -> bool;
     fn ingest_node(&mut self, Box<dyn ASTNode>) -> Result<bool, ParseError>;
     fn takes_tokens(&self) -> bool;
@@ -53,7 +54,9 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
                 block_stack.push(Box::new(CaseNode::new()) as Box<dyn ASTNode>);
             },
             "then" | "fi" | "do" | "done" | "in" | ";;" | "esac" => {
-                block_stack.last_mut().unwrap().ingest_node(current_node)?;
+                if current_node.is_started() {
+                    block_stack.last_mut().unwrap().ingest_node(current_node)?;
+                }
                 current_node = Box::new(PipelineNode::new());
                 
                 match block_stack.last_mut().unwrap().ingest_token(token) {
@@ -84,7 +87,9 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
 
                 match node.ingest_token(token) {
                     Ok(true) => {
-                        block_stack.last_mut().unwrap().ingest_node(current_node)?;
+                        if current_node.is_started() {
+                            block_stack.last_mut().unwrap().ingest_node(current_node)?;
+                        }
                         current_node = Box::new(PipelineNode::new());
                     },
                     Ok(false) => {},
@@ -139,6 +144,10 @@ impl ASTNode for ASTHead {
 
     fn ingest_token(&mut self, _token: &String) -> Result<bool, ParseError> {
         return Err(ParseError::new("Failed to ingest token - Head objects don't take tokens!", false));
+    }
+
+    fn is_started(&self) -> bool {
+        return self.nodes.len() > 0;
     }
 
     fn is_complete(&self) -> bool {
@@ -283,6 +292,10 @@ impl ASTNode for CaseNode {
                 return Err(ParseError::from_string(format!("Unexpected token `{}`", token), false));
             }
         }
+    }
+
+    fn is_started(&self) -> bool {
+        return true;
     }
 
     fn is_complete(&self) -> bool {
@@ -433,6 +446,10 @@ impl ASTNode for ForNode {
         };
     }
 
+    fn is_started(&self) -> bool {
+        return true;
+    }
+
     fn is_complete(&self) -> bool {
         return match &self.state {
             ConditionalBuildState::Done => true,
@@ -509,6 +526,10 @@ impl ASTNode for IfNode {
         };
 
         return Ok(self.state == ConditionalBuildState::Done);
+    }
+
+    fn is_started(&self) -> bool {
+        return true;
     }
 
     fn is_complete(&self) -> bool {
@@ -600,6 +621,10 @@ impl ASTNode for ProcessNode {
         return Ok(false);
     }
 
+    fn is_started(&self) -> bool {
+        return self.argv.len() > 0;
+    }
+
     fn is_complete(&self) -> bool {
         return false;
     }
@@ -673,6 +698,10 @@ impl ASTNode for PipelineNode {
         }
 
         return Ok(false);
+    }
+
+    fn is_started(&self) -> bool {
+        return self.processes.len() > 0 && self.processes[0].is_started();
     }
 
     fn is_complete(&self) -> bool {
