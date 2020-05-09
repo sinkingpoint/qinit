@@ -153,6 +153,7 @@ impl Process {
                 if let Some(errno) = e.as_errno() {
                     if errno == ENOENT {
                         eprintln!("No such command: {}", self.proc_name);
+                        std::process::exit(127);
                     }
                 }
                 else {
