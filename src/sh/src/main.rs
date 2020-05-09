@@ -98,6 +98,7 @@ fn main() {
             Ok(tokens) => {
                 //Process Tokens
                 if tokens.len() == 0 {
+                    current_buffer.clear();
                     continue;
                 }
                 match ast::parse_into_ast(&tokens) {
