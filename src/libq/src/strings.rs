@@ -96,6 +96,18 @@ impl<'a> Tokenizer<'a> {
     }
 }
 
+fn is_split_char(c: Option<&char>) -> bool {
+    return match c {
+        None => false,
+        Some(c) => {
+            c == &'\n' ||
+            c == &';'  ||
+            c == &'|'  ||
+            c == &'&'
+        }
+    }
+}
+
 impl<'a> Iterator for Tokenizer<'a> {
     type Item = String;
 
@@ -107,49 +119,51 @@ impl<'a> Iterator for Tokenizer<'a> {
             in_quotes: QuoteType::None
         };
 
-        let mut had_whitespace = false;
-
         // If the current token hasn't started, lets skip whitespace until we get to the start
         while self.iter.peek().is_some() && self.iter.peek().unwrap().is_whitespace() {
             if self.iter.peek() == Some(&'\n') {
                 self.iter.next();
                 return Some(String::from("\n"));
             }
-            had_whitespace = true;
             self.iter.next();
             continue;
         }
 
         // We're at non whitespace, so lets start ingesting chars
         while !current_token.ended && self.iter.peek().is_some() {
-            if self.iter.peek() == Some(&';') || self.iter.peek() == Some(&'#') || self.iter.peek() == Some(&'\n') {
-                if self.iter.peek() == Some(&';') && current_token.started && current_token.in_quotes.get_char() == QuoteType::None.get_char(){
-                    // If we hit a ; and we've got a token, return the token
-                    return Some(current_token.build);
+            if self.iter.peek() == Some(&'#') && current_token.in_quotes.get_char() == QuoteType::None.get_char() && !current_token.started {
+                // If we hit a #, and we're not in quotes and we're at the start of a token, then this is a comment
+                self.iter.next(); // Eat the #
+                while self.iter.peek().is_some() && self.iter.peek().unwrap() != &'\n' {self.iter.next();} // And read until we hit EOF or a new line
+                if self.iter.peek().is_some() {
+                    return Some(self.iter.next().unwrap().to_string());
                 }
-                else if !current_token.started && self.iter.peek() == Some(&';'){
-                    // If we haven't started a token, just consume and return the ;
-                    self.iter.next();
-                    let mut build = String::from(";");
-                    // ;; is a special meaning in case statements, so just make sure this isn't that
-                    if self.iter.peek().is_some() && self.iter.peek() == Some(&';') {
-                        self.iter.next();
-                        build.push(';');
+                return None;
+            }
+
+            // Handle "split" chars - special chars that mark the end of a token, but should be in their own token
+            if is_split_char(self.iter.peek()) {
+                if current_token.in_quotes.get_char() == QuoteType::None.get_char() { // Split chars are only valid not in quotes
+                    if current_token.started {
+                        // If we hit a split token and we've got a token, return the token
+                        return Some(current_token.build);
                     }
-                    return Some(build);
-                }
-                else if self.iter.peek() == Some(&'#') && current_token.in_quotes.get_char() == QuoteType::None.get_char() {
-                    if had_whitespace {
-                        self.iter.next();
-                        // We've hit a # that was preceded by whitespace, so consume until the end of the line, and return the new line
-                        while self.iter.peek().is_some() && self.iter.next().unwrap() != '\n' {}
-                        return Some(String::from("\n")); 
+                    else if self.iter.peek() == Some(&';') || self.iter.peek() == Some(&'&') { // special case split strings, that could be two
+                        // If we haven't started a token, just consume and return the ;
+                        let mut build = String::new();
+                        build.push(self.iter.next().unwrap());
+                        // ;; is a special meaning in case statements, so just make sure this isn't that
+                        if self.iter.peek().is_some() && self.iter.peek() == build.chars().next().as_ref() {
+                            build.push(self.iter.next().unwrap());
+                        }
+                        return Some(build);
                     }
-                }
-                else if self.iter.peek() == Some(&'\n') && current_token.in_quotes.get_char() == QuoteType::None.get_char() {
-                    return Some(current_token.build);
+                    else {
+                        return Some(self.iter.next().unwrap().to_string());
+                    }
                 }
             }
+
             current_token.started = true;
             let new_char = self.iter.next().unwrap();
             if new_char == '"' || new_char == '\''{
