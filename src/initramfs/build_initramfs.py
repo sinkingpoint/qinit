@@ -48,7 +48,7 @@ def main(bins, libs, init, output_file):
         with open(output_file, 'wb') as f:
             f.write(output)
 
-    # shutil.rmtree(base_dir)
+    shutil.rmtree(base_dir)
 
     
 if __name__ == '__main__':

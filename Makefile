@@ -11,7 +11,7 @@ rootfs:
 
 .PHONY: run
 run: initramfs rootfs
-	qemu-system-x86_64 -m 1G -kernel bin/vmlinux -initrd bazel-bin/src/initramfs/initramfs.igz -drive format=raw,file=bazel-bin/src/rootfs/rootfs.ext4 -serial stdio -append "console=ttyAMA0 console=ttyS0 root=/dev/hda" --enable-kvm
+	qemu-system-x86_64 -m 1G -kernel bin/vmlinux -initrd bazel-bin/src/initramfs/initramfs.igz -drive format=raw,file=bazel-bin/src/rootfs/rootfs.ext4 -serial stdio -append "console=ttyAMA0 console=ttyS0 root=/dev/sda" --enable-kvm
 
 .PHONY: debug
 debug:

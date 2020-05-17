@@ -17,6 +17,7 @@ initramfs(
         "//src/coreutils:mknod",
         "//src/coreutils:mkdir",
         "//src/coreutils:mount",
+        "//src/utils:switch_root",
         "//src/sh",
     ],
     libs = [
