@@ -100,7 +100,7 @@ impl Process {
     /// Because this process exevp's, or panics in the event that doesn't work, this function can actually
     /// never exit
     pub fn execute(&self, shell: &mut Shell, group: Option<Pid>, streams: &IOTriple) -> i32{
-        if shell.is_interactive() {
+        if shell.is_doing_job_control() {
             // If we're interactive, then we start a new process group (If one isn't given),
             // put ourselves into it, and take the foreground from the shell
             let pid = getpid();
@@ -319,7 +319,7 @@ impl Job {
                             process.started = true;
                             match fork() {
                                 Ok(ForkResult::Parent { child, .. }) => {
-                                    if shell.is_interactive {
+                                    if shell.job_control {
                                         self.pgid = match self.pgid {
                                             None => Some(child),
                                             Some(_) => self.pgid
@@ -358,7 +358,7 @@ impl Job {
             infile = pipe_source;
         }
 
-        if !shell.is_interactive() {
+        if !shell.is_doing_job_control() {
             self.wait();
         }
         else if self.processes[0].foreground {
@@ -403,6 +403,7 @@ impl Variable {
 pub struct Shell {
     is_repl: bool,
     is_interactive: bool,
+    job_control: bool,
     pub parent_pgid: Pid,
     pub terminal_fd: i32,
     builtins: HashMap<&'static str, builtins::Builtin>,
@@ -419,24 +420,26 @@ impl Shell {
                 panic!("STDIN is being weird: {}", errno);
             }
         };
+
+        let mut job_control = is_interactive;
     
         let mut my_pgid = getpgrp();
-        if is_interactive {
+        if job_control {
             while {
                 let fg_pgid = match tcgetpgrp(STDOUT_FD) {
                     Ok(fg_pgid) => fg_pgid,
                     Err(_errno) => {
-                        is_interactive = false;
+                        job_control = false;
                         Pid::from_raw(-1)
                     }
                 };
                 my_pgid = getpgrp();
-                is_interactive && fg_pgid != my_pgid
+                job_control && fg_pgid != my_pgid
             } {
                 signal::kill(Pid::from_raw(-my_pgid.as_raw()), signal::SIGTTIN).unwrap();
             }
 
-            if !is_interactive {
+            if !job_control {
                 eprintln!("Failed to start job control. Continuing without it");
             }
             else {
@@ -447,7 +450,7 @@ impl Shell {
                     signal::signal(signal::SIGTTIN, signal::SigHandler::SigIgn).unwrap();
                     signal::signal(signal::SIGTTOU, signal::SigHandler::SigIgn).unwrap();
                 }
-        
+
                 let my_pid = getpid();
                 setpgid(my_pid, my_pid).expect("Failed to set PGID for shell");
                 tcsetpgrp(shell_terminal, my_pid).expect("Failed to become the foreground process");
@@ -465,6 +468,7 @@ impl Shell {
 
         return Shell {
             is_repl: is_repl,
+            job_control: job_control,
             is_interactive: is_interactive,
             parent_pgid: my_pgid,
             terminal_fd: libq::io::STDIN_FD,
@@ -492,6 +496,10 @@ impl Shell {
 
     pub fn is_interactive(&self) -> bool {
         return self.is_interactive;
+    }
+
+    pub fn is_doing_job_control(&self) -> bool {
+        return self.job_control;
     }
 
     pub fn is_builtin(&self, name: &str) -> bool{
