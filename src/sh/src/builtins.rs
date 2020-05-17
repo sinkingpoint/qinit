@@ -15,6 +15,7 @@ pub fn get_builtin_registry() -> HashMap<&'static str, Builtin> {
     registry.insert("read", read as Builtin);
     registry.insert("local", local as Builtin);
     registry.insert("[", comparison as Builtin);
+    registry.insert("exec", exec as Builtin);
     return registry;
 }
 
@@ -215,6 +216,17 @@ fn comparison(shell: &mut shell::Shell, argv: &Vec<String>, _streams: &shell::IO
     }
 
     return builder.execute(shell);
+}
+
+fn exec(shell: &mut shell::Shell, argv: &Vec<String>, streams: &shell::IOTriple) -> i32 {
+    let argv = argv[1..].to_vec();
+    let mut new_proc = shell::Process::new(argv[0].clone(), argv, false);
+    if let Err(e) = new_proc.cement_args(shell) {
+        eprintln!("Failed to subtitute: {}", e);
+        return 0;
+    }
+    new_proc.execute(shell, None, streams);
+    return 1;
 }
 
 fn exit(shell: &mut shell::Shell, _argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {

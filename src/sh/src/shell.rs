@@ -80,7 +80,7 @@ impl Process {
         return Err(());
     }
 
-    fn cement_args(&mut self, shell: &Shell) -> Result<(), String>{
+    pub fn cement_args(&mut self, shell: &Shell) -> Result<(), String>{
         let mut new_argv = Vec::new();
         for arg in &self.argv {
             new_argv.append(&mut strings::do_value_pipeline(&arg, shell)?);
@@ -414,7 +414,7 @@ pub struct Shell {
 impl Shell {
     pub fn new(is_repl: bool) -> Shell {
         let shell_terminal = STDERR_FD;
-        let mut is_interactive = match isatty(shell_terminal) {
+        let is_interactive = match isatty(shell_terminal) {
             Ok(tty) => tty,
             Err(errno) => {
                 panic!("STDIN is being weird: {}", errno);
