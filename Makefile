@@ -4,9 +4,14 @@ initramfs:
 	[[ -e /tmp/initramfs/dev/urandom ]] || sudo mknod -m666 /tmp/initramfs/dev/urandom c 1 9 
 	bazel build //src/initramfs:initramfs
 
+.PHONY: rootfs
+rootfs:
+	bazel build //src/rootfs:rootfs
+	chmod u+w bazel-bin/src/rootfs/rootfs.ext4
+
 .PHONY: run
-run: initramfs
-	qemu-system-x86_64 -kernel bin/vmlinux -initrd bazel-bin/src/initramfs/initramfs.igz -serial stdio -append "console=ttyAMA0 console=ttyS0 root='elena you need to check when your blood test is'" --enable-kvm
+run: initramfs rootfs
+	qemu-system-x86_64 -m 1G -kernel bin/vmlinux -initrd bazel-bin/src/initramfs/initramfs.igz -drive format=raw,file=bazel-bin/src/rootfs/rootfs.ext4 -serial stdio -append "console=ttyAMA0 console=ttyS0 root=/dev/hda" --enable-kvm
 
 .PHONY: debug
 debug:

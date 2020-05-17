@@ -22,8 +22,7 @@ def _initramfs_impl(ctx):
 
     args.add('--init', ctx.files.init_script[0].path)
     args.add('--output', ctx.outputs.out)
-    args.add('--compress')
-
+    
     ctx.actions.run(
         mnemonic = "PackageInitRAMFS",
         inputs = ctx.files.libs + ctx.files.bins + ctx.files.init_script,

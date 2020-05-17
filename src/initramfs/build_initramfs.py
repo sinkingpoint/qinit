@@ -10,7 +10,7 @@ import stat
 def mkdir(base_dir, dir):
     pathlib.Path("{}{}".format(base_dir, dir)).mkdir(parents=True, exist_ok=True)
 
-def main(bins, libs, init, output_file, compress):
+def main(bins, libs, init, output_file):
     base_dir = '/tmp/initramfs'
     mkdir(base_dir, "/bin")
     mkdir(base_dir, "/lib64")
@@ -30,16 +30,25 @@ def main(bins, libs, init, output_file, compress):
     shutil.copyfile(init, base_dir+"/init")
     os.chmod(base_dir+"/init", 0o755)
     files.append("./init")
-    p = subprocess.Popen(['cpio', '-H', 'newc', '-o'], stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, cwd=base_dir)
-    output = p.communicate(input='\n'.join(files).encode('utf-8'))[0]
-    if compress:
-        p = subprocess.Popen(['gzip', '--best'], stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    output = b""
+    requires_extra_writing = True
+    if ".ext4" in output_file:
+        p = subprocess.Popen(['mke2fs', '-L', 'root', '-N', '0', '-d', base_dir, '-m', '5', '-t', 'ext4', output_file, '500M'])
         output = p.communicate(input=output)[0]
+        requires_extra_writing = False
+    else:
+        p = subprocess.Popen(['cpio', '-H', 'newc', '-o'], stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, cwd=base_dir)
+        output = p.communicate(input='\n'.join(files).encode('utf-8'))[0]
+        if ".gz" in output_file:
+            p = subprocess.Popen(['gzip', '--best'], stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+            output = p.communicate(input=output)[0]
 
-    with open(output_file, 'wb') as f:
-        f.write(output)
+    if requires_extra_writing:
+        with open(output_file, 'wb') as f:
+            f.write(output)
 
-    shutil.rmtree(base_dir)
+    # shutil.rmtree(base_dir)
 
     
 if __name__ == '__main__':
@@ -47,7 +56,6 @@ if __name__ == '__main__':
     parser.add_argument('--bins', type=str, nargs='+', default=[], help='Files to go in /bin')
     parser.add_argument('--libs', type=str, nargs='+', default=[], help='Files to go in /lib64')
     parser.add_argument('--init', type=str, help='File to go in /init', required=True)
-    parser.add_argument('--output', type=str, help='Filename to output', default='initramfs.cpio')
-    parser.add_argument('--compress', help='Whether or not to compress the archive', action='store_true')
+    parser.add_argument('--output', type=str, help='Filename to output', default='initramfs.cpio.gz')
     args = parser.parse_args()
-    main(args.bins, args.libs, args.init, args.output, args.compress)
+    main(args.bins, args.libs, args.init, args.output)
