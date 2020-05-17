@@ -15,7 +15,7 @@ fn mkdir_if_not_exists(path: &str, m: Mode) -> Result<(), nix::Error> {
     if path.is_dir() {
         return Err(nix::Error::from_errno(Errno::EEXIST));
     }
-
+    
     return mkdir(path, m);
 }
 
@@ -31,8 +31,13 @@ fn main() {
                     .get_matches();
 
     let directories = args.values_of("directories").unwrap();
+    let verbose = args.is_present("verbose");
     let mode = to_mode(args.value_of("mode").unwrap().to_string()).expect("Failed to convert mode");
     for dir in directories {
-        mkdir_if_not_exists(dir, mode);
+        if Ok(()) == mkdir_if_not_exists(dir, mode) {
+            if verbose {
+                println!("Made directory {}", dir);
+            }
+        }
     }
 }
