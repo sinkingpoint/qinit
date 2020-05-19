@@ -7,6 +7,7 @@ rust_library(
         "src/strings.rs",
         "src/io.rs",
         "src/qnix.rs",
+        "src/terminal.rs",
         "src/blkid/mod.rs",
         "src/blkid/btrfs.rs",
         "src/blkid/device.rs",

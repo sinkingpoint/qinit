@@ -9,3 +9,12 @@ rust_binary(
         "//src/cargo:clap",
     ]
 )
+
+rust_binary(
+    name = "clear",
+    srcs = ["clear/src/main.rs"],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/libq",
+    ]
+)

@@ -4,3 +4,4 @@ pub mod strings;
 pub mod io;
 pub mod qnix;
 pub mod blkid;
+pub mod terminal;
