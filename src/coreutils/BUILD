@@ -57,3 +57,15 @@ rust_binary(
         "//src/libq",
     ],
 )
+
+rust_binary(
+    name = "ls",
+    srcs = ["ls/src/main.rs"],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/libq",
+        "//src/cargo:nix",
+        "//src/cargo:clap",
+        "//src/cargo:chrono"
+    ],
+)

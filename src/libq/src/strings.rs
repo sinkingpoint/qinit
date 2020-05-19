@@ -1,6 +1,7 @@
 use std::str::Chars;
 use std::fmt;
 use std::ffi::{CStr, CString};
+use super::io::{self, FileType};
 
 #[derive(PartialEq)]
 enum QuoteType {
@@ -235,4 +236,23 @@ pub fn cstr_to_string(s: &[u8]) -> Result<String, ()> {
         }
     }
     return Err(());
+}
+
+pub fn format_file_mode(mode: u32) -> String {
+    let mut out = String::new();
+    let chr = match FileType::from_mode(mode) {
+        Ok(m) => m.to_char(),
+        Err(_) => '-'
+    };
+    out.push(chr);
+    for (bits, chr) in [(io::S_IRUSR, 'r'), (io::S_IWUSR, 'w'), (io::S_ISUID, 's'), (io::S_IXUSR, 'x'), (io::S_IRGRP, 'r'), (io::S_IWGRP, 'w'), (io::S_ISGID, 's'), (io::S_IXGRP, 'x'), (io::S_IROTH, 'r'), (io::S_IWOTH, 'w'), (io::S_IXOTH, 'x')].iter() {
+        if mode & bits == *bits {
+            out.push(*chr);
+        }
+        else if chr != &'s' {
+            out.push('-');
+        }
+    }
+
+    return out;
 }
