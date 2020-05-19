@@ -9,8 +9,12 @@ licenses([
   "notice" # See individual crates for specific licenses
 ])
 alias(
+    name = "chrono",
+    actual = "//src/cargo/vendor/chrono-0.4.11:chrono",
+)
+alias(
     name = "clap",
-    actual = "//src/cargo/vendor/clap-2.33.0:clap",
+    actual = "//src/cargo/vendor/clap-2.33.1:clap",
 )
 alias(
     name = "nix",

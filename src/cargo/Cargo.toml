@@ -8,6 +8,7 @@ edition = "2018"
 nix = "0.17.0"
 clap = "2.33.0"
 regex = "1"
+chrono = "0.4"
 
 [lib]
 path = "fake_lib.rs"
@@ -16,7 +17,7 @@ path = "fake_lib.rs"
 workspace_path = "//src/cargo"
 output_buildfile_suffix = "BUILD.bazel"
 
-[raze.crates.libc.'0.2.69']
+[raze.crates.libc.'0.2.70']
 additional_flags = [
     "--cfg=libc_align"
 ]

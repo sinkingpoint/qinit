@@ -42,7 +42,12 @@ rust_library(
         "errhandlingapi",
         "minwinbase",
         "minwindef",
+        "ntdef",
         "processenv",
+        "profileapi",
+        "std",
+        "sysinfoapi",
+        "timezoneapi",
         "winbase",
     ],
 )
