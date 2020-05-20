@@ -6,6 +6,8 @@ rust_library(
         "src/lib.rs",
         "src/strings.rs",
         "src/io.rs",
+        "src/daemon.rs",
+        "src/rand.rs",
         "src/qnix.rs",
         "src/terminal.rs",
         "src/blkid/mod.rs",

@@ -5,3 +5,4 @@ mod fat;
 mod superblock;
 
 pub use self::device::Device;
+pub use self::device::UUID;
