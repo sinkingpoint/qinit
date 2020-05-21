@@ -4,14 +4,13 @@ pub mod subscriber;
 pub mod topic;
 pub mod api;
 
-use subscriber::Subscription;
 use topic::{TopicState, Topic};
 use std::collections::HashMap;
 use api::ResponseType;
 
 pub struct Bus {
     topics: HashMap<String, Topic>,
-    subscribers: HashMap<String, String>
+    subscribers: HashMap<String, String> // Map from subscriber ids -> topic name
 }
 
 impl Bus {
@@ -53,12 +52,49 @@ impl Bus {
         if self.topics.contains_key(&topic_str) {
             let topic = self.topics.get_mut(&topic_str).unwrap();
             let sub = topic.add_subscriber();
-            println!("{}", &sub.id);
+
+            self.subscribers.insert(sub.id.clone(), topic_str);
+
             let mut response = vec![ResponseType::Ok.into(), 1, 4];
 
             response.append(&mut sub.id.clone().bytes().collect());
 
             return response;
+        }
+
+        return vec![ResponseType::DoesntExist.into()];
+    }
+
+    pub fn publish_message(&mut self, topic_name: &String, message: Vec<u8>) -> ResponseType {
+        if self.topics.contains_key(topic_name) {
+            let topic = self.topics.get_mut(topic_name).unwrap();
+            topic.publish_message(message);
+            return ResponseType::Ok;
+        }
+
+        return ResponseType::DoesntExist;
+    }
+
+    pub fn get_message(&mut self, subscriber_id: String, timeout: i32) -> Vec<u8> {
+        if self.subscribers.contains_key(&subscriber_id) {
+            let topic_name = self.subscribers.get(&subscriber_id).unwrap();
+            let mut topic = self.topics.get_mut(topic_name).unwrap();
+
+            match topic.get_message(&subscriber_id, timeout) {
+                Ok(maybe_msg) => {
+                    match maybe_msg {
+                        Some(msg) => {
+                            return msg;
+                        },
+                        None => {
+                            return vec![ResponseType::NothingHappened.into()];
+                        }
+                    }
+                },
+                Err(code) => {
+                    return vec![code.into()];
+                }
+            }
         }
 
         return vec![ResponseType::DoesntExist.into()];

@@ -9,7 +9,7 @@ use clap::{Arg, App};
 use libfreudian::Bus;
 use libfreudian::api::{self, MessageType, ResponseType};
 
-use functions::{handle_topic_request};
+use functions::{handle_topic_request, handle_add_message};
 
 use std::os::unix::net::{UnixStream, UnixListener};
 use std::path::PathBuf;
@@ -29,12 +29,20 @@ fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<()
         println!("Found message class: {:?} with length {}", message_class, message_length);
         let mut message_buffer: Vec<u8> = Vec::with_capacity(message_length);
         message_buffer.resize(message_length, 0 as u8);
-        stream.read_exact(&mut message_buffer)?;
+        match stream.read_exact(&mut message_buffer) {
+            Ok(_) => {},
+            Err(e) => {
+                eprintln!("{}", e);
+                stream.write_all(&vec![ResponseType::MalformedRequest.into()])?;
+                return Err(e);
+            }
+        }
 
         let response = match message_class {
             MessageType::CreateTopic => handle_topic_request(bus, api::parse_as_create_topic_request(&message_buffer)),
             MessageType::DeleteTopic => handle_topic_request(bus, api::parse_as_delete_topic_request(&message_buffer)),
             MessageType::Subscribe => handle_topic_request(bus, api::parse_as_subscribe_request(&message_buffer)),
+            MessageType::ProduceMessage => handle_add_message(bus, api::parse_as_put_message_request(&message_buffer)),
             _ => Ok(vec![ResponseType::Ok.into()])
         };
 

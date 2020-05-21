@@ -133,7 +133,7 @@ impl From<&Vec<u8>> for TopicRequest {
         }
 
         let topic_name = match String::from_utf8(bytes.map(|b| *b).collect()) {
-            Err(err) => {
+            Err(_err) => {
                 eprintln!("Failed to parse into TopicRequest: TopicName is not utf8");
                 // Rest of the bytes are invalid utf-8
                 return TopicRequest::new_broken();
@@ -172,7 +172,7 @@ pub fn parse_as_subscribe_request(raw: &Vec<u8>) -> Option<TopicRequest> {
     return Some(request);
 }
 
-struct EmptyRequest {
+pub struct EmptyRequest {
     pub class: MessageType
 }
 
@@ -203,4 +203,111 @@ impl From<&Vec<u8>> for EmptyRequest {
 
         return EmptyRequest::new(MessageType::Unknown);
     }
+}
+
+struct SubscriptionRequest {
+    pub class: MessageType,
+    pub sub_id: String,
+}
+
+impl SubscriptionRequest {
+    fn new(class: MessageType, sub_id: String) -> SubscriptionRequest {
+        return SubscriptionRequest{
+            class: class,
+            sub_id: sub_id,
+        }
+    }
+
+    fn new_broken() -> SubscriptionRequest {
+        return SubscriptionRequest{
+            class: MessageType::Invalid,
+            sub_id: String::new()
+        }
+    }
+}
+
+impl From<&Vec<u8>> for SubscriptionRequest {
+    fn from(raw: &Vec<u8>) -> Self {
+        if raw.len() != 20 {
+            // Size must be 20 for the subscription id (utf8 encoded guid)
+            return SubscriptionRequest::new_broken();
+        }
+        let mut bytes = raw.into_iter();
+
+        let subscription_id = match String::from_utf8(bytes.map(|b| *b).collect()) {
+            Err(_err) => {
+                eprintln!("Failed to parse into SubscriptionRequest: SubscriptionID is not utf8");
+                // Rest of the bytes are invalid utf-8
+                return SubscriptionRequest::new_broken();
+            },
+            Ok(s) => s
+        };
+
+        return SubscriptionRequest::new(MessageType::Unknown, String::from(subscription_id));
+    }
+}
+
+pub struct PutMessageRequest {
+    pub class: MessageType,
+    pub topic_id: String,
+    pub message: Vec<u8>
+}
+
+impl PutMessageRequest {
+    fn new(topic_id: String, message: Vec<u8>) -> PutMessageRequest {
+        return PutMessageRequest{
+            class: MessageType::ProduceMessage,
+            topic_id: topic_id,
+            message: message,
+        }
+    }
+
+    fn new_broken() -> PutMessageRequest {
+        return PutMessageRequest{
+            class: MessageType::Invalid,
+            topic_id: String::new(),
+            message: Vec::new(),
+        }
+    }
+}
+
+impl From<&Vec<u8>> for PutMessageRequest {
+    fn from(raw: &Vec<u8>) -> Self {
+        if raw.len() < 2 {
+            // Minimum size is 2 bytes for topic name size
+            return PutMessageRequest::new_broken();
+        }
+        let mut bytes = raw.iter();
+
+        let topic_name_length = ((*bytes.next().unwrap() as u16) << 8 | (*bytes.next().unwrap() as u16)) as usize;
+        if raw.len() - 2 < topic_name_length {
+            eprintln!("Failed to parse into PutMessageRequest: Topic length {}, but {} bytes left", topic_name_length, raw.len()-2);
+            // Rest of the bytes are the wrong length
+            return PutMessageRequest::new_broken();
+        }
+
+        let (topic_name_iter, message_iter): (Vec<(usize, &u8)>, Vec<(usize, &u8)>) = bytes.enumerate().partition(|(i, _)| i < &topic_name_length);
+
+        let topic_name = match String::from_utf8(topic_name_iter.into_iter().map(|(_, b)| *b).collect()) {
+            Err(_err) => {
+                eprintln!("Failed to parse into PutMessageRequest: TopicName is not utf8");
+                // Rest of the bytes are invalid utf-8
+                return PutMessageRequest::new_broken();
+            },
+            Ok(s) => s
+        };
+
+        let message: Vec<u8> = message_iter.into_iter().map(|(_, b)| *b).collect();
+
+        return PutMessageRequest::new(topic_name, message);
+    }
+}
+
+pub fn parse_as_put_message_request(raw: &Vec<u8>) -> Option<PutMessageRequest> {
+    let mut request = PutMessageRequest::from(raw);
+    if request.class == MessageType::Invalid {
+        return None;
+    }
+    request.class = MessageType::ProduceMessage;
+    return Some(request);
 }

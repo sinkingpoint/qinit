@@ -4,7 +4,7 @@ use std::io;
 
 pub struct Subscription {
     pub id: String,
-    offset: u64
+    pub offset: u64
 }
 
 impl Subscription {
