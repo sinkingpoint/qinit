@@ -1,5 +1,7 @@
 use libfreudian::Bus;
-use libfreudian::api::{MessageType, ResponseType, TopicRequest, PutMessageRequest};
+use libfreudian::api::{MessageType, ResponseType, TopicRequest, PutMessageRequest, SubscriptionRequest};
+use std::time::Duration;
+use std::thread;
 
 use std::sync::{Arc, Mutex};
 
@@ -21,6 +23,59 @@ pub fn handle_topic_request(bus: &mut Arc<Mutex<Bus>>, req: Option<TopicRequest>
         });
     }
     return Ok(vec![ResponseType::MalformedRequest.into()]);
+}
+
+pub fn handle_get_message_request(bus: &mut Arc<Mutex<Bus>>, req: Option<SubscriptionRequest>) -> Result<Vec<u8>, ()>{
+    if !req.is_some() {
+        return Ok(vec![ResponseType::MalformedRequest.into()]);
+    }
+    let req = req.unwrap();
+    let mut timed_out = false;
+    let block_timeout_secs = -1;
+    loop {
+        let maybe_message;
+        {
+            let locked_bus = bus.lock();
+            if locked_bus.is_err(){
+                return Err(());
+            }
+
+            let mut locked_bus = locked_bus.unwrap();
+            maybe_message = locked_bus.try_get_message(&req.sub_id);
+        }
+        match maybe_message {
+            Err(code) => {
+                return Ok(vec![code.into()])
+            },
+            Ok(maybe_msg) => {
+                match maybe_msg {
+                    Some(msg) => return Ok(msg),
+                    None => {
+                        {
+                            let locked_bus = bus.lock();
+                            if locked_bus.is_err(){
+                                return Err(());
+                            }
+
+                            let mut locked_bus = locked_bus.unwrap();
+                            locked_bus.set_subcription_waiting(&req.sub_id);
+                        }
+                        if block_timeout_secs < 0 {
+                            thread::park();
+                        }
+                        else {
+                            if timed_out {
+                                // We're in the second iteration, after having timed out from the first
+                                return Ok(vec![ResponseType::DoesntExist.into()]);
+                            }
+                            thread::park_timeout(Duration::from_secs(block_timeout_secs as u64));
+                            timed_out = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub fn handle_add_message(bus: &mut Arc<Mutex<Bus>>, req: Option<PutMessageRequest>) -> Result<Vec<u8>, ()>{

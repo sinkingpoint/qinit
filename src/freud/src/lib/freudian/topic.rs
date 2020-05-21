@@ -1,8 +1,8 @@
 use super::subscriber::Subscription;
 use std::collections::HashMap;
-use std::thread;
-use std::time::Duration;
 use super::api::ResponseType;
+use std::thread;
+use std::fmt;
 
 #[derive(PartialEq)]
 pub enum TopicState {
@@ -12,10 +12,17 @@ pub enum TopicState {
 }
 
 #[derive(PartialEq)]
+#[derive(Debug)]
 pub struct Message {
     offset: u64,
     message: Vec<u8>,
     to_read_count: u32 // Count of subscribers yet to read this message
+}
+
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        return writeln!(f, "Message:<ID: {}, Contents: [{}], Still to Read: {}>", self.offset, self.message.iter().map(|m| m.to_string()).collect::<Vec<String>>().join(", "), self.to_read_count);
+    }
 }
 
 pub struct Topic {
@@ -23,7 +30,7 @@ pub struct Topic {
     pub state: TopicState,
     pub subscribers: HashMap<String, Subscription>,
     messages: Vec<Message>,
-    waiting_threads: Vec<thread::Thread>,
+    pub waiting_threads: Vec<thread::Thread>,
     current_offset: u64,
 }
 
@@ -35,7 +42,7 @@ impl Topic {
             subscribers: HashMap::new(),
             messages: Vec::new(),
             waiting_threads: Vec::new(),
-            current_offset: 0
+            current_offset: 1
         };
     }
 
@@ -86,33 +93,5 @@ impl Topic {
         }
 
         return Err(ResponseType::DoesntExist);
-    }
-
-    pub fn get_message(&mut self, subcription_id: &String, block_timeout_secs: i32) -> Result<Option<Vec<u8>>, ResponseType> {
-        let mut timed_out = false;
-        loop {
-            match self.try_get_message(subcription_id) {
-                Err(code) => return Err(code),
-                Ok(maybe_msg) => {
-                    match maybe_msg {
-                        Some(msg) => return Ok(Some(msg)),
-                        None => {
-                            self.waiting_threads.push(thread::current());
-                            if block_timeout_secs < 0 {
-                                thread::park();
-                            }
-                            else {
-                                if timed_out {
-                                    // We're in the second iteration, after having timed out from the first
-                                    return Ok(None);
-                                }
-                                thread::park_timeout(Duration::from_secs(block_timeout_secs as u64));
-                                timed_out = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }

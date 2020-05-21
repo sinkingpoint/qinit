@@ -9,7 +9,7 @@ use clap::{Arg, App};
 use libfreudian::Bus;
 use libfreudian::api::{self, MessageType, ResponseType};
 
-use functions::{handle_topic_request, handle_add_message};
+use functions::{handle_topic_request, handle_add_message, handle_get_message_request};
 
 use std::os::unix::net::{UnixStream, UnixListener};
 use std::path::PathBuf;
@@ -43,6 +43,7 @@ fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<()
             MessageType::DeleteTopic => handle_topic_request(bus, api::parse_as_delete_topic_request(&message_buffer)),
             MessageType::Subscribe => handle_topic_request(bus, api::parse_as_subscribe_request(&message_buffer)),
             MessageType::ProduceMessage => handle_add_message(bus, api::parse_as_put_message_request(&message_buffer)),
+            MessageType::GetMessage => handle_get_message_request(bus, api::parse_as_get_message_request(&message_buffer)),
             _ => Ok(vec![ResponseType::Ok.into()])
         };
 

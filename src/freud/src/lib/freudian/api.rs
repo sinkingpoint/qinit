@@ -47,7 +47,8 @@ pub enum ResponseType {
     NothingHappened,
     No,
     DoesntExist,
-    MalformedRequest
+    MalformedRequest,
+    ServerError,
 }
 
 impl From<u8> for ResponseType {
@@ -57,6 +58,7 @@ impl From<u8> for ResponseType {
             1 => ResponseType::NothingHappened,
             2 => ResponseType::No,
             3 => ResponseType::DoesntExist,
+            4 => ResponseType::ServerError,
             _ => ResponseType::MalformedRequest
         }
     }
@@ -69,7 +71,8 @@ impl Into<u8> for ResponseType {
             ResponseType::NothingHappened => 1,
             ResponseType::No => 2,
             ResponseType::DoesntExist => 3,
-            ResponseType::MalformedRequest => 4
+            ResponseType::ServerError => 4,
+            ResponseType::MalformedRequest => 5
         }
     }
 }
@@ -205,7 +208,7 @@ impl From<&Vec<u8>> for EmptyRequest {
     }
 }
 
-struct SubscriptionRequest {
+pub struct SubscriptionRequest {
     pub class: MessageType,
     pub sub_id: String,
 }
@@ -228,8 +231,8 @@ impl SubscriptionRequest {
 
 impl From<&Vec<u8>> for SubscriptionRequest {
     fn from(raw: &Vec<u8>) -> Self {
-        if raw.len() != 20 {
-            // Size must be 20 for the subscription id (utf8 encoded guid)
+        if raw.len() != 36 {
+            // Size must be 36 for the subscription id (utf8 encoded guid)
             return SubscriptionRequest::new_broken();
         }
         let mut bytes = raw.into_iter();
@@ -245,6 +248,15 @@ impl From<&Vec<u8>> for SubscriptionRequest {
 
         return SubscriptionRequest::new(MessageType::Unknown, String::from(subscription_id));
     }
+}
+
+pub fn parse_as_get_message_request(raw: &Vec<u8>) -> Option<SubscriptionRequest> {
+    let mut request = SubscriptionRequest::from(raw);
+    if request.class == MessageType::Invalid {
+        return None;
+    }
+    request.class = MessageType::GetMessage;
+    return Some(request);
 }
 
 pub struct PutMessageRequest {

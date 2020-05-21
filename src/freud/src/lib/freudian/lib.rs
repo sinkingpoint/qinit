@@ -7,6 +7,7 @@ pub mod api;
 use topic::{TopicState, Topic};
 use std::collections::HashMap;
 use api::ResponseType;
+use std::thread;
 
 pub struct Bus {
     topics: HashMap<String, Topic>,
@@ -75,29 +76,37 @@ impl Bus {
         return ResponseType::DoesntExist;
     }
 
-    pub fn get_message(&mut self, subscriber_id: String, timeout: i32) -> Vec<u8> {
-        if self.subscribers.contains_key(&subscriber_id) {
-            let topic_name = self.subscribers.get(&subscriber_id).unwrap();
+    pub fn try_get_message(&mut self, subscriber_id: &String) -> Result<Option<Vec<u8>>, ResponseType> {
+        if self.subscribers.contains_key(subscriber_id) {
+            let topic_name = self.subscribers.get(subscriber_id).unwrap();
             let mut topic = self.topics.get_mut(topic_name).unwrap();
 
-            match topic.get_message(&subscriber_id, timeout) {
+            match topic.try_get_message(subscriber_id) {
                 Ok(maybe_msg) => {
                     match maybe_msg {
                         Some(msg) => {
-                            return msg;
+                            return Ok(Some(msg));
                         },
                         None => {
-                            return vec![ResponseType::NothingHappened.into()];
+                            return Ok(None);
                         }
                     }
                 },
                 Err(code) => {
-                    return vec![code.into()];
+                    return Err(code);
                 }
             }
         }
 
-        return vec![ResponseType::DoesntExist.into()];
+        return Err(ResponseType::DoesntExist);
+    }
+
+    pub fn set_subcription_waiting(&mut self, subscriber_id: &String) {
+        if self.subscribers.contains_key(subscriber_id) {
+            let topic_name = self.subscribers.get(subscriber_id).unwrap();
+            let mut topic = self.topics.get_mut(topic_name).unwrap();
+            topic.waiting_threads.push(thread::current());
+        }
     }
 }
 
