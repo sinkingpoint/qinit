@@ -85,10 +85,12 @@ impl Topic {
                     message.to_read_count -= 1;
                     if message.to_read_count == 0 {
                         // TODO: Remove from messages self.messages.remove_item(message);
-                        return Ok(Some(message.message.clone()));
                     }
+                    return Ok(Some(message.message.clone()));
                 },
-                None => return Ok(None)
+                None => {
+                    return Ok(None);
+                }
             }
         }
 

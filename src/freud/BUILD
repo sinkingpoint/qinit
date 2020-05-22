@@ -6,7 +6,8 @@ rust_library(
         "src/lib/freudian/lib.rs",
         "src/lib/freudian/subscriber.rs",
         "src/lib/freudian/topic.rs",
-        "src/lib/freudian/api.rs"
+        "src/lib/freudian/api.rs",
+        "src/lib/freudian/util.rs"
     ],
     deps = [
         "//src/libq:libq",
@@ -27,3 +28,17 @@ rust_binary(
     ],
     visibility = ["//visibility:public",],
 )
+
+rust_binary(
+    name = "freudctl",
+    srcs = [
+        "src/bin/freudctl/main.rs",
+    ],
+    deps = [
+        "//src/freud:libfreudian",
+        "//src/libq:libq",
+        "//src/cargo:clap",
+    ],
+    visibility = ["//visibility:public",],
+)
+

@@ -1,11 +1,12 @@
 use libfreudian::Bus;
-use libfreudian::api::{MessageType, ResponseType, TopicRequest, PutMessageRequest, SubscriptionRequest};
+use libfreudian::api::{MessageType, ResponseType, OneValueRequest, PutMessageRequest};
+use libfreudian::util::make_response;
 use std::time::Duration;
 use std::thread;
 
 use std::sync::{Arc, Mutex};
 
-pub fn handle_topic_request(bus: &mut Arc<Mutex<Bus>>, req: Option<TopicRequest>) -> Result<Vec<u8>, ()>{
+pub fn handle_topic_request(bus: &mut Arc<Mutex<Bus>>, req: Option<OneValueRequest>) -> Result<Vec<u8>, ()>{
     if req.is_some() {
         let req = req.unwrap();
         let locked_bus = bus.lock();
@@ -16,18 +17,18 @@ pub fn handle_topic_request(bus: &mut Arc<Mutex<Bus>>, req: Option<TopicRequest>
         let mut locked_bus = locked_bus.unwrap();
 
         return Ok(match req.class {
-            MessageType::CreateTopic => vec![(*locked_bus).create_topic(req.into_topic()).into()],
-            MessageType::DeleteTopic => vec![(*locked_bus).delete_topic(req.into_topic()).into()],
+            MessageType::CreateTopic => (*locked_bus).create_topic(req.into_topic()),
+            MessageType::DeleteTopic => (*locked_bus).delete_topic(req.into_topic()),
             MessageType::Subscribe => (*locked_bus).create_subscription(req.into_topic()),
-            _ => vec![ResponseType::MalformedRequest.into()]
+            _ => make_response(ResponseType::MalformedRequest, None)
         });
     }
-    return Ok(vec![ResponseType::MalformedRequest.into()]);
+    return Ok(make_response(ResponseType::MalformedRequest, None));
 }
 
-pub fn handle_get_message_request(bus: &mut Arc<Mutex<Bus>>, req: Option<SubscriptionRequest>) -> Result<Vec<u8>, ()>{
+pub fn handle_get_message_request(bus: &mut Arc<Mutex<Bus>>, req: Option<OneValueRequest>) -> Result<Vec<u8>, ()>{
     if !req.is_some() {
-        return Ok(vec![ResponseType::MalformedRequest.into()]);
+        return Ok(make_response(ResponseType::MalformedRequest, None));
     }
     let req = req.unwrap();
     let mut timed_out = false;
@@ -41,15 +42,17 @@ pub fn handle_get_message_request(bus: &mut Arc<Mutex<Bus>>, req: Option<Subscri
             }
 
             let mut locked_bus = locked_bus.unwrap();
-            maybe_message = locked_bus.try_get_message(&req.sub_id);
+            maybe_message = locked_bus.try_get_message(&req.value);
         }
         match maybe_message {
             Err(code) => {
-                return Ok(vec![code.into()])
+                return Ok(make_response(code, None));
             },
             Ok(maybe_msg) => {
                 match maybe_msg {
-                    Some(msg) => return Ok(msg),
+                    Some(msg) => {
+                        return Ok(make_response(ResponseType::Ok, Some(msg)));
+                    },
                     None => {
                         {
                             let locked_bus = bus.lock();
@@ -58,7 +61,7 @@ pub fn handle_get_message_request(bus: &mut Arc<Mutex<Bus>>, req: Option<Subscri
                             }
 
                             let mut locked_bus = locked_bus.unwrap();
-                            locked_bus.set_subcription_waiting(&req.sub_id);
+                            locked_bus.set_subcription_waiting(&req.value);
                         }
                         if block_timeout_secs < 0 {
                             thread::park();
@@ -66,7 +69,7 @@ pub fn handle_get_message_request(bus: &mut Arc<Mutex<Bus>>, req: Option<Subscri
                         else {
                             if timed_out {
                                 // We're in the second iteration, after having timed out from the first
-                                return Ok(vec![ResponseType::DoesntExist.into()]);
+                                return Ok(make_response(ResponseType::DoesntExist, None));
                             }
                             thread::park_timeout(Duration::from_secs(block_timeout_secs as u64));
                             timed_out = true;
@@ -88,8 +91,8 @@ pub fn handle_add_message(bus: &mut Arc<Mutex<Bus>>, req: Option<PutMessageReque
 
         let mut locked_bus = locked_bus.unwrap();
         if req.class == MessageType::ProduceMessage {
-            return Ok(vec![(*locked_bus).publish_message(&req.topic_id, req.message).into()]);
+            return Ok((*locked_bus).publish_message(&req.topic_id, req.message));
         }
     }
-    return Ok(vec![ResponseType::MalformedRequest.into()]);
+    return Ok(make_response(ResponseType::MalformedRequest, None));
 }

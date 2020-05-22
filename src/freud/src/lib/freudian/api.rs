@@ -36,12 +36,13 @@ impl Into<u8> for MessageType {
             MessageType::Subscribe => 2,
             MessageType::Unsubscribe => 3,
             MessageType::ProduceMessage => 4,
-            MessageType::GetMessage => 4,
+            MessageType::GetMessage => 5,
             _ => 255
         }
     }
 }
 
+#[derive(Debug)]
 pub enum ResponseType {
     Ok,
     NothingHappened,
@@ -77,79 +78,91 @@ impl Into<u8> for ResponseType {
     }
 }
 
-/// TopicRequest is a catch all for requests that just take a topic name
-pub struct TopicRequest {
-    pub class: MessageType,
-    pub topic_name: String,
+impl ResponseType {
+    pub fn as_string(self) -> String {
+        return match self {
+            ResponseType::Ok => "Ok",
+            ResponseType::NothingHappened => "Nothing Happened",
+            ResponseType::No => "No (Permission Denied)",
+            ResponseType::DoesntExist => "Resource Doesn't Exist",
+            ResponseType::ServerError => "Server Error",
+            ResponseType::MalformedRequest => "Malformed Request"
+        }.to_string();
+    }
 }
 
-impl TopicRequest {
-    fn new(class: MessageType, name: String) -> TopicRequest {
-        return TopicRequest{
+/// OneValueRequest is a catch all for requests that just take a topic name
+pub struct OneValueRequest {
+    pub class: MessageType,
+    pub value: String,
+}
+
+impl OneValueRequest {
+    pub fn new(class: MessageType, value: String) -> OneValueRequest {
+        return OneValueRequest{
             class: class,
-            topic_name: name
+            value: value
         };
     }
 
-    fn new_broken() -> TopicRequest {
-        return TopicRequest{
+    fn new_broken() -> OneValueRequest {
+        return OneValueRequest{
             class: MessageType::Invalid,
-            topic_name: String::new()
+            value: String::new()
         }
     }
 
     pub fn into_bytes(mut self) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
-        bytes.push(self.class.into());
 
-        if self.topic_name.len() >= 2 << 16 {
+        if self.value.len() >= 2 << 16 {
             bytes.append(&mut [255, 255].into_iter().copied().collect());
         }
         else{
-            let length = self.topic_name.len() as u16;
-            bytes.append(&mut [(length & 0xFF00 >> 8) as u8, (length & 0xFF) as u8].into_iter().copied().collect());
+            let length = self.value.len() as u16;
+            bytes.append(&mut [((length & 0xFF00) >> 8) as u8, (length & 0xFF) as u8].into_iter().copied().collect());
         }
 
-        self.topic_name.truncate(2<<16-1);
-        bytes.append(&mut self.topic_name.into_bytes());
+        self.value.truncate(2<<16-1);
+        bytes.append(&mut self.value.into_bytes());
         return bytes;
     }
 
     pub fn into_topic(self) -> Topic {
-        return Topic::new(self.topic_name);
+        return Topic::new(self.value);
     }
 }
 
-impl From<&Vec<u8>> for TopicRequest {
+impl From<&Vec<u8>> for OneValueRequest {
     fn from(raw: &Vec<u8>) -> Self {
         if raw.len() < 2 {
             // Minimum size is 2 bytes for topic name size
-            return TopicRequest::new_broken();
+            return OneValueRequest::new_broken();
         }
         let mut bytes = raw.into_iter();
 
         let topic_name_length = ((*bytes.next().unwrap() as u16) << 8 | (*bytes.next().unwrap() as u16)) as usize;
         if raw.len() - 2 != topic_name_length {
-            eprintln!("Failed to parse into TopicRequest: Topic length {}, but only {} bytes left", topic_name_length, raw.len()-2);
+            eprintln!("Failed to parse into OneValueRequest: Topic length {}, but only {} bytes left", topic_name_length, raw.len()-2);
             // Rest of the bytes are the wrong length
-            return TopicRequest::new_broken();
+            return OneValueRequest::new_broken();
         }
 
         let topic_name = match String::from_utf8(bytes.map(|b| *b).collect()) {
             Err(_err) => {
-                eprintln!("Failed to parse into TopicRequest: TopicName is not utf8");
+                eprintln!("Failed to parse into OneValueRequest: TopicName is not utf8");
                 // Rest of the bytes are invalid utf-8
-                return TopicRequest::new_broken();
+                return OneValueRequest::new_broken();
             },
             Ok(s) => s
         };
 
-        return TopicRequest::new(MessageType::Unknown, String::from(topic_name));
+        return OneValueRequest::new(MessageType::Unknown, String::from(topic_name));
     }
 }
 
-pub fn parse_as_create_topic_request(raw: &Vec<u8>) -> Option<TopicRequest> {
-    let mut request = TopicRequest::from(raw);
+pub fn parse_as_create_topic_request(raw: &Vec<u8>) -> Option<OneValueRequest> {
+    let mut request = OneValueRequest::from(raw);
     if request.class == MessageType::Invalid {
         return None;
     }
@@ -157,8 +170,8 @@ pub fn parse_as_create_topic_request(raw: &Vec<u8>) -> Option<TopicRequest> {
     return Some(request);
 }
 
-pub fn parse_as_delete_topic_request(raw: &Vec<u8>) -> Option<TopicRequest> {
-    let mut request = TopicRequest::from(raw);
+pub fn parse_as_delete_topic_request(raw: &Vec<u8>) -> Option<OneValueRequest> {
+    let mut request = OneValueRequest::from(raw);
     if request.class == MessageType::Invalid {
         return None;
     }
@@ -166,8 +179,8 @@ pub fn parse_as_delete_topic_request(raw: &Vec<u8>) -> Option<TopicRequest> {
     return Some(request);
 }
 
-pub fn parse_as_subscribe_request(raw: &Vec<u8>) -> Option<TopicRequest> {
-    let mut request = TopicRequest::from(raw);
+pub fn parse_as_subscribe_request(raw: &Vec<u8>) -> Option<OneValueRequest> {
+    let mut request = OneValueRequest::from(raw);
     if request.class == MessageType::Invalid {
         return None;
     }
@@ -208,50 +221,8 @@ impl From<&Vec<u8>> for EmptyRequest {
     }
 }
 
-pub struct SubscriptionRequest {
-    pub class: MessageType,
-    pub sub_id: String,
-}
-
-impl SubscriptionRequest {
-    fn new(class: MessageType, sub_id: String) -> SubscriptionRequest {
-        return SubscriptionRequest{
-            class: class,
-            sub_id: sub_id,
-        }
-    }
-
-    fn new_broken() -> SubscriptionRequest {
-        return SubscriptionRequest{
-            class: MessageType::Invalid,
-            sub_id: String::new()
-        }
-    }
-}
-
-impl From<&Vec<u8>> for SubscriptionRequest {
-    fn from(raw: &Vec<u8>) -> Self {
-        if raw.len() != 36 {
-            // Size must be 36 for the subscription id (utf8 encoded guid)
-            return SubscriptionRequest::new_broken();
-        }
-        let mut bytes = raw.into_iter();
-
-        let subscription_id = match String::from_utf8(bytes.map(|b| *b).collect()) {
-            Err(_err) => {
-                eprintln!("Failed to parse into SubscriptionRequest: SubscriptionID is not utf8");
-                // Rest of the bytes are invalid utf-8
-                return SubscriptionRequest::new_broken();
-            },
-            Ok(s) => s
-        };
-
-        return SubscriptionRequest::new(MessageType::Unknown, String::from(subscription_id));
-    }
-}
-
-pub fn parse_as_get_message_request(raw: &Vec<u8>) -> Option<SubscriptionRequest> {
-    let mut request = SubscriptionRequest::from(raw);
+pub fn parse_as_get_message_request(raw: &Vec<u8>) -> Option<OneValueRequest> {
+    let mut request = OneValueRequest::from(raw);
     if request.class == MessageType::Invalid {
         return None;
     }
@@ -266,7 +237,7 @@ pub struct PutMessageRequest {
 }
 
 impl PutMessageRequest {
-    fn new(topic_id: String, message: Vec<u8>) -> PutMessageRequest {
+    pub fn new(topic_id: String, message: Vec<u8>) -> PutMessageRequest {
         return PutMessageRequest{
             class: MessageType::ProduceMessage,
             topic_id: topic_id,
@@ -280,6 +251,22 @@ impl PutMessageRequest {
             topic_id: String::new(),
             message: Vec::new(),
         }
+    }
+
+    pub fn into_bytes(&self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        let topic_id_len = self.topic_id.len();
+        buffer.push(((topic_id_len & 0xFF00) >> 8) as u8);
+        buffer.push((topic_id_len & 0xFF) as u8);
+
+        let mut topic_id_bytes = self.topic_id.bytes().collect();
+        buffer.append(&mut topic_id_bytes);
+
+        for byte in self.message.iter() {
+            buffer.push(*byte);
+        }
+
+        return buffer;
     }
 }
 

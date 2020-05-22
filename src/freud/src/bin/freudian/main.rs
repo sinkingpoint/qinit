@@ -26,7 +26,6 @@ fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<()
         stream.read_exact(&mut header_buffer)?;
         let message_class = MessageType::from(header_buffer[0]);
         let message_length = ((header_buffer[1] as u16) << 8 | header_buffer[2] as u16) as usize;
-        println!("Found message class: {:?} with length {}", message_class, message_length);
         let mut message_buffer: Vec<u8> = Vec::with_capacity(message_length);
         message_buffer.resize(message_length, 0 as u8);
         match stream.read_exact(&mut message_buffer) {
@@ -50,6 +49,7 @@ fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<()
         let response = match response {
             Ok(resp) => resp,
             Err(()) => {
+                stream.write_all(&vec![ResponseType::ServerError.into()])?;
                 return Err(io::Error::new(io::ErrorKind::Other, "Bailing out of thread - bus function died"));
             }
         };
@@ -100,7 +100,8 @@ fn main() {
                 let mut bus_ptr = Arc::clone(&bus);
                 children.push(thread::spawn(move|| handle_client(&mut bus_ptr, stream)));
             }
-            Err(_err) => {
+            Err(err) => {
+                println!("Failed to handle connection... {}", err);
                 break;
             }
         }
