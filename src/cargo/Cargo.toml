@@ -9,6 +9,8 @@ nix = "0.17.0"
 clap = "2.33.0"
 regex = "1"
 chrono = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.4.2"
 
 [lib]
 path = "fake_lib.rs"
@@ -20,4 +22,9 @@ output_buildfile_suffix = "BUILD.bazel"
 [raze.crates.libc.'0.2.70']
 additional_flags = [
     "--cfg=libc_align"
+]
+
+[raze.crates.proc-macro2.'1.0.17']
+additional_flags = [
+    "--cfg=use_proc_macro"
 ]

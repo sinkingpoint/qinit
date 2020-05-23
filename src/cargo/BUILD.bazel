@@ -24,3 +24,11 @@ alias(
     name = "regex",
     actual = "//src/cargo/vendor/regex-1.3.7:regex",
 )
+alias(
+    name = "serde",
+    actual = "//src/cargo/vendor/serde-1.0.110:serde",
+)
+alias(
+    name = "toml",
+    actual = "//src/cargo/vendor/toml-0.4.10:toml",
+)
