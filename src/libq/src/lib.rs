@@ -7,3 +7,4 @@ pub mod blkid;
 pub mod terminal;
 pub mod daemon;
 pub mod rand;
+pub mod passwd;
