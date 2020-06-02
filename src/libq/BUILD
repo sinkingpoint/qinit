@@ -9,6 +9,7 @@ rust_library(
         "src/daemon.rs",
         "src/rand.rs",
         "src/qnix.rs",
+        "src/logger.rs",
         "src/passwd.rs",
         "src/terminal.rs",
         "src/blkid/mod.rs",

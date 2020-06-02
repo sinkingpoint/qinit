@@ -8,3 +8,4 @@ pub mod terminal;
 pub mod daemon;
 pub mod rand;
 pub mod passwd;
+pub mod logger;
