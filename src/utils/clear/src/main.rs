@@ -1,9 +1,9 @@
 extern crate libq;
+use std::io;
 
-use libq::io::STDOUT_FD;
 use libq::terminal;
 
 fn main() {
-    terminal::set_cursor_position(STDOUT_FD, 1, 1).unwrap();
-    terminal::erase_display(STDOUT_FD, terminal::EraseDisplayMode::All).unwrap();
+    terminal::set_cursor_position(&mut io::stdout(), 1, 1).unwrap();
+    terminal::erase_display(&mut io::stdout(), terminal::EraseDisplayMode::All).unwrap();
 }
