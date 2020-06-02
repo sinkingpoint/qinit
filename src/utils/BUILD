@@ -18,3 +18,12 @@ rust_binary(
         "//src/libq",
     ]
 )
+
+rust_binary(
+    name = "shutdown",
+    srcs = ["shutdown/src/main.rs"],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:nix",
+    ]
+)

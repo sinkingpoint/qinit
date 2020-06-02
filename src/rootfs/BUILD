@@ -10,6 +10,8 @@ initramfs(
         "//src/coreutils:mount",
         "//src/coreutils:ls",
         "//src/utils:clear",
+        "//src/utils:shutdown",
+        "//src/freud:freudian",
         "//src/sh",
     ],
     libs = [
