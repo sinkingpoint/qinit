@@ -11,6 +11,7 @@ regex = "1"
 chrono = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.4.2"
+serde_derive = "1.0.110"
 
 [lib]
 path = "fake_lib.rs"

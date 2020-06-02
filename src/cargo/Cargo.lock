@@ -50,6 +50,7 @@ dependencies = [
  "nix",
  "regex",
  "serde",
+ "serde_derive",
  "toml",
 ]
 
