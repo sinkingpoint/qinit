@@ -129,6 +129,11 @@ impl<'a, T> Record<'a, T> where T: RecordWriter{
         return self;
     }
 
+    pub fn with_string(&'a mut self, key: &'a str, value: String) -> &'a mut Record<T> {
+        self.kvs.insert(key, value);
+        return self;
+    }
+
     pub fn with_i8(&'a mut self, key: &'a str, value: i8) -> &'a mut Record<T> {
         return self.with_i64(key, value as i64);
     }
