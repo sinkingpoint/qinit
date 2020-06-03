@@ -63,8 +63,8 @@ fn main() {
                     .version("0.1")
                     .author("Colin D. <colin@quirl.co.nz>")
                     .about("message bus daemon")
-                    .arg(Arg::with_name("pidfile").long("pidfile").help("Sets the PID file to use"))
-                    .arg(Arg::with_name("socketfile").long("socket").help("Sets the socket file to use"))
+                    .arg(Arg::with_name("pidfile").takes_value(true).long("pidfile").help("Sets the PID file to use"))
+                    .arg(Arg::with_name("socketfile").takes_value(true).long("socket").help("Sets the socket file to use"))
                     .get_matches();
 
     let pidfile = PathBuf::from(args.value_of("pidfile").unwrap_or("/run/freudian/active.pid"));
