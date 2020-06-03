@@ -6,11 +6,12 @@ import subprocess
 import os.path
 import os
 import stat
+from pathlib import Path
 
 def mkdir(base_dir, dir):
     pathlib.Path("{}{}".format(base_dir, dir)).mkdir(parents=True, exist_ok=True)
 
-def main(bins, libs, init, output_file):
+def main(bins, libs, init, extra_files, output_file):
     base_dir = '/tmp/initramfs'
     mkdir(base_dir, "/bin")
     mkdir(base_dir, "/lib64")
@@ -26,6 +27,13 @@ def main(bins, libs, init, output_file):
         shutil.copy(lib, base_dir+"/lib64")
         os.chmod("{}/lib64/{}".format(base_dir, os.path.basename(lib)), 0o777)
         files.append("./lib64/{}".format(os.path.basename(lib)))
+
+    for f in extra_files:
+        host_loc, guest_loc = f.split("=")
+        parent_dir = Path(guest_loc)
+        mkdir(base_dir, parent_dir.parent)
+        shutil.copy(host_loc, base_dir+guest_loc)
+        files.append(".{}".format(guest_loc))
     
     shutil.copyfile(init, base_dir+"/init")
     os.chmod(base_dir+"/init", 0o755)
@@ -55,7 +63,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Make an initramfs from a set of binaries/libraries')
     parser.add_argument('--bins', type=str, nargs='+', default=[], help='Files to go in /bin')
     parser.add_argument('--libs', type=str, nargs='+', default=[], help='Files to go in /lib64')
+    parser.add_argument('--extrafiles', type=str, nargs='+', default=[], help='Files to go in other places. Format is <host>=<guest>')
     parser.add_argument('--init', type=str, help='File to go in /init', required=True)
     parser.add_argument('--output', type=str, help='Filename to output', default='initramfs.cpio.gz')
     args = parser.parse_args()
-    main(args.bins, args.libs, args.init, args.output)
+    main(args.bins, args.libs, args.init, args.extrafiles, args.output)

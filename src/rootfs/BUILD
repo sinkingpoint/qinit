@@ -25,6 +25,9 @@ initramfs(
         "vendor/libstdc++.so.6",
         "vendor/libtinfo.so.6",
     ],
+    extra_files = {
+        "tasks/shutdown.service": "/etc/qinit/tasks/shutdown.service"
+    },
     init_script = "init.sh",
     out = "rootfs.ext4"
 )
