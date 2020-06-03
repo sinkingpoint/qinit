@@ -7,6 +7,7 @@ rust_binary(
     ],
     deps = [
         "//src/qinit:libqinit",
+        "//src/cargo:clap",
         "//src/libq"
     ],
     visibility = ["//visibility:public",],

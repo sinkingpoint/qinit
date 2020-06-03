@@ -17,6 +17,14 @@ pub struct ServiceDef {
     pub command: String
 }
 
+#[derive(Deserialize)]
+#[derive(Debug)]
+pub struct StageDef {
+    pub name: String,
+    pub description: Option<String>,
+    pub steps: Vec<String>
+}
+
 /// Struct used in serde to Deserialise user/group definitions
 struct IdentifierVisitor;
 impl<'de> Visitor<'de> for IdentifierVisitor {
