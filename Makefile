@@ -1,7 +1,7 @@
 .PHONY: initramfs
 initramfs:
 	mkdir /tmp/initramfs/dev -p
-	[[ -e /tmp/initramfs/dev/urandom ]] || sudo mknod -m666 /tmp/initramfs/dev/urandom c 1 9 
+	[[ -e /tmp/initramfs/dev/urandom ]] || sudo mknod -m666 /tmp/initramfs/dev/urandom c 1 9
 	bazel build //src/initramfs:initramfs
 
 .PHONY: rootfs

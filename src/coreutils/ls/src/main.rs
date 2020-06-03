@@ -5,6 +5,8 @@ extern crate chrono;
 
 use libq::io::FileType;
 use libq::strings::format_file_mode;
+use libq::passwd;
+
 use nix::sys::stat::{lstat, FileStat};
 use nix::fcntl::readlink;
 use std::path::{Component, PathBuf};
@@ -16,6 +18,7 @@ use std::fs;
 use std::collections::VecDeque;
 use std::time::{UNIX_EPOCH, Duration};
 use std::process;
+use std::collections::HashMap;
 
 enum LsAllMode {
     None,
@@ -94,7 +97,7 @@ struct LsResult {
 }
 
 impl LsResult {
-    fn print(&self, mode: &LsMode) {
+    fn print(&self, mode: &LsMode, user_map: &HashMap<u32, String>, group_map: &HashMap<u32, String>) {
         if self.is_new_dir && mode.recursive{
             println!("{}: ", self.path.display());
             return;
@@ -119,7 +122,12 @@ impl LsResult {
             if self.file_type == FileType::Link && mode.long {
                 file_name.push_str(&format!("-> {}", readlink(&self.path).unwrap().to_string_lossy()));
             }
-            println!("{}. {} {} {} {} {} {}", format_file_mode(sr.st_mode), sr.st_nlink, sr.st_uid, sr.st_gid, sr.st_size, timestamp_str, file_name);
+
+            let uid_str = format!("{}", sr.st_uid);
+            let gid_str = format!("{}", sr.st_gid);
+            let user = user_map.get(&sr.st_uid).unwrap_or(&uid_str);
+            let group = group_map.get(&sr.st_gid).unwrap_or(&gid_str);
+            println!("{}. {} {} {} {} {} {}", format_file_mode(sr.st_mode), sr.st_nlink, user, group, sr.st_size, timestamp_str, file_name);
         }
     }
 }
@@ -194,7 +202,7 @@ impl Iterator for LsIter {
     }
 }
 
-fn do_ls(path: &PathBuf, mode: &LsMode) -> Result<(), ()>{
+fn do_ls(path: &PathBuf, mode: &LsMode, user_map: &HashMap<u32, String>, group_map: &HashMap<u32, String>) -> Result<(), ()>{
     let ls_iter = LsIter::new(path, mode.recursive, mode.directory);
 
     let mut printed_something = false;
@@ -210,7 +218,7 @@ fn do_ls(path: &PathBuf, mode: &LsMode) -> Result<(), ()>{
 
         // Second condition overrides the -a parameter if we're printing the current dir in directory mode
         if mode.all_mode.accept(&result.path) || (!printed_something && mode.directory){
-            result.print(mode);
+            result.print(mode, user_map, group_map);
             printed_something = true;
         }
     }
@@ -250,9 +258,19 @@ fn main() {
         directory: args.is_present("directory")
     };
 
+    let mut uid_map = HashMap::new();
+    for user in passwd::get_all_users() {
+        uid_map.insert(user.uid, user.username);
+    }
+
+    let mut gid_map = HashMap::new();
+    for group in passwd::get_all_groups() {
+        gid_map.insert(group.gid, group.name);
+    }
+
     let mut exit_code = 0;
     for file in files.iter() {
-        match do_ls(file, &mode) {
+        match do_ls(file, &mode, &uid_map, &gid_map) {
             Ok(_) => {},
             Err(_) => {
                 exit_code = 1;

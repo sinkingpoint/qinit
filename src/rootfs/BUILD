@@ -26,7 +26,10 @@ initramfs(
         "vendor/libtinfo.so.6",
     ],
     extra_files = {
-        "tasks/shutdown.service": "/etc/qinit/tasks/shutdown.service"
+        "tasks/shutdown.service": "/etc/qinit/tasks/shutdown.service",
+        "etc/group": "/etc/group",
+        "etc/passwd": "/etc/passwd",
+        "//src/utils:qgetty": "/sbin/qgetty"
     },
     init_script = "init.sh",
     out = "rootfs.ext4"
