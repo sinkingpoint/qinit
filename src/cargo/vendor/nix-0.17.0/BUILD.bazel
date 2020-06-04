@@ -34,7 +34,7 @@ rust_library(
     deps = [
         "//src/cargo/vendor/bitflags-1.2.1:bitflags",
         "//src/cargo/vendor/cfg-if-0.1.10:cfg_if",
-        "//src/cargo/vendor/libc-0.2.70:libc",
+        "//src/cargo/vendor/libc-0.2.71:libc",
         "//src/cargo/vendor/void-1.0.2:void",
     ],
     rustc_flags = [
