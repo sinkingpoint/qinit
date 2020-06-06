@@ -29,6 +29,14 @@ alias(
     actual = "//src/cargo/vendor/regex-1.3.9:regex",
 )
 alias(
+    name = "ring",
+    actual = "//src/cargo/vendor/ring-0.16.14:ring",
+)
+alias(
+    name = "rustls",
+    actual = "//src/cargo/vendor/rustls-0.17.0:rustls",
+)
+alias(
     name = "serde",
     actual = "//src/cargo/vendor/serde-1.0.111:serde",
 )

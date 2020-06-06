@@ -36,6 +36,7 @@ rust_library(
     rustc_flags = [
         "--cap-lints=allow",
     ],
+    
     version = "0.3.8",
     crate_features = [
         "consoleapi",
@@ -43,12 +44,14 @@ rust_library(
         "minwinbase",
         "minwindef",
         "ntdef",
+        "ntsecapi",
         "processenv",
         "profileapi",
         "std",
         "sysinfoapi",
         "timezoneapi",
         "winbase",
+        "wtypesbase",
     ],
 )
 

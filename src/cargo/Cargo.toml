@@ -13,6 +13,8 @@ serde = { version = "1.0", features = ["derive"] }
 toml = "0.4.2"
 serde_derive = "1.0.110"
 libc = "0.2.71"
+rustls = "0.17.0"
+ring = "0.16.14"
 
 [lib]
 path = "fake_lib.rs"
@@ -30,3 +32,14 @@ additional_flags = [
 additional_flags = [
     "--cfg=use_proc_macro"
 ]
+
+[raze.crates.ring.'0.16.14']
+data_attr = 'glob(["**/src/data/*", "**/src/ec/**/*.der"])'
+additional_deps = [
+    # provided by the additional_build_file
+    ":ring-core",
+]
+additional_build_file = "builds/ring-0.16.BUILD"
+
+[raze.crates.webpki.'0.21.3']
+data_attr = """glob([\"src/data/*.der\"])"""

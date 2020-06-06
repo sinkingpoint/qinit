@@ -41,6 +41,7 @@ rust_library(
         "--cap-lints=allow",
         "--cfg=use_proc_macro",
     ],
+    
     version = "1.0.18",
     crate_features = [
         "default",

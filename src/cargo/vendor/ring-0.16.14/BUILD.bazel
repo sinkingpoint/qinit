@@ -1,0 +1,92 @@
+"""
+cargo-raze crate build file.
+
+DO NOT EDIT! Replaced on runs of cargo-raze
+"""
+package(default_visibility = [
+  # Public for visibility by "@raze__crate__version//" targets.
+  #
+  # Prefer access through "//src/cargo", which limits external
+  # visibility to explicit Cargo.toml dependencies.
+  "//visibility:public",
+])
+
+licenses([
+  "restricted", # "no license"
+])
+
+load(
+    "@io_bazel_rules_rust//rust:rust.bzl",
+    "rust_library",
+    "rust_binary",
+    "rust_test",
+)
+
+
+# Unsupported target "aead_tests" with type "test" omitted
+# Unsupported target "agreement_tests" with type "test" omitted
+# Unsupported target "build-script-build" with type "custom-build" omitted
+# Unsupported target "constant_time_tests" with type "test" omitted
+# Unsupported target "digest_tests" with type "test" omitted
+# Unsupported target "ecdsa_tests" with type "test" omitted
+# Unsupported target "ed25519_tests" with type "test" omitted
+# Unsupported target "hkdf_tests" with type "test" omitted
+# Unsupported target "hmac_tests" with type "test" omitted
+# Unsupported target "pbkdf2_tests" with type "test" omitted
+# Unsupported target "quic_tests" with type "test" omitted
+# Unsupported target "rand_tests" with type "test" omitted
+
+rust_library(
+    name = "ring",
+    crate_root = "src/lib.rs",
+    crate_type = "lib",
+    edition = "2018",
+    srcs = glob(["**/*.rs"]),
+    deps = [
+        "//src/cargo/vendor/libc-0.2.71:libc",
+        "//src/cargo/vendor/once_cell-1.4.0:once_cell",
+        "//src/cargo/vendor/spin-0.5.2:spin",
+        "//src/cargo/vendor/untrusted-0.7.1:untrusted",
+        ":ring-core",
+    ],
+    rustc_flags = [
+        "--cap-lints=allow",
+    ],
+    
+    data = glob(["**/src/data/*", "**/src/ec/**/*.der"]),
+    version = "0.16.14",
+    crate_features = [
+        "alloc",
+        "default",
+        "dev_urandom_fallback",
+        "once_cell",
+    ],
+)
+
+# Unsupported target "rsa_tests" with type "test" omitted
+# Unsupported target "signature_tests" with type "test" omitted
+
+# Additional content from builds/ring-0.16.BUILD
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+# Based off of ring's build.rs file:
+# https://github.com/briansmith/ring/blob/master/build.rs
+cc_library(
+    name = "ring-core",
+    srcs = glob(
+        [
+            "**/*.h",
+            "**/*.c",
+            "**/*.inl",
+            "**/*x86_64*-elf.S",
+        ],
+        exclude = ["crypto/constant_time_test.c"],
+    ),
+    copts = [
+        "-fno-strict-aliasing",
+        "-fvisibility=hidden",
+    ],
+    includes = [
+        "include",
+    ],
+)

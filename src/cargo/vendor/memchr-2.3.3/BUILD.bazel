@@ -37,6 +37,7 @@ rust_library(
     rustc_flags = [
         "--cap-lints=allow",
     ],
+    
     version = "2.3.3",
     crate_features = [
         "default",
