@@ -94,16 +94,19 @@ pub const S_ISUID: u32 = 0o04000;
 pub const S_ISGID: u32 = 0o02000;
 
 pub const S_IRWXU: u32 = 0o00700;
+pub const S_IRWUSR: u32 = 0o00600;
 pub const S_IRUSR: u32 = 0o00400;
 pub const S_IWUSR: u32 = 0o00200;
 pub const S_IXUSR: u32 = 0o00100;
 
 pub const S_IRWXG: u32 = 0o00070;
+pub const S_IRWGRP: u32 = 0o00060;
 pub const S_IRGRP: u32 = 0o00040;
 pub const S_IWGRP: u32 = 0o00020;
 pub const S_IXGRP: u32 = 0o00010;
 
 pub const S_IRWXO: u32 = 0o00007;
+pub const S_IRWOTH: u32 = 0o00006;
 pub const S_IROTH: u32 = 0o00004;
 pub const S_IWOTH: u32 = 0o00002;
 pub const S_IXOTH: u32 = 0o00001;

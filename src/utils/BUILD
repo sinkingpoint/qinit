@@ -27,3 +27,15 @@ rust_binary(
         "//src/cargo:nix",
     ]
 )
+
+rust_binary(
+    name = "qgetty",
+    srcs = ["qgetty/src/main.rs"],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:nix",
+        "//src/cargo:clap",
+        "//src/cargo:libc",
+        "//src/libq",
+    ]
+)

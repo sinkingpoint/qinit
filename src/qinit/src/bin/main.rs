@@ -15,6 +15,7 @@ fn main() -> Result<(), ()>{
                     .arg(Arg::with_name("pidfile").long("pidfile").help("Sets the PID file to use"))
                     .arg(Arg::with_name("socketfile").long("socket").help("Sets the socket file to use"))
                     .arg(Arg::with_name("taskdir").long("taskdir").takes_value(true).multiple(true).help("Specifies the directories to look for tasks in"))
+                    .arg(Arg::with_name("level").index(1))
                     .get_matches();
 
     let pidfile = PathBuf::from(args.value_of("pidfile").unwrap_or("/run/freudian/active.pid"));
