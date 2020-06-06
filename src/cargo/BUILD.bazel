@@ -9,6 +9,10 @@ licenses([
   "notice" # See individual crates for specific licenses
 ])
 alias(
+    name = "base64",
+    actual = "//src/cargo/vendor/base64-0.11.0:base64",
+)
+alias(
     name = "chrono",
     actual = "//src/cargo/vendor/chrono-0.4.11:chrono",
 )

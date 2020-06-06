@@ -15,6 +15,7 @@ serde_derive = "1.0.110"
 libc = "0.2.71"
 rustls = "0.17.0"
 ring = "0.16.14"
+base64 = "0.11.0"
 
 [lib]
 path = "fake_lib.rs"
