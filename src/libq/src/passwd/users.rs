@@ -59,6 +59,10 @@ impl PasswdEntry {
         return Users::new().filter(|u| u.uid == uid).next();
     }
 
+    pub fn by_username_str(username: &str) -> Option<PasswdEntry> {
+        return Users::new().filter(|u| &u.username == username).next();
+    }
+
     pub fn by_username(username: &String) -> Option<PasswdEntry> {
         return Users::new().filter(|u| &u.username == username).next();
     }

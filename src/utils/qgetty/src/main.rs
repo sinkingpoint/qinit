@@ -6,7 +6,7 @@ extern crate libc;
 use clap::{App, Arg};
 
 use nix::errno::Errno;
-use nix::unistd::{getpid, isatty, close, Pid, tcsetpgrp, dup};
+use nix::unistd::{getpid, isatty, close, Pid, tcsetpgrp, dup, execve};
 use nix::fcntl::{fcntl, open, OFlag, FcntlArg};
 use nix::sys::stat::{fstat, Mode};
 use nix::sys::termios::{tcflush, FlushArg, SpecialCharacterIndices, tcgetattr, tcsetattr, tcgetsid, Termios, ControlFlags, BaudRate, cfgetispeed, cfgetospeed, cfsetispeed, cfsetospeed, SetArg, InputFlags, OutputFlags, LocalFlags};
@@ -21,6 +21,7 @@ use libq::io::{FileType, STDIN_FD, STDOUT_FD, STDERR_FD, S_IRWOTH};
 use std::path::PathBuf;
 use std::os::unix::io::RawFd;
 use std::io::{self, BufReader, Read, Write};
+use std::ffi::{CStr, CString};
 
 use libc::{fchown, fchmod, vhangup};
 
@@ -141,9 +142,27 @@ fn main() -> Result<(), ()> {
         }
     };
 
-    println!("Logging in {}", username);
+    let login_bin = CString::new("/sbin/login").unwrap();
+    let args: Vec<Vec<u8>> = ["/sbin/login", username.as_str()].into_iter().map(|arg| CString::new(*arg).unwrap().into_bytes_with_nul()).collect();
+    let args = &args.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
 
-    loop {}
+    let env: Vec<Vec<u8>> = [format!("TERM={}", options.term_type.unwrap()).as_str()].into_iter().map(|env| CString::new(*env).unwrap().into_bytes_with_nul()).collect();
+    let env = &env.iter().map(|env| CStr::from_bytes_with_nul(env).unwrap()).collect::<Vec<&CStr>>()[..];
+
+    match execve(&login_bin, &args[..], &env[..]) {
+        Ok(_) => {} // We should never get here. A sucessful execvp will never get here as it will be running the other program
+        Err(err) => {
+            if let Some(errno) = err.as_errno() {
+                if errno == Errno::ENOENT {
+                    eprintln!("No such command: {}", "/sbin/login");
+                    std::process::exit(127);
+                }
+            }
+            else {
+                logger.debug().with_string("error", err.to_string()).smsg("Failed to exec login process");
+            }
+        }
+    }
 
     return Ok(());
 }

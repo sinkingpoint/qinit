@@ -29,7 +29,9 @@ initramfs(
         "tasks/shutdown.service": "/etc/qinit/tasks/shutdown.service",
         "etc/group": "/etc/group",
         "etc/passwd": "/etc/passwd",
-        "//src/utils:qgetty": "/sbin/qgetty"
+        "etc/shadow": "/etc/shadow",
+        "//src/utils:qgetty": "/sbin/qgetty",
+        "//src/utils:login": "/sbin/login"
     },
     init_script = "init.sh",
     out = "rootfs.ext4"

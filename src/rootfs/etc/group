@@ -18,3 +18,4 @@ lock:x:54:
 audio:x:63:
 users:x:100:
 nobody:x:65534:
+group:x:1000:colin
