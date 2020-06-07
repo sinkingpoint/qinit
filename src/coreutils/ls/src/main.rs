@@ -259,12 +259,12 @@ fn main() {
     };
 
     let mut uid_map = HashMap::new();
-    for user in passwd::get_all_users() {
+    for user in passwd::Users::new() {
         uid_map.insert(user.uid, user.username);
     }
 
     let mut gid_map = HashMap::new();
-    for group in passwd::get_all_groups() {
+    for group in passwd::Groups::new() {
         gid_map.insert(group.gid, group.name);
     }
 

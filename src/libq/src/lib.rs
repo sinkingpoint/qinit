@@ -1,4 +1,5 @@
 extern crate nix;
+extern crate ring;
 
 pub mod strings;
 pub mod io;

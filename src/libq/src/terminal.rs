@@ -1,7 +1,5 @@
 use std::io::{self, Write};
-use std::os::unix::io::RawFd;
 
-use nix;
 use nix::pty::Winsize;
 use nix::libc::c_int;
 use nix::sys::termios::{Termios, ControlFlags, InputFlags, OutputFlags, LocalFlags, SpecialCharacterIndices};
