@@ -1,0 +1,5 @@
+name = "SingleUserMode"
+description = "Single User mode. Basically init 1"
+steps = [
+    { name = "Getty", args = { tty = "console"}}
+]

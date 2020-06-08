@@ -1,0 +1,7 @@
+name = "Getty"
+description = "Controls a Getty Service on a terminal"
+args = [
+    "tty"
+]
+command = "/sbin/getty ${tty}"
+restart = "always"

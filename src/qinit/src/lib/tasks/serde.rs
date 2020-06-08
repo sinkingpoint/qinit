@@ -3,8 +3,17 @@ use serde_derive::Deserialize;
 use serde::de::{self, Visitor, Deserializer, Deserialize};
 use std::convert::TryInto;
 use std::fmt;
+use std::collections::HashMap;
 
 use super::Identifier;
+
+#[derive(Debug)]
+#[derive(Deserialize)]
+pub enum RestartMode {
+    Always,
+    OnCrash,
+    Never
+}
 
 #[derive(Deserialize)]
 #[derive(Debug)]
@@ -13,8 +22,17 @@ pub struct ServiceDef {
     pub description: Option<String>,
     pub user: Option<Identifier>,
     pub group: Option<Identifier>,
-    pub requirements: Option<Vec<String>>, // A list of Units that should be started _before_ this one
+    pub args: Option<Vec<String>>,
+    pub restart_mode: Option<RestartMode>,
+    pub requirements: Option<Vec<DependencyDef>>, // A list of Units that should be started _before_ this one
     pub command: String
+}
+
+#[derive(Deserialize)]
+#[derive(Debug)]
+pub struct DependencyDef {
+    pub name: String,
+    pub args: HashMap<String, String>
 }
 
 #[derive(Deserialize)]
@@ -22,7 +40,7 @@ pub struct ServiceDef {
 pub struct StageDef {
     pub name: String,
     pub description: Option<String>,
-    pub steps: Vec<String>
+    pub steps: Vec<DependencyDef>
 }
 
 /// Struct used in serde to Deserialise user/group definitions

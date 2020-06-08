@@ -1,6 +1,8 @@
 use super::task::{Stage, Service, Task};
 use super::serde::{ServiceDef, StageDef};
-use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
+use std::cmp::Eq;
+use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
 use std::io::{self, Read};
@@ -24,9 +26,9 @@ impl TaskRegistry {
                 logger.debug().msg(format!("{} either doesn't exist or isn't a directory. Either way, skipping it for task definitions", loc.display()));
                 continue;
             }
-    
+
             logger.debug().msg(format!("Checking {} for tasks", loc.display()));
-    
+
             for child in loc.read_dir()? {
                 if child.is_err() {
                     continue;
@@ -46,7 +48,8 @@ impl TaskRegistry {
                             if tasks.contains_key(&service.name) {
                                 logger.info().msg(format!("Found duplicate defintion of {}. Skipping", &service.name));
                             }
-                            tasks.insert(service.name.clone(), Box::new(Service::from(service)));
+                            let service = Service::from(service);
+                            tasks.insert(service.get_name().clone(), Box::new(service));
                         },
                         Err(err) => {
                             logger.info().with_string("error", format!("{}", err)).msg(format!("Failed to load task definition {} as service definition", child.path().display()));
@@ -59,7 +62,8 @@ impl TaskRegistry {
                             if tasks.contains_key(&stage.name) {
                                 logger.info().msg(format!("Found duplicate defintion of {}. Skipping", &stage.name));
                             }
-                            tasks.insert(stage.name.clone(), Box::new(Stage::from(stage)));
+                            let stage = Stage::from(stage);
+                            tasks.insert(stage.get_name().clone(), Box::new(stage));
                         },
                         Err(err) => {
                             logger.info().with_string("error", format!("{}", err)).msg(format!("Failed to load task definition {} as service definition", child.path().display()));
@@ -72,36 +76,17 @@ impl TaskRegistry {
             }
         }
 
-        let mut registry = TaskRegistry {
+        return Ok(TaskRegistry {
             tasks: tasks,
             logger: logger
-        };
-        
-        registry.validate();
-
-        return Ok(registry);
-    }
-
-    /// Goes through all the tasks in the registry and validates their dependencies, removing
-    /// the tasks that have unknown ones
-    fn validate(&mut self) {
-        let mut to_remove = Vec::new();
-        for (service_name, task) in self.tasks.iter() {
-            for dep in task.get_deps().iter() {
-                if !self.tasks.contains_key(dep) {
-                    self.logger.info().msg(format!("Failed to load {} - dependency {} not found", service_name, dep));
-                    to_remove.push(dep.clone());
-                    break;
-                }
-            }
-        }
-
-        for service_name in to_remove.iter() {
-            self.tasks.remove(service_name);
-        }
+        });
     }
 
     pub fn len(&self) -> usize {
         return self.tasks.len();
+    }
+
+    pub fn get_task(&self, name: &str) -> Option<&Box<dyn Task>> {
+        return self.tasks.get(name);
     }
 }
