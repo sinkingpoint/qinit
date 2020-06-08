@@ -9,6 +9,8 @@ use libqinit::tasks::TaskRegistry;
 use std::path::PathBuf;
 use clap::{Arg, App};
 
+use std::collections::HashMap;
+
 enum RunLevel {
     SingleUserMode
 }
@@ -79,12 +81,9 @@ fn main() -> Result<(), ()>{
 
     logger.info().msg(format!("Loaded {} tasks", task_registry.len()));
 
-    match task_registry.get_task(run_level.get_stage_name()) {
-        Some(task) => {},
-        None => {
-            logger.info().msg(format!("Failed to find task {} for run level {}", run_level.get_stage_name(), run_level.to_str()));
-        }
-    }
+    task_registry.execute_task(run_level.get_stage_name(), &HashMap::new());
+
+    loop {}
 
     return Ok(());
 }

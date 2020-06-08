@@ -5,15 +5,13 @@ use std::cmp::Eq;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::fmt;
+use std::ffi::{CStr, CString};
 
-#[derive(Debug)]
-pub enum TaskState {
-    Stopped,
-    Started,
-    Stopping,
-    Starting,
-    Failed
-}
+use nix::unistd::{fork, ForkResult, execv};
+use nix::errno::Errno;
+
+use super::registry::TaskRegistry;
+use libq::logger;
 
 pub struct Dependency {
     name: String,
@@ -23,6 +21,10 @@ pub struct Dependency {
 impl Dependency {
     pub fn get_name(&self) -> &String {
         return &self.name;
+    }
+
+    pub fn get_args(&self) -> &HashMap<String, String> {
+        return &self.args;
     }
 }
 
@@ -51,7 +53,10 @@ impl From<DependencyDef> for Dependency {
     fn from(item: DependencyDef) -> Self {
         return Dependency {
             name: item.name.to_lowercase(),
-            args: item.args
+            args: match item.args {
+                None => HashMap::new(),
+                Some(a) => a
+            }
         }
     }
 }
@@ -88,6 +93,7 @@ impl Eq for Dependency{}
 pub trait Task {
     fn get_name(&self) -> &String;
     fn get_deps(&self) -> &Vec<Dependency>;
+    fn execute(&self, &HashMap<String, String>, &TaskRegistry) -> Result<(), ()>;
 }
 
 /// A struct that represents a service/daemon being run in the system
@@ -102,7 +108,6 @@ pub struct Service {
     restart_mode: RestartMode,
     requirements: Vec<Dependency>, // A list of Units that should be started _before_ this one
     command: String,
-    state: TaskState,
 }
 
 impl From<ServiceDef> for Service {
@@ -121,8 +126,7 @@ impl From<ServiceDef> for Service {
                 None => Vec::new(),
                 Some(reqs) => reqs.into_iter().map(|dep| Dependency::from(dep)).collect()
             },
-            command: item.command,
-            state: TaskState::Stopped
+            command: item.command
         }
     }
 }
@@ -135,6 +139,57 @@ impl Task for Service {
     fn get_deps(&self) -> &Vec<Dependency> {
         return &self.requirements;
     }
+
+    fn execute(&self, args: &HashMap<String, String>, registry: &TaskRegistry) -> Result<(), ()> {
+        // Validate args
+        if args.len() != self.args.len() {
+            // Args are incomplete
+                return Err(());
+        }
+
+        for arg in self.args.iter() {
+            if !args.contains_key(arg) {
+                // Arg is missing
+                return Err(());
+            }
+        }
+
+        // TODO: Do templating on command line string, split into argv, fork and record state
+        let mut replaced_command = self.command.clone();
+        for (key, value) in args.iter() {
+            let template = format!("${{{}}}", key);
+            replaced_command = replaced_command.replace(template.as_str(), value.as_str());
+        }
+        let logger = logger::with_name_as_json("qinit;task");
+
+        let args: Vec<&str> = replaced_command.split_whitespace().collect();
+        let args: Vec<Vec<u8>> = args.into_iter().map(|arg| CString::new(arg).unwrap().into_bytes_with_nul()).collect();
+        let args = &args.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
+
+        match fork() {
+            Ok(ForkResult::Parent { child, .. }) => {}
+            Ok(ForkResult::Child) => {
+                match execv(args[0], args) {
+                    Ok(_) => {} // We should never get here. A sucessful execvp will never get here as it will be running the other program
+                    Err(err) => {
+                        if let Some(errno) = err.as_errno() {
+                            if errno == Errno::ENOENT {
+                                eprintln!("No such command: {:?}", args[0]);
+                                std::process::exit(127);
+                            }
+                        }
+                        else {
+                            logger.debug().with_string("error", err.to_string()).smsg("Failed to exec process");
+                        }
+                    }
+                }
+            },
+            Err(_) => {
+                eprintln!("Fork failed");
+            }
+        }
+        return Err(());
+    }
 }
 
 /// A Stage is a convienient way to link a number of `Service`s. It can be thought
@@ -142,8 +197,7 @@ impl Task for Service {
 pub struct Stage {
     name: String,
     description: Option<String>,
-    pub steps: Vec<Dependency>,
-    state: TaskState,
+    steps: Vec<Dependency>,
 }
 
 impl From<StageDef> for Stage {
@@ -152,7 +206,6 @@ impl From<StageDef> for Stage {
             name: item.name.to_lowercase(),
             description: item.description,
             steps: item.steps.into_iter().map(|dep| Dependency::from(dep)).collect(),
-            state: TaskState::Stopped
         };
     }
 }
@@ -164,5 +217,15 @@ impl Task for Stage {
 
     fn get_deps(&self) -> &Vec<Dependency> {
         return &self.steps;
+    }
+
+    fn execute(&self, args: &HashMap<String, String>, registry: &TaskRegistry) -> Result<(), ()> {
+        for step in self.steps.iter() {
+            if !registry.execute_task(step.get_name(), step.get_args()) {
+                return Err(());
+            }
+        }
+        
+        return Ok(());
     }
 }

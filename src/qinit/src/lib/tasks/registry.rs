@@ -89,4 +89,18 @@ impl TaskRegistry {
     pub fn get_task(&self, name: &str) -> Option<&Box<dyn Task>> {
         return self.tasks.get(name);
     }
+
+    pub fn execute_task(&self, name: &str, args: &HashMap<String, String>) -> bool {
+        let task = match self.tasks.get(name) {
+            None => {
+                return false;
+            },
+            Some(task) => task
+        };
+
+        let mut log = logger::with_name_as_json("TaskRegistry");
+        log.info().with_string("task", name.to_string()).msg(format!("Starting task"));
+
+        return task.execute(args, self).is_ok();
+    }
 }

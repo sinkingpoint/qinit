@@ -12,6 +12,7 @@ initramfs(
         "//src/utils:clear",
         "//src/utils:shutdown",
         "//src/freud:freudian",
+        "//src/qinit:qinit",
         "//src/sh",
     ],
     libs = [
@@ -27,6 +28,8 @@ initramfs(
     ],
     extra_files = {
         "tasks/shutdown.service": "/etc/qinit/tasks/shutdown.service",
+        "tasks/getty.service": "/etc/qinit/tasks/getty.service",
+        "tasks/single_user_mode.stage": "/etc/qinit/tasks/single_user_mode.stage",
         "etc/group": "/etc/group",
         "etc/passwd": "/etc/passwd",
         "etc/shadow": "/etc/shadow",

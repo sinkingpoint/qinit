@@ -70,7 +70,7 @@ fn main() {
     let pidfile = PathBuf::from(args.value_of("pidfile").unwrap_or("/run/freudian/active.pid"));
     let socketfile = PathBuf::from(args.value_of("socketfile").unwrap_or("/run/freudian/socket"));
 
-    match write_pid_file {
+    match write_pid_file(pidfile) {
         Ok(_) => {},
         Err(err) => {
             eprintln!("{}", err);

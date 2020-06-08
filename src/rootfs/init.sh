@@ -2,4 +2,4 @@
 
 echo Hello Userland!
 
-exec /sbin/qgetty -R ttyS0
+exec /bin/qinit -- 1

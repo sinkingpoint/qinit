@@ -32,7 +32,7 @@ pub struct ServiceDef {
 #[derive(Debug)]
 pub struct DependencyDef {
     pub name: String,
-    pub args: HashMap<String, String>
+    pub args: Option<HashMap<String, String>>
 }
 
 #[derive(Deserialize)]
