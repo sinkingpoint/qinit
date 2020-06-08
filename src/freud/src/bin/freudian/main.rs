@@ -18,7 +18,7 @@ use std::thread;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
 
-use libq::daemon::PidFile;
+use libq::daemon::write_pid_file;
 
 fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<(), io::Error>{
     loop {
@@ -70,8 +70,8 @@ fn main() {
     let pidfile = PathBuf::from(args.value_of("pidfile").unwrap_or("/run/freudian/active.pid"));
     let socketfile = PathBuf::from(args.value_of("socketfile").unwrap_or("/run/freudian/socket"));
 
-    match PidFile::new(pidfile) {
-        Ok(pf) => pf,
+    match write_pid_file {
+        Ok(_) => {},
         Err(err) => {
             eprintln!("{}", err);
             return;
