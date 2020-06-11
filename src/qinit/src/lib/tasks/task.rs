@@ -1,4 +1,5 @@
 use super::serde::{ServiceDef, StageDef, DependencyDef, RestartMode};
+use super::status_registry::{TaskStatusRegistry, TaskState};
 use super::Identifier;
 use std::convert::From;
 use std::cmp::Eq;
@@ -10,15 +11,21 @@ use std::ffi::{CStr, CString};
 use nix::unistd::{fork, ForkResult, execv};
 use nix::errno::Errno;
 
-use super::registry::TaskRegistry;
 use libq::logger;
 
-pub struct Dependency {
+pub struct ServiceInstance {
     name: String,
     args: HashMap<String, String>
 }
 
-impl Dependency {
+impl ServiceInstance {
+    pub fn new(name: String, args: HashMap<String, String>) -> ServiceInstance {
+        return ServiceInstance {
+            name: name,
+            args: args
+        };
+    }
+
     pub fn get_name(&self) -> &String {
         return &self.name;
     }
@@ -28,7 +35,7 @@ impl Dependency {
     }
 }
 
-impl Hash for Dependency {
+impl Hash for ServiceInstance {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         for (key, value) in self.args.iter() {
@@ -38,7 +45,7 @@ impl Hash for Dependency {
     }
 }
 
-impl fmt::Display for Dependency {
+impl fmt::Display for ServiceInstance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut arg_string = String::new();
         for (key, value) in self.args.iter() {
@@ -49,9 +56,9 @@ impl fmt::Display for Dependency {
     }
 }
 
-impl From<DependencyDef> for Dependency {
+impl From<DependencyDef> for ServiceInstance {
     fn from(item: DependencyDef) -> Self {
-        return Dependency {
+        return ServiceInstance {
             name: item.name.to_lowercase(),
             args: match item.args {
                 None => HashMap::new(),
@@ -61,7 +68,7 @@ impl From<DependencyDef> for Dependency {
     }
 }
 
-impl PartialEq for Dependency {
+impl PartialEq for ServiceInstance {
     fn eq(&self, other: &Self) -> bool {
         if self.name != other.name {
             return false;
@@ -87,13 +94,13 @@ impl PartialEq for Dependency {
     }
 }
 
-impl Eq for Dependency{}
+impl Eq for ServiceInstance{}
 
 /// A trait that defines the minimum requirements for a task to be run by QInit
 pub trait Task {
     fn get_name(&self) -> &String;
-    fn get_deps(&self) -> &Vec<Dependency>;
-    fn execute(&self, &HashMap<String, String>, &TaskRegistry) -> Result<(), ()>;
+    fn get_deps(&self) -> &Vec<ServiceInstance>;
+    fn execute(&self, &HashMap<String, String>, &mut TaskStatusRegistry) -> Result<(), ()>;
 }
 
 /// A struct that represents a service/daemon being run in the system
@@ -106,7 +113,7 @@ pub struct Service {
     group: Option<Identifier>,
     args: Vec<String>,
     restart_mode: RestartMode,
-    requirements: Vec<Dependency>, // A list of Units that should be started _before_ this one
+    requirements: Vec<ServiceInstance>, // A list of Units that should be started _before_ this one
     command: String,
 }
 
@@ -124,7 +131,7 @@ impl From<ServiceDef> for Service {
             restart_mode: item.restart_mode.unwrap_or(RestartMode::OnCrash),
             requirements: match item.requirements {
                 None => Vec::new(),
-                Some(reqs) => reqs.into_iter().map(|dep| Dependency::from(dep)).collect()
+                Some(reqs) => reqs.into_iter().map(|dep| ServiceInstance::from(dep)).collect()
             },
             command: item.command
         }
@@ -136,11 +143,11 @@ impl Task for Service {
         return &self.name;
     }
 
-    fn get_deps(&self) -> &Vec<Dependency> {
+    fn get_deps(&self) -> &Vec<ServiceInstance> {
         return &self.requirements;
     }
 
-    fn execute(&self, args: &HashMap<String, String>, registry: &TaskRegistry) -> Result<(), ()> {
+    fn execute(&self, args: &HashMap<String, String>, registry: &mut TaskStatusRegistry) -> Result<(), ()> {
         // Validate args
         if args.len() != self.args.len() {
             // Args are incomplete
@@ -162,19 +169,20 @@ impl Task for Service {
         }
         let logger = logger::with_name_as_json("qinit;task");
 
-        let args: Vec<&str> = replaced_command.split_whitespace().collect();
-        let args: Vec<Vec<u8>> = args.into_iter().map(|arg| CString::new(arg).unwrap().into_bytes_with_nul()).collect();
-        let args = &args.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
+        let argv: Vec<&str> = replaced_command.split_whitespace().collect();
+        let argv: Vec<Vec<u8>> = argv.into_iter().map(|arg| CString::new(arg).unwrap().into_bytes_with_nul()).collect();
+        let argv = &argv.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
 
         match fork() {
-            Ok(ForkResult::Parent { child, .. }) => {}
+            Ok(ForkResult::Parent { child, .. }) => {
+                registry.set_status(ServiceInstance::new(self.name.clone(), args.clone()), TaskState::Started(Some(child)));
+            },
             Ok(ForkResult::Child) => {
-                match execv(args[0], args) {
+                match execv(argv[0], argv) {
                     Ok(_) => {} // We should never get here. A sucessful execvp will never get here as it will be running the other program
                     Err(err) => {
                         if let Some(errno) = err.as_errno() {
                             if errno == Errno::ENOENT {
-                                eprintln!("No such command: {:?}", args[0]);
                                 std::process::exit(127);
                             }
                         }
@@ -197,7 +205,7 @@ impl Task for Service {
 pub struct Stage {
     name: String,
     description: Option<String>,
-    steps: Vec<Dependency>,
+    steps: Vec<ServiceInstance>,
 }
 
 impl From<StageDef> for Stage {
@@ -205,7 +213,7 @@ impl From<StageDef> for Stage {
         return Stage {
             name: item.name.to_lowercase(),
             description: item.description,
-            steps: item.steps.into_iter().map(|dep| Dependency::from(dep)).collect(),
+            steps: item.steps.into_iter().map(|dep| ServiceInstance::from(dep)).collect(),
         };
     }
 }
@@ -215,16 +223,19 @@ impl Task for Stage {
         return &self.name;
     }
 
-    fn get_deps(&self) -> &Vec<Dependency> {
+    fn get_deps(&self) -> &Vec<ServiceInstance> {
         return &self.steps;
     }
 
-    fn execute(&self, args: &HashMap<String, String>, registry: &TaskRegistry) -> Result<(), ()> {
+    fn execute(&self, args: &HashMap<String, String>, registry: &mut TaskStatusRegistry) -> Result<(), ()> {
         for step in self.steps.iter() {
             if !registry.execute_task(step.get_name(), step.get_args()) {
+                registry.set_status(ServiceInstance::new(self.name.clone(), args.clone()), TaskState::Failed(format!("Failed to start {}", step.get_name())));
                 return Err(());
             }
         }
+
+        registry.set_status(ServiceInstance::new(self.name.clone(), args.clone()), TaskState::Started(None));
         
         return Ok(());
     }

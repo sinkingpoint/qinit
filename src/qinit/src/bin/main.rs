@@ -5,7 +5,7 @@ extern crate clap;
 use libq::logger;
 use libq::daemon::write_pid_file;
 
-use libqinit::tasks::TaskRegistry;
+use libqinit::tasks::{TaskStatusRegistry, TaskRegistry};
 use std::path::PathBuf;
 use clap::{Arg, App};
 
@@ -20,12 +20,6 @@ impl RunLevel {
         return match i {
             "1" | "singleusermode" => Some(RunLevel::SingleUserMode),
             _ => None
-        }
-    }
-
-    fn to_str(&self) -> &str {
-        return match self {
-            RunLevel::SingleUserMode => "singleusermode"
         }
     }
 
@@ -79,11 +73,11 @@ fn main() -> Result<(), ()>{
         }
     };
 
+    let mut status_registry = TaskStatusRegistry::new(&task_registry);
+
     logger.info().msg(format!("Loaded {} tasks", task_registry.len()));
 
-    task_registry.execute_task(run_level.get_stage_name(), &HashMap::new());
+    status_registry.execute_task(run_level.get_stage_name(), &HashMap::new());
 
     loop {}
-
-    return Ok(());
 }
