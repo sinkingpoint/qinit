@@ -80,8 +80,9 @@ fn main() {
     }
 
     let init = args.value_of("init").unwrap();
-    let init_args: Vec<&str> = args.values_of("initargs").unwrap().collect();
-
+    let mut init_args: Vec<&str> = args.values_of("initargs").unwrap().collect();
+    init_args.insert(0, init);
+    
     let c_path = CString::new(init).unwrap();
     let cstr_argv: Vec<Vec<u8>> = init_args.iter().map(|arg| CString::new(*arg).unwrap().into_bytes_with_nul()).collect();
     let argv = &cstr_argv.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];

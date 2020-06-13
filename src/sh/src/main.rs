@@ -55,9 +55,10 @@ fn print_prompt(shell: &shell::Shell, process_name: &String, continue_prompt: bo
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "full");
-    let argv: Vec<String> = env::args().collect();
+    let mut argv: Vec<String> = env::args().collect();
+    argv.reverse();
     let is_repl = argv.len() == 1;
-    let mut shell = shell::Shell::new(is_repl);
+    let exe_name = argv.pop().expect("Program name missing?");
     let mut reader: Box<dyn LineReader>;
     if !is_repl {
         let file = match File::open(argv[1].clone()) {
@@ -67,16 +68,19 @@ fn main() {
                 return;
             }
         };
+        argv.pop().expect("File name missing?");
         reader = Box::new(InputFile::new(file));
     }
     else {
         reader = Box::new(io::stdin());
     }
+    argv.reverse();
+    let mut shell = shell::Shell::new(is_repl, argv);
     let mut current_buffer = String::new();
     let mut at_eof = false;
     while !at_eof {
         let mut new_line = String::new();
-        print_prompt(&shell, &argv[0], current_buffer != "");
+        print_prompt(&shell, &exe_name, current_buffer != "");
         match reader.next_line(&mut new_line) {
             Ok(0) => at_eof = true,
             Ok(_) => {},

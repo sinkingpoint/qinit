@@ -27,4 +27,4 @@ mkdir /.root
 mount $root_dev /.root
 mkdir /.root/dev /.root/proc /.root/sys /.root/tmp /.root/run
 
-exec switch_root /.root /init init
+exec switch_root /.root /init $@

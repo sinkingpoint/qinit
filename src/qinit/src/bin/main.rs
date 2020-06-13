@@ -16,12 +16,14 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 enum RunLevel {
+    ShutdownMode,
     SingleUserMode
 }
 
 impl RunLevel {
     fn from(i: &str) -> Option<Self> {
         return match i {
+            "0" | "shutdownmode" => Some(RunLevel::ShutdownMode),
             "1" | "singleusermode" => Some(RunLevel::SingleUserMode),
             _ => None
         }
@@ -29,6 +31,7 @@ impl RunLevel {
 
     fn get_stage_name(&self) -> &str {
         return match self {
+            RunLevel::ShutdownMode => "shutdownmode",
             RunLevel::SingleUserMode => "singleusermode",
         }
     }

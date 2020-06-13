@@ -30,6 +30,7 @@ initramfs(
         "tasks/shutdown.service": "/etc/qinit/tasks/shutdown.service",
         "tasks/getty.service": "/etc/qinit/tasks/getty.service",
         "tasks/single_user_mode.stage": "/etc/qinit/tasks/single_user_mode.stage",
+        "tasks/shutdown.stage": "/etc/qinit/tasks/shutdown.stage",
         "etc/group": "/etc/group",
         "etc/passwd": "/etc/passwd",
         "etc/shadow": "/etc/shadow",

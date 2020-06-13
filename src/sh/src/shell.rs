@@ -412,7 +412,7 @@ pub struct Shell {
 }
 
 impl Shell {
-    pub fn new(is_repl: bool) -> Shell {
+    pub fn new(is_repl: bool, args: Vec<String>) -> Shell {
         let shell_terminal = STDERR_FD;
         let is_interactive = match isatty(shell_terminal) {
             Ok(tty) => tty,
@@ -465,6 +465,12 @@ impl Shell {
                 environment: true
             });
         }
+
+        variables_map.insert(String::from("@"), Variable {
+            name: String::from("@"),
+            value: args.join(" "),
+            environment: false
+        });
 
         return Shell {
             is_repl: is_repl,

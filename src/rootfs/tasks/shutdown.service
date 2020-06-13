@@ -1,3 +1,3 @@
-name = "shutdown"
+name = "Shutdown"
 description = "Powers off the system"
 command = "/bin/shutdown"
