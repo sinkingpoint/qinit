@@ -4,4 +4,4 @@ args = [
     "tty"
 ]
 command = "/sbin/qgetty ${tty}"
-restart = "always"
+restart = "Always"

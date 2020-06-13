@@ -47,6 +47,7 @@ impl TaskRegistry {
                 if extension == "service" {
                     match toml::from_str::<ServiceDef>(&contents) {
                         Ok(service) => {
+                            println!("{:?}", service);
                             if tasks.contains_key(&service.name) {
                                 logger.info().msg(format!("Found duplicate defintion of {}. Skipping", &service.name));
                             }

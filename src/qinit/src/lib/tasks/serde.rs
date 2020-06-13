@@ -22,7 +22,7 @@ pub struct ServiceDef {
     pub user: Option<Identifier>,
     pub group: Option<Identifier>,
     pub args: Option<Vec<String>>,
-    pub restart_mode: Option<RestartMode>,
+    pub restart: Option<RestartMode>,
     pub requirements: Option<Vec<DependencyDef>>, // A list of Units that should be started _before_ this one
     pub command: String
 }

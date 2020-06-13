@@ -140,7 +140,7 @@ impl From<ServiceDef> for Service {
                 None => Vec::new(),
                 Some(args) => args
             },
-            restart_mode: item.restart_mode.unwrap_or(RestartMode::OnCrash),
+            restart_mode: item.restart.unwrap_or(RestartMode::OnCrash),
             requirements: match item.requirements {
                 None => Vec::new(),
                 Some(reqs) => reqs.into_iter().map(|dep| ServiceInstance::from(dep)).collect()
