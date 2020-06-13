@@ -1,5 +1,12 @@
 load("//src/initramfs:initramfs.bzl", "initramfs")
 
+extra_files = {
+    "//src/utils:qgetty": "/sbin/qgetty",
+    "//src/utils:login": "/sbin/login"
+}
+extra_files.update({local: "/etc/qinit/{}".format(local) for local in glob(["tasks/*"])})
+extra_files.update({local: "/{}".format(local) for local in glob(["etc/*"])})
+
 initramfs(
     name = "rootfs",
     bins = [
@@ -15,28 +22,8 @@ initramfs(
         "//src/qinit:qinit",
         "//src/sh",
     ],
-    libs = [
-        "vendor/ld-linux-x86-64.so.2",
-        "vendor/libc.so.6",
-        "vendor/libdl.so.2",
-        "vendor/libgcc_s.so.1",
-        "vendor/libm.so.6",
-        "vendor/libpthread.so.0",
-        "vendor/librt.so.1",
-        "vendor/libstdc++.so.6",
-        "vendor/libtinfo.so.6",
-    ],
-    extra_files = {
-        "tasks/shutdown.service": "/etc/qinit/tasks/shutdown.service",
-        "tasks/getty.service": "/etc/qinit/tasks/getty.service",
-        "tasks/single_user_mode.stage": "/etc/qinit/tasks/single_user_mode.stage",
-        "tasks/shutdown.stage": "/etc/qinit/tasks/shutdown.stage",
-        "etc/group": "/etc/group",
-        "etc/passwd": "/etc/passwd",
-        "etc/shadow": "/etc/shadow",
-        "//src/utils:qgetty": "/sbin/qgetty",
-        "//src/utils:login": "/sbin/login"
-    },
+    libs = glob(["vendor/*.so.*"]),
+    extra_files = extra_files,
     init_script = "init.sh",
     out = "rootfs.ext4"
 )

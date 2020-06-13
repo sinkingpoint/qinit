@@ -20,17 +20,7 @@ initramfs(
         "//src/utils:switch_root",
         "//src/sh",
     ],
-    libs = [
-        "vendor/ld-linux-x86-64.so.2",
-        "vendor/libc.so.6",
-        "vendor/libdl.so.2",
-        "vendor/libgcc_s.so.1",
-        "vendor/libm.so.6",
-        "vendor/libpthread.so.0",
-        "vendor/librt.so.1",
-        "vendor/libstdc++.so.6",
-        "vendor/libtinfo.so.6",
-    ],
+    libs = glob(["vendor/*.so.*"]),
     init_script = "init.sh",
     out = "initramfs.igz"
 )
