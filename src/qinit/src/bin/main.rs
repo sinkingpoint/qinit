@@ -1,15 +1,19 @@
 extern crate libqinit;
 extern crate libq;
 extern crate clap;
+extern crate nix;
+
+use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 
 use libq::logger;
 use libq::daemon::write_pid_file;
 
-use libqinit::tasks::{TaskStatusRegistry, TaskRegistry};
+use libqinit::tasks::{TaskRegistry, TaskStatus};
 use std::path::PathBuf;
 use clap::{Arg, App};
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 enum RunLevel {
     SingleUserMode
@@ -26,6 +30,18 @@ impl RunLevel {
     fn get_stage_name(&self) -> &str {
         return match self {
             RunLevel::SingleUserMode => "singleusermode",
+        }
+    }
+}
+
+fn reap_processes(task_registry: Arc<Mutex<TaskRegistry>>) {
+    loop {
+        match waitpid(None, Some(WaitPidFlag::__WALL | WaitPidFlag::WUNTRACED)) {
+            Ok(WaitStatus::Exited(child_pid, exit_code)) => {
+                let mut task_registry = task_registry.lock().unwrap();
+                task_registry.set_status_with_pid(child_pid, TaskStatus::Stopped(exit_code));
+            },
+            _ => {}
         }
     }
 }
@@ -65,19 +81,29 @@ fn main() -> Result<(), ()>{
         None => vec![PathBuf::from("/etc/qinit/tasks")]
     };
 
-    let task_registry = match TaskRegistry::load_from_disk(&task_dirs){
-        Ok(reg) => reg,
+    let task_registry: Arc<Mutex<TaskRegistry>> = match TaskRegistry::load_from_disk(&task_dirs){
+        Ok(reg) => Arc::new(Mutex::new(reg)),
         Err(err) => {
             logger.debug().with_string("error", format!("{}", err)).msg(format!("Failed to load task definitions. Dropping into a shell"));
             return Err(());
         }
     };
 
-    let mut status_registry = TaskStatusRegistry::new(&task_registry);
+    let reaper_registry = Arc::clone(&task_registry);
+    std::thread::spawn(move || reap_processes(reaper_registry));
 
-    logger.info().msg(format!("Loaded {} tasks", task_registry.len()));
-
-    status_registry.execute_task(run_level.get_stage_name(), &HashMap::new());
+    {
+        let mut task_registry = task_registry.lock().unwrap();
+        match task_registry.execute_task(run_level.get_stage_name(), &HashMap::new()) {
+            Ok(_) => {
+                logger.info().msg(format!("Started QInit"));
+            },
+            Err(_) => {
+                logger.info().msg(format!("Failed to start QInit"));
+            }
+        }
+        logger.info().msg(format!("Loaded {} tasks", task_registry.len()));
+    }
 
     loop {}
 }

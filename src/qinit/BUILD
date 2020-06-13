@@ -8,6 +8,7 @@ rust_binary(
     deps = [
         "//src/qinit:libqinit",
         "//src/cargo:clap",
+        "//src/cargo:nix",
         "//src/libq"
     ],
     visibility = ["//visibility:public",],
@@ -21,8 +22,7 @@ rust_library(
         "src/lib/tasks/registry.rs",
         "src/lib/tasks/identifier.rs",
         "src/lib/tasks/task.rs",
-        "src/lib/tasks/serde.rs",
-        "src/lib/tasks/status_registry.rs",
+        "src/lib/tasks/serde.rs"
     ],
     deps = [
         "//src/cargo:serde",

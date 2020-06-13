@@ -1,5 +1,4 @@
 use super::serde::{ServiceDef, StageDef, DependencyDef, RestartMode};
-use super::status_registry::{TaskStatusRegistry, TaskState};
 use super::Identifier;
 use std::convert::From;
 use std::cmp::Eq;
@@ -8,11 +7,21 @@ use std::hash::{Hash, Hasher};
 use std::fmt;
 use std::ffi::{CStr, CString};
 
-use nix::unistd::{fork, ForkResult, execv};
+use nix::unistd::{fork, ForkResult, execv, Pid};
 use nix::errno::Errno;
 
 use libq::logger;
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum TaskStatus {
+    Running(Option<Pid>),
+    Starting,
+    Stopping,
+    Stopped(i32),
+    Failed
+}
+
+#[derive(Debug, Clone)]
 pub struct ServiceInstance {
     name: String,
     args: HashMap<String, String>
@@ -100,7 +109,8 @@ impl Eq for ServiceInstance{}
 pub trait Task {
     fn get_name(&self) -> &String;
     fn get_deps(&self) -> &Vec<ServiceInstance>;
-    fn execute(&self, &HashMap<String, String>, &mut TaskStatusRegistry) -> Result<(), ()>;
+    fn get_restart_mode(&self) -> Option<&RestartMode>;
+    fn execute(&self, &HashMap<String, String>) -> TaskStatus;
 }
 
 /// A struct that represents a service/daemon being run in the system
@@ -147,17 +157,21 @@ impl Task for Service {
         return &self.requirements;
     }
 
-    fn execute(&self, args: &HashMap<String, String>, registry: &mut TaskStatusRegistry) -> Result<(), ()> {
+    fn get_restart_mode(&self) -> Option<&RestartMode> {
+        return Some(&self.restart_mode);
+    }
+
+    fn execute(&self, args: &HashMap<String, String>) -> TaskStatus {
         // Validate args
         if args.len() != self.args.len() {
             // Args are incomplete
-                return Err(());
+                return TaskStatus::Failed;
         }
 
         for arg in self.args.iter() {
             if !args.contains_key(arg) {
                 // Arg is missing
-                return Err(());
+                return TaskStatus::Failed;
             }
         }
 
@@ -175,7 +189,7 @@ impl Task for Service {
 
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
-                registry.set_status(ServiceInstance::new(self.name.clone(), args.clone()), TaskState::Started(Some(child)));
+                return TaskStatus::Running(Some(child));
             },
             Ok(ForkResult::Child) => {
                 match execv(argv[0], argv) {
@@ -196,7 +210,7 @@ impl Task for Service {
                 eprintln!("Fork failed");
             }
         }
-        return Err(());
+        return TaskStatus::Failed;
     }
 }
 
@@ -227,16 +241,11 @@ impl Task for Stage {
         return &self.steps;
     }
 
-    fn execute(&self, args: &HashMap<String, String>, registry: &mut TaskStatusRegistry) -> Result<(), ()> {
-        for step in self.steps.iter() {
-            if !registry.execute_task(step.get_name(), step.get_args()) {
-                registry.set_status(ServiceInstance::new(self.name.clone(), args.clone()), TaskState::Failed(format!("Failed to start {}", step.get_name())));
-                return Err(());
-            }
-        }
+    fn get_restart_mode(&self) -> Option<&RestartMode> {
+        return None;
+    }
 
-        registry.set_status(ServiceInstance::new(self.name.clone(), args.clone()), TaskState::Started(None));
-        
-        return Ok(());
+    fn execute(&self, _args: &HashMap<String, String>) -> TaskStatus {
+        return TaskStatus::Running(None);
     }
 }

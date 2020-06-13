@@ -2,7 +2,7 @@ use std::io::{self, Write};
 
 use nix::pty::Winsize;
 use nix::libc::c_int;
-use nix::sys::termios::{Termios, ControlFlags, InputFlags, OutputFlags, LocalFlags, SpecialCharacterIndices, SetArg};
+use nix::sys::termios::{Termios, ControlFlags, InputFlags, OutputFlags, LocalFlags, SpecialCharacterIndices};
 use nix::{ioctl_none, ioctl_read, ioctl_write_ptr};
 
 const ESC: &str = "\x1b[";
@@ -114,7 +114,7 @@ pub fn set_background_color_raw<T>(f: &mut T, r: u8, g: u8, b: u8) -> Result<(),
 
 /// Enables or disables echoing of characters as they're typed
 pub fn set_echo_mode(settings: &mut Termios, echo: bool) {
-    let local_flags = (LocalFlags::ECHO | LocalFlags::ECHOE | LocalFlags::ECHOKE);
+    let local_flags = LocalFlags::ECHO | LocalFlags::ECHOE | LocalFlags::ECHOKE;
 
     if echo {
         settings.local_flags |= local_flags;

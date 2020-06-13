@@ -7,8 +7,7 @@ use std::collections::HashMap;
 
 use super::Identifier;
 
-#[derive(Debug)]
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum RestartMode {
     Always,
     OnCrash,
