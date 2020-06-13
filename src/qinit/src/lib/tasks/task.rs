@@ -6,11 +6,13 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::fmt;
 use std::ffi::{CStr, CString};
+use std::process::exit;
 
-use nix::unistd::{fork, ForkResult, execv, Pid};
+use nix::unistd::{fork, ForkResult, execv, Pid, setuid, setgid, Uid, Gid};
 use nix::errno::Errno;
 
 use libq::logger;
+use libq::passwd::{PasswdEntry, GroupEntry};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TaskStatus {
@@ -60,7 +62,7 @@ impl fmt::Display for ServiceInstance {
         for (key, value) in self.args.iter() {
             arg_string.push_str(format!("{}={}", key, value).as_str());
         }
-        write!(f, "Depency{{ {} {} }}", self.name, arg_string)?;
+        write!(f, "Dependency{{ {} {} }}", self.name, arg_string)?;
         return Ok(());
     }
 }
@@ -175,6 +177,32 @@ impl Task for Service {
             }
         }
 
+        let uid = match &self.user {
+            Some(Identifier::Name(name)) => {
+                match PasswdEntry::by_username(&name) {
+                    Some(user) => user.uid,
+                    None => {
+                        return TaskStatus::Failed;
+                    }
+                }
+            },
+            Some(Identifier::ID(uid)) => *uid,
+            None => 0
+        };
+
+        let gid = match &self.user {
+            Some(Identifier::Name(name)) => {
+                match GroupEntry::by_groupname(&name) {
+                    Some(group) => group.gid,
+                    None => {
+                        return TaskStatus::Failed;
+                    }
+                }
+            },
+            Some(Identifier::ID(uid)) => *uid,
+            None => 0
+        };
+
         // TODO: Do templating on command line string, split into argv, fork and record state
         let mut replaced_command = self.command.clone();
         for (key, value) in args.iter() {
@@ -192,6 +220,19 @@ impl Task for Service {
                 return TaskStatus::Running(Some(child));
             },
             Ok(ForkResult::Child) => {
+                match setgid(Gid::from_raw(gid)) {
+                    Ok(_) => {},
+                    Err(_) => {
+                        exit(1);
+                    }
+                };
+
+                match setuid(Uid::from_raw(uid)) {
+                    Ok(_) => {},
+                    Err(_) => {
+                        exit(1);
+                    }
+                };
                 match execv(argv[0], argv) {
                     Ok(_) => {} // We should never get here. A sucessful execvp will never get here as it will be running the other program
                     Err(err) => {
