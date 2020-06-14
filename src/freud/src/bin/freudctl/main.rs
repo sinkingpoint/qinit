@@ -1,84 +1,47 @@
 extern crate clap;
-extern crate libfreudian;
+extern crate patient;
+extern crate libq;
 
 use clap::{Arg, App, SubCommand, AppSettings};
 use std::path::PathBuf;
-use std::cmp::min;
-use std::os::unix::net::UnixStream;
-use std::io::{self, Read, Write};
 
-use libfreudian::api::{MessageType, ResponseType, OneValueRequest, PutMessageRequest};
+use libq::logger::{self, Logger, ConsoleRecordWriter};
 
-const MAX_MESSAGE_LENGTH: usize = 1 << 16 - 1;
+use patient::{FreudianClientError, ResponseType, FreudianClient};
 
-fn make_request(class: MessageType, msg: Vec<u8>) -> Vec<u8> {
-    let message_length = min(msg.len(), MAX_MESSAGE_LENGTH);
-    let mut message = vec![class.into(), ((message_length & 0xFF00) >> 8) as u8, (message_length & 0xFF) as u8];
-    for byte in msg.iter() {
-        message.push(*byte);
-    }
-
-    return message;
-}
-
-fn create_topic(topic_name: &str) -> Vec<u8> {
-    return make_request(MessageType::CreateTopic, OneValueRequest::new(MessageType::CreateTopic, topic_name.to_string()).into_bytes());
-}
-
-fn delete_topic(topic_name: &str) -> Vec<u8> {
-    return make_request(MessageType::DeleteTopic, OneValueRequest::new(MessageType::DeleteTopic, topic_name.to_string()).into_bytes());
-}
-
-fn create_subscription(topic_name: &str) -> Vec<u8> {
-    return make_request(MessageType::Subscribe, OneValueRequest::new(MessageType::Subscribe, topic_name.to_string()).into_bytes());
-}
-
-fn read_message(sub_id: &str) -> Vec<u8> {
-    return make_request(MessageType::GetMessage, OneValueRequest::new(MessageType::GetMessage, sub_id.to_string()).into_bytes());
-}
-
-fn send_message(topic_id: &str, message: &str) -> Vec<u8> {
-    return make_request(MessageType::ProduceMessage, PutMessageRequest::new(topic_id.to_string(), message.bytes().collect()).into_bytes());
-}
-
-fn send_to_socket(file: &PathBuf, data: Vec<u8>) -> Result<Vec<u8>, io::Error> {
-    let mut stream = UnixStream::connect(file)?;
-    stream.write_all(&data[..])?;
-
-    let mut buffer: Vec<u8> = vec![0, 0, 0];
-    stream.read_exact(&mut buffer)?;
-    let message_size = ((buffer[1] as u16) << 8 | buffer[2] as u16) as usize;
-    let mut message_buffer = vec![0;message_size];
-    stream.read_exact(&mut message_buffer)?;
-
-    buffer.append(&mut message_buffer);
-
-    return Ok(buffer);
-}
-
-fn decode_output(data: Vec<u8>) -> Result<(), ()> {
-    if data.len() == 0 {
-        return Err(());
-    }
-    let mut iter = data.iter();
-    let result = *iter.next().unwrap();
-    println!("Status: {}", ResponseType::from(result).as_string());
-
-    let message_size = (*iter.next().unwrap_or(&0) as u16) << 8 | (*iter.next().unwrap_or(&0) as u16);
-    if message_size == 0 {
-        return Ok(());
-    }
-    if data.len() < (3 + message_size) as usize {
-        println!("Expected more in message, but server only sent {} bytes", data.len());
-        return Err(());
-    }
-
-    match String::from_utf8(iter.map(|x| *x).collect()) {
-        Ok(s) => println!("Got message: {}", s),
-        Err(_) => eprintln!("Returned message wasn't printable")
+fn friendly_error<'a>(f: FreudianClientError) -> String {
+    return match f {
+        FreudianClientError::EmptyResponse => String::from("Got an empty response from the server"),
+        FreudianClientError::ResponseTooSmall => String::from("Got a response, but the advertised message size was more than the data sent"),
+        FreudianClientError::ExtraData => String::from("Got a response, but the advertised message size was less than the data sent"),
+        FreudianClientError::ServerResponse(r) => r.as_string(),
+        FreudianClientError::BrokenSocket => String::from("Got an IO error trying to talk to Freudian")
     };
+}
 
-    return Ok(());
+fn handle_status_message(response: Result<ResponseType, FreudianClientError>, logger: &Logger<ConsoleRecordWriter>) {
+    match response {
+        Ok(response_type) => {
+            logger.info().msg(response_type.as_string());
+        },
+        Err(client_err) => {
+            logger.info().msg(friendly_error(client_err));
+        }
+    }
+}
+
+fn handle_response_message(response: Result<(ResponseType, String), FreudianClientError>, body_preamble: &str, logger: &Logger<ConsoleRecordWriter>) {
+    match response {
+        Ok((response_type, body)) => {
+            handle_status_message(Ok(response_type), logger);
+            if body.len() > 0 {
+                logger.info().msg(format!("{}: {}", body_preamble, body));
+            }
+        },
+        Err(client_err) => {
+            logger.info().msg(friendly_error(client_err));
+        }
+    }
 }
 
 fn main() {
@@ -134,21 +97,28 @@ fn main() {
                                         .required(true)
                                         .index(1))))
                     .get_matches();
-    let socketfile = PathBuf::from(args.value_of("socketfile").unwrap_or("/run/freudian/socket"));
-    
 
-    let mut message: Option<Vec<u8>> = None;
+    let logger = logger::with_name_as_console("freudctl");
+    let socketfile = PathBuf::from(args.value_of("socketfile").unwrap_or("/run/freudian/socket"));
+    let mut client = match FreudianClient::new(socketfile) {
+        Ok(client) => client,
+        Err(e) => {
+            logger.info().with_string("error", e.to_string()).smsg("Failed to open Freud socket");
+            return;
+        }
+    };
+    
     match args.subcommand() {
         ("topic", Some(matches)) => {
             match matches.subcommand() {
                 ("create", Some(matches)) => {
-                    message = Some(create_topic(matches.value_of("topic_name").unwrap()));
+                    handle_status_message(client.create_topic(matches.value_of("topic_name").unwrap()), &logger);
                 },
                 ("delete", Some(matches)) => {
-                    message = Some(delete_topic(matches.value_of("topic_name").unwrap()));
+                    handle_status_message(client.delete_topic(matches.value_of("topic_name").unwrap()), &logger);
                 },
                 ("publish", Some(matches)) => {
-                    message = Some(send_message(matches.value_of("topic_name").unwrap(), matches.value_of("message").unwrap()));
+                    handle_status_message(client.send_message(matches.value_of("topic_name").unwrap(), matches.value_of("message").unwrap()), &logger);
                 }
                 _                       => {},
             }
@@ -156,31 +126,18 @@ fn main() {
         ("subscription", Some(matches)) => {
             match matches.subcommand() {
                 ("create", Some(matches)) => {
-                    message = Some(create_subscription(matches.value_of("topic_name").unwrap()));
+                    handle_response_message(client.create_subscription(matches.value_of("topic_name").unwrap()), "Subscription ID: ", &logger);
                 },
                 ("delete", Some(_matches)) => {
                     println!("Delete Subscription");
                     println!("Not implemented");
                 },
                 ("read", Some(matches)) => {
-                    message = Some(read_message(matches.value_of("sub_id").unwrap()));
+                    handle_response_message(client.read_message(matches.value_of("sub_id").unwrap()), "Message: ", &logger);
                 },
                 _                       => {},
             }
         },
         _                       => {},
     };
-
-    if message.is_none() {
-        return; // We hit an unimplemented command
-    }
-
-    let message = message.unwrap();
-
-    match send_to_socket(&socketfile, message) {
-        Ok(response) => decode_output(response).unwrap(),
-        Err(error) => {
-            eprintln!("Got an error sending to freudian: {}", error);
-        }
-    }
 }

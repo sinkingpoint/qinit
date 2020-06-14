@@ -42,7 +42,7 @@ impl Into<u8> for MessageType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ResponseType {
     Ok,
     NothingHappened,

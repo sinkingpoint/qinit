@@ -15,6 +15,17 @@ rust_library(
     visibility = ["//visibility:public",],
 )
 
+rust_library(
+    name = "patient",
+    srcs = [
+        "src/lib/client/lib.rs"
+    ],
+    deps = [
+        "//src/freud:libfreudian",
+    ],
+    visibility = ["//visibility:public",],
+)
+
 rust_binary(
     name = "freudian",
     srcs = [
@@ -35,7 +46,7 @@ rust_binary(
         "src/bin/freudctl/main.rs",
     ],
     deps = [
-        "//src/freud:libfreudian",
+        "//src/freud:patient",
         "//src/libq:libq",
         "//src/cargo:clap",
     ],
