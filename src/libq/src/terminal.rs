@@ -1,4 +1,5 @@
-use std::io::{self, Write};
+use std::io::{self, Write, Read};
+use std::fmt;
 
 use nix::pty::Winsize;
 use nix::libc::c_int;
@@ -19,6 +20,16 @@ pub enum EraseDisplayMode {
     All,
     AllAndClear,
 }
+
+pub const ESCAPE_CHAR: u8 = 0x1B;
+pub const CTRL_C_BYTE: u8 = 0x03;
+pub const EOF_BYTE: u8 = 0x04;
+pub const NULL_BYTE: u8 = '\0' as u8;
+pub const BACKSPACE_BYTE: u8 = 0x08;
+pub const TAB_BYTE: u8 = '\t' as u8;
+pub const DELETE_BYTE: u8 = 0x7F;
+pub const CARRIAGE_RETURN_BYTE: u8 = '\r' as u8;
+pub const NEW_LINE_BYTE: u8 = '\n' as u8;
 
 pub fn erase_display<T>(f: &mut T, mode: EraseDisplayMode) -> Result<(), io::Error> where T: Write{
     let mode_num = match mode {
@@ -229,4 +240,151 @@ ioctl_read! {
 ioctl_write_ptr! {
     /// Get window size
     tiocswinsz, b'T', 0x14, Winsize
+}
+
+#[derive(Debug)]
+pub enum AnsiEscapeCode {
+    CursorUp(u32),
+    CursorDown(u32),
+    CursorForward(u32),
+    CursorBack(u32),
+    CursorNextLine(u32),
+    CursorPreviousLine(u32),
+    CursorColumn(u32),
+    CursorPosition(u32, u32),
+    EraseInDisplay(u32),
+    EraseInLine(u32),
+    PageUp(u32),
+    PageDown(u32),
+    Unknown(char, Option<u32>, Option<u32>, Option<u32>)
+}
+
+impl fmt::Display for AnsiEscapeCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        return write!(f, "{}", self.to_string());
+    }
+}
+
+impl AnsiEscapeCode {
+    pub fn to_string(&self) -> String {
+        return match self {
+            AnsiEscapeCode::CursorUp(n) => format!("{}{}A", ESC, n),
+            AnsiEscapeCode::CursorDown(n) => format!("{}{}B", ESC, n),
+            AnsiEscapeCode::CursorForward(n) => format!("{}{}C", ESC, n),
+            AnsiEscapeCode::CursorBack(n) => format!("{}{}D", ESC, n),
+            AnsiEscapeCode::CursorNextLine(n) => format!("{}{}E", ESC, n),
+            AnsiEscapeCode::CursorPreviousLine(n) => format!("{}{}F", ESC, n),
+            AnsiEscapeCode::CursorColumn(n) => format!("{}{}G", ESC, n),
+            AnsiEscapeCode::CursorPosition(n, m) => format!("{}{};{}H", ESC, n, m),
+            AnsiEscapeCode::EraseInDisplay(n) => format!("{}{}J", ESC, n),
+            AnsiEscapeCode::EraseInLine(n) => format!("{}{}K", ESC, n),
+            AnsiEscapeCode::PageUp(n) => format!("{}{}S", ESC, n),
+            AnsiEscapeCode::PageDown(n) => format!("{}{}T", ESC, n),
+            AnsiEscapeCode::Unknown(cmd, a, b, c) => {
+                let mut build = String::from(ESC);
+                let mut num_args = 0;
+                for arg in [a, b, c].iter() {
+                    if arg.is_some() {
+                        if num_args > 0 {
+                            build.push(';');
+                        }
+
+                        build.push_str(arg.unwrap().to_string().as_str());
+                    }
+                }
+
+                build.push(*cmd);
+                build
+            }
+        }
+    }
+
+    pub fn read_from_stdin() -> Option<AnsiEscapeCode> {
+        let mut stdin = io::stdin();
+        let mut arg_buffer = String::new();
+        let mut command: char = '\0';
+        let mut args: [u32; 3] = [1, 1, 1];
+        let mut num_args: usize = 0;
+        let mut buffer: [u8; 1] = [0];
+        let mut hit_open = false;
+        loop {
+            match stdin.read(&mut buffer) {
+                Ok(0) | Err(_) => {
+                    return None; // EOF before we completed
+                }
+                Ok(n) => {},
+            };
+
+            let byte = buffer[0];
+            let chr: char = byte.into();
+
+            if chr != '[' && !hit_open {
+                return None; // Malformed. We expect [ immediately after the ESC which enters this function
+            }
+            else if chr == '[' {
+                if hit_open {
+                    return None; // Malformed, we expect [ only once
+                }
+                else {
+                    hit_open = true;
+                    continue;
+                }
+            }
+
+            match chr {
+                c if c.is_numeric() => {
+                    arg_buffer.push(c);
+                },
+                ';' => {
+                    if num_args >= 3 {
+                        return None; // Malformed. Too Many Args
+                    }
+                    if arg_buffer == "" {
+                        arg_buffer.push('1');
+                    }
+                    args[num_args] = arg_buffer.parse().unwrap();
+                    arg_buffer.clear();
+                    num_args += 1;
+                },
+                c => {
+                    command = c;
+                    break;
+                }
+            }
+        }
+
+        if num_args >= 3 {
+            return None; // Malformed. Too Many Args
+        }
+        if arg_buffer == "" {
+            arg_buffer.push('1');
+        }
+
+        args[num_args] = arg_buffer.parse().unwrap();
+        num_args += 1;
+
+        return match command {
+            'A' => Some(AnsiEscapeCode::CursorUp(args[0])),
+            'B' => Some(AnsiEscapeCode::CursorDown(args[0])),
+            'C' => Some(AnsiEscapeCode::CursorForward(args[0])),
+            'D' => Some(AnsiEscapeCode::CursorBack(args[0])),
+            'E' => Some(AnsiEscapeCode::CursorNextLine(args[0])),
+            'F' => Some(AnsiEscapeCode::CursorPreviousLine(args[0])),
+            'G' => Some(AnsiEscapeCode::CursorColumn(args[0])),
+            'H' => Some(AnsiEscapeCode::CursorPosition(args[0], args[1])),
+            'J' => Some(AnsiEscapeCode::EraseInDisplay(args[0])),
+            'K' => Some(AnsiEscapeCode::EraseInLine(args[0])),
+            'S' => Some(AnsiEscapeCode::PageUp(args[0])),
+            'T' => Some(AnsiEscapeCode::PageDown(args[0])),
+            c => {
+                match num_args {
+                    0 => Some(AnsiEscapeCode::Unknown(c, None, None, None)),
+                    1 => Some(AnsiEscapeCode::Unknown(c, Some(args[0]), None, None)),
+                    2 => Some(AnsiEscapeCode::Unknown(c, Some(args[0]), Some(args[1]), None)),
+                    3 => Some(AnsiEscapeCode::Unknown(c, Some(args[0]), Some(args[1]), Some(args[2]))),
+                    _ => None
+                }
+            }
+        }
+    }
 }

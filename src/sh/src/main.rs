@@ -3,44 +3,17 @@ extern crate libq;
 extern crate regex;
 
 use std::env;
-use std::io;
 use std::fs::File;
-use std::io::BufRead;
 
 mod builtins;
 mod shell;
 mod ast;
 mod strings;
+mod shio;
+
+use shio::{ShStdin, InputFile, LineReader};
 
 const VERSION: &str = "0.0.1";
-
-trait LineReader {
-    fn next_line(&mut self, &mut String) -> io::Result<usize>;
-}
-
-struct InputFile {
-    stream: io::BufReader<File>
-}
-
-impl InputFile {
-    fn new(f: File) -> InputFile {
-        return InputFile{
-            stream: io::BufReader::new(f),
-        };
-    }
-}
-
-impl LineReader for io::Stdin {
-    fn next_line(&mut self, dest: &mut String) -> io::Result<usize> {
-        return self.read_line(dest);
-    }
-}
-
-impl LineReader for InputFile {
-    fn next_line(&mut self, dest: &mut String) -> io::Result<usize> {
-        return self.stream.read_line(dest);
-    }
-}
 
 fn print_prompt(shell: &shell::Shell, process_name: &String, continue_prompt: bool) {
     if continue_prompt {
@@ -72,7 +45,7 @@ fn main() {
         reader = Box::new(InputFile::new(file));
     }
     else {
-        reader = Box::new(io::stdin());
+        reader = Box::new(ShStdin::new());
     }
     argv.reverse();
     let mut shell = shell::Shell::new(is_repl, argv);
@@ -81,7 +54,7 @@ fn main() {
     while !at_eof {
         let mut new_line = String::new();
         print_prompt(&shell, &exe_name, current_buffer != "");
-        match reader.next_line(&mut new_line) {
+        match reader.next_line(&mut new_line, &mut shell) {
             Ok(0) => at_eof = true,
             Ok(_) => {},
             Err(ioerr) => {
@@ -107,6 +80,7 @@ fn main() {
                 }
                 match ast::parse_into_ast(&tokens) {
                     Ok(ast) => {
+                        shell.add_history_line(current_buffer.clone());
                         current_buffer.clear();
                         ast.execute(&mut shell, None, &shell::IOTriple::new());
                     },

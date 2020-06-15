@@ -1,13 +1,17 @@
 use std::io::Write;
-use std::collections::HashMap;
+use std::collections::{VecDeque, HashMap};
 use std::os::unix::io::RawFd;
 use std::env;
 use std::ffi::{CStr, CString};
+
 use nix::sys::signal;
 use nix::unistd::{fork, ForkResult, Pid, tcsetpgrp, tcgetpgrp, pipe, execvp, dup2, close, getpid, setpgid, getpgrp, isatty};
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use nix::errno::Errno::{ENOENT,ECHILD};
+use nix::sys::termios::{Termios, tcgetattr, tcsetattr, LocalFlags, SetArg};
+
 use libq::io::{STDIN_FD, STDOUT_FD, STDERR_FD};
+
 use builtins;
 use strings;
 
@@ -408,12 +412,14 @@ pub struct Shell {
     pub terminal_fd: i32,
     builtins: HashMap<&'static str, builtins::Builtin>,
     exitcode: Option<u8>,
-    variables: HashMap<String, Variable>
+    variables: HashMap<String, Variable>,
+    history: VecDeque<String>,
+    term_settings: Termios
 }
 
 impl Shell {
     pub fn new(is_repl: bool, args: Vec<String>) -> Shell {
-        let shell_terminal = STDERR_FD;
+        let shell_terminal = STDIN_FD;
         let is_interactive = match isatty(shell_terminal) {
             Ok(tty) => tty,
             Err(errno) => {
@@ -472,6 +478,10 @@ impl Shell {
             environment: false
         });
 
+        let mut term_settings = tcgetattr(shell_terminal).unwrap();
+        term_settings.local_flags = LocalFlags::empty();
+        tcsetattr(shell_terminal, SetArg::TCSAFLUSH, &term_settings).unwrap();
+
         return Shell {
             is_repl: is_repl,
             job_control: job_control,
@@ -480,7 +490,9 @@ impl Shell {
             terminal_fd: libq::io::STDIN_FD,
             builtins: builtins::get_builtin_registry(),
             exitcode: None,
-            variables: variables_map
+            variables: variables_map,
+            history: VecDeque::new(),
+            term_settings: term_settings
         }
     }
 
@@ -547,5 +559,28 @@ impl Shell {
 
     pub fn has_exitted(&self) -> Option<u8> {
         return self.exitcode;
+    }
+
+    pub fn set_last_exit_code(&mut self, exit_code: u8) {
+        self.set_variable(Variable{
+            name: "?".to_owned(), 
+            value: exit_code.to_string(), 
+            environment: false
+        });
+    }
+
+    pub fn add_history_line(&mut self, line: String) {
+        if self.history.front().is_some() && self.history.front().unwrap() == &line {
+            return; // Skip repeated entries
+        }
+        self.history.push_front(line);
+    }
+
+    pub fn history_size(&self) -> usize {
+        return self.history.len();
+    }
+
+    pub fn get_history_line(&self, i: usize) -> Option<&String> {
+        return self.history.get(i);
     }
 }
