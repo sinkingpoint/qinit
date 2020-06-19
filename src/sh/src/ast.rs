@@ -180,7 +180,6 @@ enum ConditionalBuildState {
     Condition,
     EndCondition,
     Body,
-    EndBody,
     Done
 }
 
@@ -436,9 +435,6 @@ impl ASTNode for ForNode {
                         return Err(ParseError::from_string(format!("Unexpected token `{}`. Expected `done`", token), false));
                     }
                 }
-            },
-            ConditionalBuildState::EndBody => {
-                return Err(ParseError::new("Unexpected state EndBody", false));
             },
             ConditionalBuildState::Done => {
                 return Err(ParseError::new("Unexpected state Done", false));

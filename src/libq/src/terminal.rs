@@ -289,6 +289,8 @@ impl AnsiEscapeCode {
                             build.push(';');
                         }
 
+                        num_args += 1;
+
                         build.push_str(arg.unwrap().to_string().as_str());
                     }
                 }
@@ -302,7 +304,7 @@ impl AnsiEscapeCode {
     pub fn read_from_stdin() -> Option<AnsiEscapeCode> {
         let mut stdin = io::stdin();
         let mut arg_buffer = String::new();
-        let mut command: char = '\0';
+        let command: char;
         let mut args: [u32; 3] = [1, 1, 1];
         let mut num_args: usize = 0;
         let mut buffer: [u8; 1] = [0];
@@ -312,7 +314,7 @@ impl AnsiEscapeCode {
                 Ok(0) | Err(_) => {
                     return None; // EOF before we completed
                 }
-                Ok(n) => {},
+                Ok(_) => {},
             };
 
             let byte = buffer[0];

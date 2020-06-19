@@ -295,7 +295,7 @@ fn init_term_settings(termio_settings: &mut Termios, options: &mut GettyOptions)
     
     // OPOST -> Disable Post Processing (e.g. tr 'U+00A0' '\n')
     // ONLCR -> Don't munge new line chars - we want to handle them ourselves
-    termio_settings.output_flags &= OutputFlags::OPOST | OutputFlags::ONLCR;
+    termio_settings.output_flags &= !(OutputFlags::OPOST | OutputFlags::ONLCR);
 
     if !options.keep_cflags {
         // CS8 -> 8 bit chars, no parity

@@ -8,9 +8,10 @@ use nix::sys::signal;
 use nix::unistd::{fork, ForkResult, Pid, tcsetpgrp, tcgetpgrp, pipe, execvp, dup2, close, getpid, setpgid, getpgrp, isatty};
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use nix::errno::Errno::{ENOENT,ECHILD};
-use nix::sys::termios::{Termios, tcgetattr, tcsetattr, LocalFlags, SetArg};
+use nix::sys::termios::{tcgetattr, tcsetattr, LocalFlags, ControlFlags, SetArg, SpecialCharacterIndices};
 
 use libq::io::{STDIN_FD, STDOUT_FD, STDERR_FD};
+use libq::terminal::reset_virtual_console;
 
 use builtins;
 use strings;
@@ -413,8 +414,7 @@ pub struct Shell {
     builtins: HashMap<&'static str, builtins::Builtin>,
     exitcode: Option<u8>,
     variables: HashMap<String, Variable>,
-    history: VecDeque<String>,
-    term_settings: Termios
+    history: VecDeque<String>
 }
 
 impl Shell {
@@ -479,7 +479,13 @@ impl Shell {
         });
 
         let mut term_settings = tcgetattr(shell_terminal).unwrap();
-        term_settings.local_flags = LocalFlags::empty();
+        reset_virtual_console(&mut term_settings, false, true);
+
+        term_settings.local_flags = LocalFlags::ECHOCTL | LocalFlags::ISIG;
+        term_settings.control_flags = ControlFlags::CS8 | ControlFlags::HUPCL | ControlFlags::CREAD | (term_settings.control_flags & ControlFlags::CLOCAL);
+        term_settings.control_chars[SpecialCharacterIndices::VTIME as usize] = 0;
+        term_settings.control_chars[SpecialCharacterIndices::VMIN as usize] = 1;
+
         tcsetattr(shell_terminal, SetArg::TCSAFLUSH, &term_settings).unwrap();
 
         return Shell {
@@ -491,8 +497,7 @@ impl Shell {
             builtins: builtins::get_builtin_registry(),
             exitcode: None,
             variables: variables_map,
-            history: VecDeque::new(),
-            term_settings: term_settings
+            history: VecDeque::new()
         }
     }
 

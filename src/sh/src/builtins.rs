@@ -277,10 +277,8 @@ fn read(shell: &mut shell::Shell, argv: &Vec<String>, streams: &shell::IOTriple)
     let mut arg_iter = argv.iter();
     arg_iter.next();
     for arg in arg_iter {
-        if arg.starts_with("-") {
+        if !arg.starts_with("-") {
             // We have an arg
-        }
-        else {
             variable_names.push_back(arg);
         }
     }
@@ -293,7 +291,13 @@ fn read(shell: &mut shell::Shell, argv: &Vec<String>, streams: &shell::IOTriple)
     let mut input_file = BufReader::new(input_file);
 
     let mut buffer = String::new();
-    input_file.read_line(&mut buffer);
+    match input_file.read_line(&mut buffer) {
+        Ok(_) => {},
+        Err(_) => {
+            println!("Failed to read from stdin");
+            return 1;
+        }
+    }
 
     let mut current_variable = String::new();
     for chr in buffer.chars() {

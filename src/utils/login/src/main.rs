@@ -54,10 +54,16 @@ fn main() {
         }
     };
 
-    disable_echo(&mut termio_settings);
+    match disable_echo(&mut termio_settings) {
+        Ok(_) => {},
+        Err(()) => {
+            logger.info().msg(format!("Failed to disable terminal echoing"));
+            return;
+        }
+    }
 
     let mut successful = false;
-    for i in 0..PASSWORD_ATTEMPTS {
+    for _ in 0..PASSWORD_ATTEMPTS {
         let password = read_password().unwrap();
         if user_shadow.password_hash.verify(&password) {
             successful = true;
@@ -68,7 +74,13 @@ fn main() {
         }
     }
 
-    reset_terminal(&mut termio_settings);
+    match reset_terminal(&mut termio_settings) {
+        Ok(_) => {},
+        Err(()) => {
+            logger.info().msg(format!("Failed to reset terminal modes"));
+            return;
+        }
+    }
 
     if successful {
         match setgid(Gid::from_raw(user_passwd.gid)) {
