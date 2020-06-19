@@ -50,3 +50,14 @@ rust_binary(
         "//src/libq",
     ]
 )
+
+rust_binary(
+    name = "id",
+    srcs = ["id/src/main.rs"],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:nix",
+        "//src/cargo:clap",
+        "//src/libq",
+    ]
+)
