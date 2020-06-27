@@ -1,4 +1,4 @@
-load("@io_bazel_rules_rust//rust:rust.bzl", "rust_binary")
+load("@io_bazel_rules_rust//rust:rust.bzl", "rust_binary", "rust_library", "rust_test")
 
 rust_binary(
     name = "switch_root",
@@ -59,5 +59,42 @@ rust_binary(
         "//src/cargo:nix",
         "//src/cargo:clap",
         "//src/libq",
+    ]
+)
+
+rust_binary(
+    name = "sudo",
+    srcs = [
+        "sudo/src/main.rs"
+    ],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:clap",
+        "//src/libq",
+        ":libsudo"
+    ]
+)
+
+rust_library(
+    name = "libsudo",
+    srcs = [
+        "sudo/lib/lib.rs",
+        "sudo/lib/sudoers.rs"
+    ],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:nix",
+        "//src/cargo:clap",
+        "//src/libq",
+    ]
+)
+
+rust_test(
+    name = "sudo_sudoers_test",
+    srcs = [
+        "sudo/tests/test_sudoers.rs",
+    ],
+    deps = [
+        ":libsudo"
     ]
 )

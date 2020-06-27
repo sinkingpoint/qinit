@@ -18,6 +18,7 @@ initramfs(
         "//src/coreutils:ls",
         "//src/utils:clear",
         "//src/utils:shutdown",
+        "//src/utils:id",
         "//src/freud:freudian",
         "//src/qinit:qinit",
         "//src/sh",

@@ -40,10 +40,15 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
 
     let mut current_node: Box<dyn ASTNode> = Box::new(PipelineNode::new());
     let mut block_stack:Vec<Box<dyn ASTNode>> = Vec::new();
+    let mut in_comment = false;
     block_stack.push(Box::new(ASTHead::new()));
     
     for token in tokens {
         match token.as_str() {
+            _ if in_comment => {},
+            "#" => {
+                in_comment = true;
+            }
             "if" if current_node.as_ref().is_complete() => {
                 block_stack.push(Box::new(IfNode::new()) as Box<dyn ASTNode>);
             },
@@ -80,6 +85,9 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
             "&&" => {}, // TODO: And statements
             "||" => {}, // TODO: Or Statements
             _ => {
+                if token == "\n" && in_comment {
+                    in_comment = false;
+                }
                 let node = match block_stack.last_mut() {
                     Some(node) if node.takes_tokens() => node,
                     _ => &mut current_node

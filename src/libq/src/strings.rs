@@ -36,6 +36,7 @@ impl Token {
     }
 }
 
+#[derive(Debug)]
 pub enum TokenizationError {
     UnclosedQuote,
     InvalidEscapeChar,
@@ -64,15 +65,17 @@ impl fmt::Display for TokenizationError {
 pub struct Tokenizer<'a> {
     base: &'a str,
     iter: std::iter::Peekable<Chars<'a>>,
-    last_err: Option<TokenizationError>
+    last_err: Option<TokenizationError>,
+    split_chars: Vec<char>
 }
 
 impl<'a> Tokenizer<'a> {
-    pub fn new(corpus: &'a str) -> Tokenizer{
+    pub fn new(corpus: &'a str, split_chars: Vec<char>) -> Tokenizer{
         return Tokenizer {
             base: corpus,
             iter: corpus.chars().peekable(),
             last_err: None,
+            split_chars: split_chars
         }
     }
 
@@ -97,6 +100,10 @@ fn is_split_char(c: Option<&char>) -> bool {
             c == &'\n' ||
             c == &';'  ||
             c == &'|'  ||
+            c == &'='  ||
+            c == &','  ||
+            c == &'('  ||
+            c == &')'  ||
             c == &'&'
         }
     }
@@ -125,19 +132,13 @@ impl<'a> Iterator for Tokenizer<'a> {
 
         // We're at non whitespace, so lets start ingesting chars
         while !current_token.ended && self.iter.peek().is_some() {
-            if self.iter.peek() == Some(&'#') && current_token.in_quotes == QuoteType::None && !current_token.started {
+            if self.split_chars.contains(&'#') && self.iter.peek() == Some(&'#') && current_token.in_quotes == QuoteType::None && !current_token.started {
                 // If we hit a #, and we're not in quotes and we're at the start of a token, then this is a comment
-                self.iter.next(); // Eat the #
-                while self.iter.peek().is_some() && self.iter.peek().unwrap() != &'\n' {self.iter.next();} // And read until we hit EOF or a new line
-                if self.iter.peek().is_some() {
-                    println!("Got char: {}", self.iter.peek().unwrap());
-                    return Some(self.iter.next().unwrap().to_string());
-                }
-                return None;
+                return Some(self.iter.next().unwrap().to_string());
             }
 
             // Handle "split" chars - special chars that mark the end of a token, but should be in their own token
-            if is_split_char(self.iter.peek()) {
+            if self.split_chars.contains(self.iter.peek()?) && self.iter.peek()? != &'#'{
                 if current_token.in_quotes == QuoteType::None { // Split chars are only valid not in quotes
                     if current_token.started {
                         // If we hit a split token and we've got a token, return the token
