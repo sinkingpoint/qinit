@@ -40,7 +40,7 @@ rust_library(
     edition = "2015",
     srcs = glob(["**/*.rs"]),
     deps = [
-        "//src/cargo/vendor/aho-corasick-0.7.10:aho_corasick",
+        "//src/cargo/vendor/aho-corasick-0.7.13:aho_corasick",
         "//src/cargo/vendor/memchr-2.3.3:memchr",
         "//src/cargo/vendor/regex-syntax-0.6.18:regex_syntax",
         "//src/cargo/vendor/thread_local-1.0.1:thread_local",

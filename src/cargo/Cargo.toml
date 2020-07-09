@@ -12,10 +12,11 @@ chrono = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.4.2"
 serde_derive = "1.0.110"
-libc = "0.2.71"
+libc = "0.2.72"
 rustls = "0.17.0"
 ring = "0.16.14"
 base64 = "0.11.0"
+bitflags = "1.2.1"
 
 [lib]
 path = "fake_lib.rs"
@@ -24,7 +25,7 @@ path = "fake_lib.rs"
 workspace_path = "//src/cargo"
 output_buildfile_suffix = "BUILD.bazel"
 
-[raze.crates.libc.'0.2.71']
+[raze.crates.libc.'0.2.72']
 additional_flags = [
     "--cfg=libc_align"
 ]
@@ -34,7 +35,7 @@ additional_flags = [
     "--cfg=use_proc_macro"
 ]
 
-[raze.crates.ring.'0.16.14']
+[raze.crates.ring.'0.16.15']
 data_attr = 'glob(["**/src/data/*", "**/src/ec/**/*.der"])'
 additional_deps = [
     # provided by the additional_build_file

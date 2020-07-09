@@ -38,7 +38,7 @@ rust_library(
     deps = [
         "//src/cargo/vendor/base64-0.11.0:base64",
         "//src/cargo/vendor/log-0.4.8:log",
-        "//src/cargo/vendor/ring-0.16.14:ring",
+        "//src/cargo/vendor/ring-0.16.15:ring",
         "//src/cargo/vendor/sct-0.6.0:sct",
         "//src/cargo/vendor/webpki-0.21.3:webpki",
     ],

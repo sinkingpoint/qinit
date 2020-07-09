@@ -13,8 +13,12 @@ alias(
     actual = "//src/cargo/vendor/base64-0.11.0:base64",
 )
 alias(
+    name = "bitflags",
+    actual = "//src/cargo/vendor/bitflags-1.2.1:bitflags",
+)
+alias(
     name = "chrono",
-    actual = "//src/cargo/vendor/chrono-0.4.11:chrono",
+    actual = "//src/cargo/vendor/chrono-0.4.13:chrono",
 )
 alias(
     name = "clap",
@@ -22,7 +26,7 @@ alias(
 )
 alias(
     name = "libc",
-    actual = "//src/cargo/vendor/libc-0.2.71:libc",
+    actual = "//src/cargo/vendor/libc-0.2.72:libc",
 )
 alias(
     name = "nix",
@@ -34,7 +38,7 @@ alias(
 )
 alias(
     name = "ring",
-    actual = "//src/cargo/vendor/ring-0.16.14:ring",
+    actual = "//src/cargo/vendor/ring-0.16.15:ring",
 )
 alias(
     name = "rustls",
@@ -42,11 +46,11 @@ alias(
 )
 alias(
     name = "serde",
-    actual = "//src/cargo/vendor/serde-1.0.111:serde",
+    actual = "//src/cargo/vendor/serde-1.0.114:serde",
 )
 alias(
     name = "serde_derive",
-    actual = "//src/cargo/vendor/serde_derive-1.0.111:serde_derive",
+    actual = "//src/cargo/vendor/serde_derive-1.0.114:serde_derive",
 )
 alias(
     name = "toml",

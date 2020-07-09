@@ -35,7 +35,7 @@ rust_library(
     edition = "2018",
     srcs = glob(["**/*.rs"]),
     deps = [
-        "//src/cargo/vendor/unicode-xid-0.2.0:unicode_xid",
+        "//src/cargo/vendor/unicode-xid-0.2.1:unicode_xid",
     ],
     rustc_flags = [
         "--cap-lints=allow",

@@ -36,7 +36,7 @@ rust_library(
         "//src/cargo/vendor/bitflags-1.2.1:bitflags",
         "//src/cargo/vendor/strsim-0.8.0:strsim",
         "//src/cargo/vendor/textwrap-0.11.0:textwrap",
-        "//src/cargo/vendor/unicode-width-0.1.7:unicode_width",
+        "//src/cargo/vendor/unicode-width-0.1.8:unicode_width",
         "//src/cargo/vendor/vec_map-0.8.2:vec_map",
     ],
     rustc_flags = [
