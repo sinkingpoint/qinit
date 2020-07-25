@@ -38,6 +38,7 @@ rust_library(
     ],
     rustc_flags = [
         "--cap-lints=allow",
+        "--cfg=libc_align",
     ],
     
     version = "0.5.0",

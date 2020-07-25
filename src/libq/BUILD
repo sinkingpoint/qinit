@@ -2,30 +2,13 @@ load("@io_bazel_rules_rust//rust:rust.bzl", "rust_library", "rust_test")
 
 rust_library(
     name = "libq",
-    srcs = [
-        "src/lib.rs",
-        "src/strings.rs",
-        "src/io.rs",
-        "src/daemon.rs",
-        "src/rand.rs",
-        "src/qnix.rs",
-        "src/logger.rs",
-        "src/terminal.rs",
-        "src/blkid/mod.rs",
-        "src/blkid/btrfs.rs",
-        "src/blkid/device.rs",
-        "src/blkid/ext.rs",
-        "src/blkid/fat.rs",
-        "src/blkid/superblock.rs",
-        "src/passwd/mod.rs",
-        "src/passwd/users.rs",
-        "src/passwd/group.rs",
-        "src/passwd/shadow.rs",
-        "src/passwd/crypt_sha2.rs",
-    ],
+    srcs = glob(["src/*.rs", "src/**/*.rs"]),
     deps = [
         "//src/cargo:nix",
-        "//src/cargo:ring"
+        "//src/cargo:ring",
+        "//src/cargo:libc",
+        "//src/cargo:bitflags",
+        "//src/cargo:num_enum"
     ],
     visibility = ["//visibility:public",],
 )

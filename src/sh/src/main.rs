@@ -62,7 +62,7 @@ fn main() {
             }
         }
         current_buffer.push_str(&new_line.trim_end());
-        let mut tokenizer = libq::strings::Tokenizer::new(&current_buffer);
+        let mut tokenizer = libq::strings::Tokenizer::new(&current_buffer, vec!['\n', ';', '|', '&', '#']);
         let tokens = tokenizer.try_tokenize();
         match tokens {
             Err(err) if err.is_continuable() => {

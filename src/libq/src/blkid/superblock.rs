@@ -1,5 +1,5 @@
 use super::device::{Device,UUID};
-use io::read_struct;
+use mem::read_struct;
 use std::io::{Error, SeekFrom, Seek};
 use std::fs::File;
 
@@ -27,7 +27,7 @@ impl<T: 'static> FromDevice for T where T: OffsetSuperBlock {
             return Err(err);
         }
 
-        return read_struct(f);
+        return read_struct(&mut f);
     }
 
     fn from_raw_device(d: &Device) -> Option<Box<dyn SuperBlock>> {

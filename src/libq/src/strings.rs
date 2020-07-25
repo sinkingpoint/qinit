@@ -93,22 +93,6 @@ impl<'a> Tokenizer<'a> {
     }
 }
 
-fn is_split_char(c: Option<&char>) -> bool {
-    return match c {
-        None => false,
-        Some(c) => {
-            c == &'\n' ||
-            c == &';'  ||
-            c == &'|'  ||
-            c == &'='  ||
-            c == &','  ||
-            c == &'('  ||
-            c == &')'  ||
-            c == &'&'
-        }
-    }
-}
-
 impl<'a> Iterator for Tokenizer<'a> {
     type Item = String;
 

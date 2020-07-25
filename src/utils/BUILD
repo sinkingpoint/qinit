@@ -98,3 +98,15 @@ rust_test(
         ":libsudo"
     ]
 )
+
+rust_binary(
+    name = "ip",
+    srcs = [
+        "ip/src/main.rs"
+    ],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:clap",
+        "//src/libq"
+    ]
+)

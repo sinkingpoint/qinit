@@ -1,5 +1,5 @@
 use std::os::unix::io::{FromRawFd, RawFd};
-use std::io::{self, Read, Error, ErrorKind};
+use std::io::{Read, Error, ErrorKind};
 use std::path::PathBuf;
 use nix::unistd::{write, read};
 use nix::sys::stat::FileStat;
@@ -54,21 +54,6 @@ impl Read for RawFdReader {
                     return Err(Error::from_raw_os_error(errno as i32));
                 }
                 return Err(Error::new(ErrorKind::Other, e));
-            }
-        }
-    }
-}
-
-pub fn read_struct<T, R: Read>(mut read: R) -> io::Result<T> {
-    let num_bytes = ::std::mem::size_of::<T>();
-    unsafe {
-        let mut s = std::mem::MaybeUninit::<T>::uninit();
-        let buffer = std::slice::from_raw_parts_mut((&mut s).as_ptr() as *mut T as *mut u8, num_bytes);
-        match read.read_exact(buffer) {
-            Ok(()) => Ok(s.assume_init()),
-            Err(e) => {
-                ::std::mem::forget(s);
-                Err(e)
             }
         }
     }
