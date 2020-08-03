@@ -21,7 +21,7 @@ initramfs(
         "//src/utils:id",
         "//src/freud:freudian",
         "//src/qinit:qinit",
-        "//src/sh",
+        "//src/sh"
     ],
     libs = glob(["vendor/*.so.*"]),
     extra_files = extra_files,
