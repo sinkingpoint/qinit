@@ -1,11 +1,11 @@
-use strings::cstr_to_string;
-use super::superblock::{OffsetSuperBlock, SuperBlock};
 use super::device::UUID;
+use super::superblock::{OffsetSuperBlock, SuperBlock};
+use strings::cstr_to_string;
 
 #[repr(C, packed)]
 struct FatSuperBlock {
-    bootstrap_jump: [u8;3],
-    oem_name: [u8;8],
+    bootstrap_jump: [u8; 3],
+    oem_name: [u8; 8],
     bytes_per_sector: u16,
     sectors_per_cluster: u8,
     reserved_sectors: u16,
@@ -22,11 +22,11 @@ struct FatSuperBlock {
 #[repr(C, packed)]
 pub struct FAT12SuperBlock {
     supersuper: FatSuperBlock,
-    bootstrap: [u8;480],
-    signature: u16
+    bootstrap: [u8; 480],
+    signature: u16,
 }
 
-impl OffsetSuperBlock for FAT12SuperBlock{
+impl OffsetSuperBlock for FAT12SuperBlock {
     fn get_superblock_offset() -> u64 {
         return 0;
     }
@@ -55,13 +55,13 @@ pub struct FAT16SuperBlock {
     reserved: u8,
     extended_signature: u8,
     serial: u32,
-    label: [u8;10],
-    fstype: [u8;8],
-    bootstrap: [u8;449],
-    signature: u16
+    label: [u8; 10],
+    fstype: [u8; 8],
+    bootstrap: [u8; 449],
+    signature: u16,
 }
 
-impl OffsetSuperBlock for FAT16SuperBlock{
+impl OffsetSuperBlock for FAT16SuperBlock {
     fn get_superblock_offset() -> u64 {
         return 0;
     }
@@ -100,16 +100,16 @@ pub struct FAT32SuperBlock {
     first_root_cluster: u32,
     fs_info_sector: u16,
     backup_boot_sector: u16,
-    reserved: [u8;12],
+    reserved: [u8; 12],
     drive_number: u8,
     reserved2: u8,
     extended_signature: u8,
     serial_number: u32,
-    label: [u8;11],
-    fstype: [u8; 8]
+    label: [u8; 11],
+    fstype: [u8; 8],
 }
 
-impl OffsetSuperBlock for FAT32SuperBlock{
+impl OffsetSuperBlock for FAT32SuperBlock {
     fn get_superblock_offset() -> u64 {
         return 0;
     }

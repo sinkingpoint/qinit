@@ -1,7 +1,7 @@
-use super::api::{NLMsgHeader, IFInfoMsg, NLMsgFlags, MessageType, RoutingAttribute, InterfaceFlags, MacAddress, IPv4Addr, InterfaceType};
-use std::mem::size_of;
-use std::io::{self, Read};
 use super::super::mem::read_struct;
+use super::api::{IFInfoMsg, IPv4Addr, InterfaceFlags, InterfaceType, MacAddress, MessageType, NLMsgFlags, NLMsgHeader, RoutingAttribute};
+use std::io::{self, Read};
+use std::mem::size_of;
 
 pub trait NLCommand {
     fn as_bytes(&self) -> &[u8];
@@ -9,15 +9,20 @@ pub trait NLCommand {
 
 pub struct GetInterfacesCommand {
     header: NLMsgHeader,
-    body: IFInfoMsg
+    body: IFInfoMsg,
 }
 
 impl GetInterfacesCommand {
     pub fn new(sequence_number: u32) -> GetInterfacesCommand {
         return GetInterfacesCommand {
-            header: NLMsgHeader::new(MessageType::RTM_GETLINK, sequence_number, size_of::<GetInterfacesCommand>() as u32, NLMsgFlags::NLM_F_REQUEST | NLMsgFlags::NLM_F_MATCH),
-            body: IFInfoMsg::empty()
-        }
+            header: NLMsgHeader::new(
+                MessageType::RTM_GETLINK,
+                sequence_number,
+                size_of::<GetInterfacesCommand>() as u32,
+                NLMsgFlags::NLM_F_REQUEST | NLMsgFlags::NLM_F_MATCH,
+            ),
+            body: IFInfoMsg::empty(),
+        };
     }
 }
 
@@ -25,11 +30,14 @@ impl GetInterfacesCommand {
 pub struct NewInterfaceCommand {
     header: NLMsgHeader,
     body: IFInfoMsg,
-    attrs: Vec<RoutingAttribute>
+    attrs: Vec<RoutingAttribute>,
 }
 
 impl NewInterfaceCommand {
-    pub fn read_after_header<T>(header: NLMsgHeader, buffer: &mut T) -> Result<NewInterfaceCommand, io::Error> where T: Read{
+    pub fn read_after_header<T>(header: NLMsgHeader, buffer: &mut T) -> Result<NewInterfaceCommand, io::Error>
+    where
+        T: Read,
+    {
         let body = read_struct(buffer).unwrap();
         let mut count = header.length - 32;
         let mut attrs = Vec::new();
@@ -43,7 +51,7 @@ impl NewInterfaceCommand {
         return Ok(NewInterfaceCommand {
             header: header,
             body: body,
-            attrs: attrs
+            attrs: attrs,
         });
     }
 }
@@ -60,7 +68,7 @@ pub struct Interface {
     pub mac_address: MacAddress,
     pub broadcast_address: MacAddress,
     pub index: i32,
-    pub int_type: InterfaceType
+    pub int_type: InterfaceType,
 }
 
 impl Into<Interface> for NewInterfaceCommand {
@@ -72,40 +80,40 @@ impl Into<Interface> for NewInterfaceCommand {
             qdisc: String::new(),
             state: 0,
             queue_length: 0,
-            group: [0, 0, 0, 0,],
+            group: [0, 0, 0, 0],
             attrs: Vec::new(),
             mac_address: MacAddress([0, 0, 0, 0, 0, 0]),
             broadcast_address: MacAddress([0, 0, 0, 0, 0, 0]),
             index: self.body.interface_index,
-            int_type: self.body.interface_type
+            int_type: self.body.interface_type,
         };
 
         for attr in self.attrs.into_iter() {
             match attr {
                 RoutingAttribute::InterfaceName(name) => {
                     int.name = name;
-                },
+                }
                 RoutingAttribute::Mtu(mtu) => {
                     int.mtu = mtu;
-                },
+                }
                 RoutingAttribute::QDisc(qdisc) => {
                     int.qdisc = qdisc;
-                },
+                }
                 RoutingAttribute::OperationalState(state) => {
                     int.state = state;
-                },
+                }
                 RoutingAttribute::TXQLen(qlen) => {
                     int.queue_length = qlen;
-                },
+                }
                 RoutingAttribute::Group(addr) => {
                     int.group = addr;
-                },
+                }
                 RoutingAttribute::Address(addr) => {
                     int.mac_address = addr;
-                },
+                }
                 RoutingAttribute::Broadcast(addr) => {
                     int.broadcast_address = addr;
-                },
+                }
                 attr => {
                     int.attrs.push(attr);
                 }

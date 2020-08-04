@@ -1,26 +1,26 @@
 extern crate libq;
 
+pub mod api;
 pub mod subscriber;
 pub mod topic;
-pub mod api;
 pub mod util;
 
-use std::collections::HashMap;
 use api::ResponseType;
+use std::collections::HashMap;
 use std::thread;
+use topic::{Topic, TopicState};
 use util::make_response;
-use topic::{TopicState, Topic};
 
 pub struct Bus {
     topics: HashMap<String, Topic>,
-    subscribers: HashMap<String, String> // Map from subscriber ids -> topic name
+    subscribers: HashMap<String, String>, // Map from subscriber ids -> topic name
 }
 
 impl Bus {
     pub fn new() -> Self {
-        return Bus{
+        return Bus {
             topics: HashMap::new(),
-            subscribers: HashMap::new()
+            subscribers: HashMap::new(),
         };
     }
 
@@ -80,14 +80,12 @@ impl Bus {
             let topic = self.topics.get_mut(topic_name).unwrap();
 
             match topic.try_get_message(subscriber_id) {
-                Ok(maybe_msg) => {
-                    match maybe_msg {
-                        Some(msg) => {
-                            return Ok(Some(msg));
-                        },
-                        None => {
-                            return Ok(None);
-                        }
+                Ok(maybe_msg) => match maybe_msg {
+                    Some(msg) => {
+                        return Ok(Some(msg));
+                    }
+                    None => {
+                        return Ok(None);
                     }
                 },
                 Err(code) => {
@@ -107,4 +105,3 @@ impl Bus {
         }
     }
 }
-

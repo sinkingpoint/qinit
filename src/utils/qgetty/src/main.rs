@@ -1,29 +1,32 @@
 extern crate clap;
-extern crate nix;
-extern crate libq;
 extern crate libc;
+extern crate libq;
+extern crate nix;
 
 use clap::{App, Arg};
 
 use nix::errno::Errno;
-use nix::unistd::{getpid, isatty, close, Pid, tcsetpgrp, dup, execve};
-use nix::fcntl::{fcntl, open, OFlag, FcntlArg};
-use nix::sys::stat::{fstat, Mode};
-use nix::sys::termios::{tcflush, FlushArg, SpecialCharacterIndices, tcgetattr, tcsetattr, tcgetsid, Termios, ControlFlags, BaudRate, cfgetispeed, cfgetospeed, cfsetispeed, cfsetospeed, SetArg, InputFlags, OutputFlags, LocalFlags};
-use nix::sys::signal;
+use nix::fcntl::{fcntl, open, FcntlArg, OFlag};
 use nix::pty::Winsize;
+use nix::sys::signal;
+use nix::sys::stat::{fstat, Mode};
+use nix::sys::termios::{
+    cfgetispeed, cfgetospeed, cfsetispeed, cfsetospeed, tcflush, tcgetattr, tcgetsid, tcsetattr, BaudRate, ControlFlags, FlushArg,
+    InputFlags, LocalFlags, OutputFlags, SetArg, SpecialCharacterIndices, Termios,
+};
+use nix::unistd::{close, dup, execve, getpid, isatty, tcsetpgrp, Pid};
 
+use libq::io::{FileType, STDERR_FD, STDIN_FD, STDOUT_FD, S_IRWOTH};
+use libq::logger::{self, JSONRecordWriter, Logger};
 use libq::passwd::GroupEntry;
-use libq::logger::{self, Logger, JSONRecordWriter};
-use libq::terminal::{erase_display, EraseDisplayMode, reset_virtual_console, tiocsctty, tiocnotty, kdgkbmode, tiocswinsz, tiocgwinsz};
-use libq::io::{FileType, STDIN_FD, STDOUT_FD, STDERR_FD, S_IRWOTH};
+use libq::terminal::{erase_display, kdgkbmode, reset_virtual_console, tiocgwinsz, tiocnotty, tiocsctty, tiocswinsz, EraseDisplayMode};
 
-use std::path::PathBuf;
-use std::os::unix::io::RawFd;
-use std::io::{self, BufReader, Read, Write};
 use std::ffi::{CStr, CString};
+use std::io::{self, BufReader, Read, Write};
+use std::os::unix::io::RawFd;
+use std::path::PathBuf;
 
-use libc::{fchown, fchmod, vhangup};
+use libc::{fchmod, fchown, vhangup};
 
 #[derive(PartialEq)]
 enum KeyboardMode {
@@ -32,7 +35,7 @@ enum KeyboardMode {
     MediumRaw, /* Medium raw (scancode) mode */
     Unicode,   /* Unicode mode */
     Off,       /* Disabled mode; since Linux 2.6.39 */
-    Invalid    /* We received an invalid value from the API */
+    Invalid,   /* We received an invalid value from the API */
 }
 
 impl From<i32> for KeyboardMode {
@@ -43,7 +46,7 @@ impl From<i32> for KeyboardMode {
             0x02 => KeyboardMode::MediumRaw,
             0x03 => KeyboardMode::Unicode,
             0x04 => KeyboardMode::Off,
-            _ => KeyboardMode::Invalid
+            _ => KeyboardMode::Invalid,
         };
     }
 }
@@ -59,33 +62,60 @@ struct GettyOptions {
     dont_clear: bool,
     keep_baud: bool,
     keep_cflags: bool,
-    speeds: Vec<BaudRate>
+    speeds: Vec<BaudRate>,
 }
 
 fn try_int(n: String) -> Result<(), String> {
     return match n.parse::<i32>() {
         Ok(_) => Ok(()),
-        Err(_) => Err("Input must be a valid number".to_owned())
+        Err(_) => Err("Input must be a valid number".to_owned()),
     };
 }
 
 fn main() -> Result<(), ()> {
     let args = App::new("qgetty")
-                    .version("0.1")
-                    .author("Colin D. <colin@quirl.co.nz>")
-                    .about("A _very_ minimal getty implementation")
-                    .arg(Arg::with_name("autolog").short("a").long("autologin").takes_value(true).help("Automatically log in the specified user without asking for a username or password."))
-                    .arg(Arg::with_name("hangup").short("R").long("--hangup").help("Sets the TTY to bind to"))
-                    .arg(Arg::with_name("noreset").short("c").long("--noreset").help("Do not reset terminal cflags"))
-                    .arg(Arg::with_name("noclear").short("J").long("--noclear").help("Don't clear the terminal"))
-                    .arg(Arg::with_name("delay").long("delay").validator(try_int).help("Sleep seconds before opening tty"))
-                    .arg(Arg::with_name("keepbaud").short("s").long("keep-baud").validator(try_int).help("Try to keep the existing baud rate"))
-                    .arg(Arg::with_name("tty").index(1).help("Sets the TTY to bind to").required(true))
-                    .arg(Arg::with_name("termtype").index(2).help("Specifies the terminal type to use"))
-                    .get_matches();
+        .version("0.1")
+        .author("Colin D. <colin@quirl.co.nz>")
+        .about("A _very_ minimal getty implementation")
+        .arg(
+            Arg::with_name("autolog")
+                .short("a")
+                .long("autologin")
+                .takes_value(true)
+                .help("Automatically log in the specified user without asking for a username or password."),
+        )
+        .arg(Arg::with_name("hangup").short("R").long("--hangup").help("Sets the TTY to bind to"))
+        .arg(
+            Arg::with_name("noreset")
+                .short("c")
+                .long("--noreset")
+                .help("Do not reset terminal cflags"),
+        )
+        .arg(
+            Arg::with_name("noclear")
+                .short("J")
+                .long("--noclear")
+                .help("Don't clear the terminal"),
+        )
+        .arg(
+            Arg::with_name("delay")
+                .long("delay")
+                .validator(try_int)
+                .help("Sleep seconds before opening tty"),
+        )
+        .arg(
+            Arg::with_name("keepbaud")
+                .short("s")
+                .long("keep-baud")
+                .validator(try_int)
+                .help("Try to keep the existing baud rate"),
+        )
+        .arg(Arg::with_name("tty").index(1).help("Sets the TTY to bind to").required(true))
+        .arg(Arg::with_name("termtype").index(2).help("Specifies the terminal type to use"))
+        .get_matches();
 
     let tty = args.value_of("tty").unwrap();
-    
+
     unsafe {
         let action = signal::SigAction::new(signal::SigHandler::SigIgn, signal::SaFlags::SA_RESTART, signal::SigSet::empty());
         signal::sigaction(signal::Signal::SIGHUP, &action).expect("Failed to set signal action");
@@ -93,14 +123,14 @@ fn main() -> Result<(), ()> {
         signal::sigaction(signal::Signal::SIGINT, &action).expect("Failed to set signal action");
     }
 
-    let mut options = GettyOptions{
+    let mut options = GettyOptions {
         term_type: match args.value_of("termtype") {
             Some(s) => Some(s.to_owned()),
-            None => None
+            None => None,
         },
         autolog_user: match args.value_of("autolog") {
             Some(s) => Some(s.to_owned()),
-            None => None
+            None => None,
         },
         should_hangup: args.is_present("hangup"),
         is_vconsole: false,
@@ -110,7 +140,7 @@ fn main() -> Result<(), ()> {
         keep_baud: args.is_present("keepbaud"),
         keep_cflags: args.is_present("noreset"),
         keyboard_mode: KeyboardMode::Invalid,
-        speeds: Vec::new()
+        speeds: Vec::new(),
     };
 
     let mut termio_settings = match open_tty(tty, &mut options) {
@@ -122,9 +152,12 @@ fn main() -> Result<(), ()> {
 
     let logger = logger::with_name_as_json("qgetty");
     match tcsetpgrp(STDIN_FD, getpid()) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
-            logger.debug().with_string("error", err.to_string()).smsg("Failed to set terminal process group");
+            logger
+                .debug()
+                .with_string("error", err.to_string())
+                .smsg("Failed to set terminal process group");
         }
     }
 
@@ -143,11 +176,23 @@ fn main() -> Result<(), ()> {
     };
 
     let login_bin = CString::new("/sbin/login").unwrap();
-    let args: Vec<Vec<u8>> = ["/sbin/login", username.as_str()].into_iter().map(|arg| CString::new(*arg).unwrap().into_bytes_with_nul()).collect();
-    let args = &args.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
+    let args: Vec<Vec<u8>> = ["/sbin/login", username.as_str()]
+        .into_iter()
+        .map(|arg| CString::new(*arg).unwrap().into_bytes_with_nul())
+        .collect();
+    let args = &args
+        .iter()
+        .map(|arg| CStr::from_bytes_with_nul(arg).unwrap())
+        .collect::<Vec<&CStr>>()[..];
 
-    let env: Vec<Vec<u8>> = [format!("TERM={}", options.term_type.unwrap()).as_str()].into_iter().map(|env| CString::new(*env).unwrap().into_bytes_with_nul()).collect();
-    let env = &env.iter().map(|env| CStr::from_bytes_with_nul(env).unwrap()).collect::<Vec<&CStr>>()[..];
+    let env: Vec<Vec<u8>> = [format!("TERM={}", options.term_type.unwrap()).as_str()]
+        .into_iter()
+        .map(|env| CString::new(*env).unwrap().into_bytes_with_nul())
+        .collect();
+    let env = &env
+        .iter()
+        .map(|env| CStr::from_bytes_with_nul(env).unwrap())
+        .collect::<Vec<&CStr>>()[..];
 
     match execve(&login_bin, &args[..], &env[..]) {
         Ok(_) => {} // We should never get here. A sucessful execvp will never get here as it will be running the other program
@@ -157,9 +202,11 @@ fn main() -> Result<(), ()> {
                     eprintln!("No such command: {}", "/sbin/login");
                     std::process::exit(127);
                 }
-            }
-            else {
-                logger.debug().with_string("error", err.to_string()).smsg("Failed to exec login process");
+            } else {
+                logger
+                    .debug()
+                    .with_string("error", err.to_string())
+                    .smsg("Failed to exec login process");
             }
         }
     }
@@ -182,7 +229,10 @@ fn read_username() -> Result<String, Option<io::Error>> {
         let byte = match byte {
             Ok(b) => b,
             Err(err) => {
-                logger.info().with_string("error", err.to_string()).smsg("Failed to read from stdin");
+                logger
+                    .info()
+                    .with_string("error", err.to_string())
+                    .smsg("Failed to read from stdin");
                 return Err(Some(err));
             }
         };
@@ -193,19 +243,16 @@ fn read_username() -> Result<String, Option<io::Error>> {
                 if build.len() > 0 {
                     handle.write_all(b"\n")?;
                     return Ok(String::from_utf8_lossy(&build[..]).to_string());
-                }
-                else {
+                } else {
                     handle.write_all(b"\nlogin: ")?;
                 }
-            },
+            }
             // 0x7f == DEL , 0x08 == Backspace. Delete the last char (if it exists)
-            0x7F | 0x08 => {
-                match build.pop(){
-                    Some(_) => {
-                        handle.write_all(b"\x08 \x08")?;
-                    },
-                    None => {}
+            0x7F | 0x08 => match build.pop() {
+                Some(_) => {
+                    handle.write_all(b"\x08 \x08")?;
                 }
+                None => {}
             },
             c => {
                 build.push(c);
@@ -224,16 +271,25 @@ fn set_blocking(fd: RawFd) {
     let current_mode = match fcntl(fd, FcntlArg::F_GETFL) {
         Ok(m) => m,
         Err(err) => {
-            logger.debug().with_string("error", err.to_string()).smsg("Failed to get stdin attributes");
+            logger
+                .debug()
+                .with_string("error", err.to_string())
+                .smsg("Failed to get stdin attributes");
             0
         }
     };
 
     // And set them, minus the O_NONBLOCK flag
-    match fcntl(fd, FcntlArg::F_SETFL(OFlag::from_bits_truncate(current_mode) & !(OFlag::O_NONBLOCK))) {
-        Ok(_) => {},
+    match fcntl(
+        fd,
+        FcntlArg::F_SETFL(OFlag::from_bits_truncate(current_mode) & !(OFlag::O_NONBLOCK)),
+    ) {
+        Ok(_) => {}
         Err(err) => {
-            logger.debug().with_string("error", err.to_string()).smsg("Failed to set stdin to blocking");
+            logger
+                .debug()
+                .with_string("error", err.to_string())
+                .smsg("Failed to set stdin to blocking");
         }
     }
 }
@@ -243,9 +299,12 @@ fn reset_vc(settings: &mut Termios, options: &mut GettyOptions) {
     reset_virtual_console(settings, options.keep_cflags, options.utf8_support);
 
     match tcsetattr(STDIN_FD, SetArg::TCSADRAIN, settings) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
-            logger.debug().with_string("error", err.to_string()).smsg("Failed to set terminal attributes");
+            logger
+                .debug()
+                .with_string("error", err.to_string())
+                .smsg("Failed to set terminal attributes");
         }
     }
 
@@ -267,9 +326,12 @@ fn init_term_settings(termio_settings: &mut Termios, options: &mut GettyOptions)
             options.eight_bit_mode = true;
             if !options.dont_clear {
                 match erase_display(&mut io::stdout(), EraseDisplayMode::All) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(err) => {
-                        logger.debug().with_string("error", err.to_string()).smsg("Failed to clear terminal");
+                        logger
+                            .debug()
+                            .with_string("error", err.to_string())
+                            .smsg("Failed to clear terminal");
                     }
                 }
             }
@@ -285,14 +347,13 @@ fn init_term_settings(termio_settings: &mut Termios, options: &mut GettyOptions)
     if options.autolog_user.is_none() {
         if options.utf8_support {
             termio_settings.input_flags |= InputFlags::IUTF8;
-        }
-        else {
+        } else {
             termio_settings.input_flags = InputFlags::empty();
         }
     }
 
     termio_settings.local_flags = LocalFlags::empty();
-    
+
     // OPOST -> Disable Post Processing (e.g. tr 'U+00A0' '\n')
     // ONLCR -> Don't munge new line chars - we want to handle them ourselves
     termio_settings.output_flags &= !(OutputFlags::OPOST | OutputFlags::ONLCR);
@@ -302,7 +363,8 @@ fn init_term_settings(termio_settings: &mut Termios, options: &mut GettyOptions)
         // HUPCL -> Send a Hangup when the last process exits
         // CREAD -> Enable reading chars
         // CLOCAL -> local connection, no modem contol
-        termio_settings.control_flags = ControlFlags::CS8 | ControlFlags::HUPCL | ControlFlags::CREAD | (termio_settings.control_flags & ControlFlags::CLOCAL);
+        termio_settings.control_flags =
+            ControlFlags::CS8 | ControlFlags::HUPCL | ControlFlags::CREAD | (termio_settings.control_flags & ControlFlags::CLOCAL);
     }
 
     let ispeed: BaudRate;
@@ -310,30 +372,35 @@ fn init_term_settings(termio_settings: &mut Termios, options: &mut GettyOptions)
     if options.keep_baud || options.speeds.len() == 0 {
         ispeed = match cfgetispeed(termio_settings) {
             BaudRate::B0 => BaudRate::B9600,
-            speed => speed
+            speed => speed,
         };
 
         ospeed = match cfgetospeed(termio_settings) {
             BaudRate::B0 => BaudRate::B9600,
-            speed => speed
+            speed => speed,
         };
-    }
-    else {
+    } else {
         ispeed = *options.speeds.last().unwrap();
         ospeed = ispeed;
     }
 
     match cfsetispeed(termio_settings, ispeed) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
-            logger.debug().with_string("error", err.to_string()).smsg("Failed to set terminal input speed");
+            logger
+                .debug()
+                .with_string("error", err.to_string())
+                .smsg("Failed to set terminal input speed");
         }
     }
 
     match cfsetospeed(termio_settings, ospeed) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
-            logger.debug().with_string("error", err.to_string()).smsg("Failed to set terminal output speed");
+            logger
+                .debug()
+                .with_string("error", err.to_string())
+                .smsg("Failed to set terminal output speed");
         }
     }
 
@@ -341,11 +408,11 @@ fn init_term_settings(termio_settings: &mut Termios, options: &mut GettyOptions)
     termio_settings.control_chars[SpecialCharacterIndices::VTIME as usize] = 0;
     termio_settings.control_chars[SpecialCharacterIndices::VMIN as usize] = 1;
 
-    let mut winsize = Winsize{
+    let mut winsize = Winsize {
         ws_row: 0,
         ws_col: 0,
         ws_xpixel: 0,
-        ws_ypixel: 0
+        ws_ypixel: 0,
     };
 
     unsafe {
@@ -354,33 +421,42 @@ fn init_term_settings(termio_settings: &mut Termios, options: &mut GettyOptions)
                 if winsize.ws_row == 0 {
                     winsize.ws_row = 24;
                 }
-    
+
                 if winsize.ws_col == 0 {
                     winsize.ws_col = 80;
                 }
-    
+
                 match tiocswinsz(STDIN_FD, &mut winsize) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(err) => {
-                        logger.debug().with_string("error", err.to_string()).smsg("Failed to set window size");
+                        logger
+                            .debug()
+                            .with_string("error", err.to_string())
+                            .smsg("Failed to set window size");
                     }
                 }
-            },
+            }
             Ok(_) | Err(_) => {}
         }
     }
 
     match tcflush(STDIN_FD, FlushArg::TCIOFLUSH) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
-            logger.debug().with_string("error", err.to_string()).smsg("Failed to flush IO streams");
+            logger
+                .debug()
+                .with_string("error", err.to_string())
+                .smsg("Failed to flush IO streams");
         }
     }
 
     match tcsetattr(STDIN_FD, SetArg::TCSANOW, termio_settings) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
-            logger.debug().with_string("error", err.to_string()).smsg("Failed to set terminal attributes");
+            logger
+                .debug()
+                .with_string("error", err.to_string())
+                .smsg("Failed to set terminal attributes");
         }
     }
 
@@ -390,11 +466,18 @@ fn init_term_settings(termio_settings: &mut Termios, options: &mut GettyOptions)
 fn try_reparenting(fd: RawFd, mypid: Pid, logger: &Logger<JSONRecordWriter>, tty_name: &str) {
     let needs_reparenting = match tcgetsid(fd) {
         Ok(pid) => {
-            logger.debug().with_str("tty", tty_name).msg(format!("TTY Session PID: {}, My PID: {}", pid, mypid));
+            logger
+                .debug()
+                .with_str("tty", tty_name)
+                .msg(format!("TTY Session PID: {}, My PID: {}", pid, mypid));
             pid != mypid
-        },
+        }
         Err(err) => {
-            logger.debug().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("Failed to get terminal session ID");
+            logger
+                .debug()
+                .with_str("tty", tty_name)
+                .with_string("error", err.to_string())
+                .smsg("Failed to get terminal session ID");
             true
         }
     };
@@ -403,17 +486,21 @@ fn try_reparenting(fd: RawFd, mypid: Pid, logger: &Logger<JSONRecordWriter>, tty
         unsafe {
             let mut arg = 1;
             match tiocsctty(fd, &mut arg) {
-                Ok(-1) => {},
-                Ok(_) => {},
+                Ok(-1) => {}
+                Ok(_) => {}
                 Err(err) => {
-                    logger.debug().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("Failed to make the terminal the controlling terminal of this process");
+                    logger
+                        .debug()
+                        .with_str("tty", tty_name)
+                        .with_string("error", err.to_string())
+                        .smsg("Failed to make the terminal the controlling terminal of this process");
                 }
             }
         }
     }
 }
 
-fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Option<nix::Error>>{
+fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Option<nix::Error>> {
     let mut logger = logger::with_name_as_json("qgetty;open_tty");
     logger.set_debug_mode(true);
 
@@ -422,7 +509,7 @@ fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Optio
     if tty_name != "-" {
         let tty_group_id = match GroupEntry::by_groupname(&"tty".to_owned()) {
             Some(group) => group.gid,
-            None => 0
+            None => 0,
         };
 
         let tty_path: PathBuf = {
@@ -431,24 +518,37 @@ fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Optio
             tmp
         };
 
-        logger.debug().with_str("tty", tty_name).msg(format!("Opening {} as the new TTY", tty_path.display()));
+        logger
+            .debug()
+            .with_str("tty", tty_name)
+            .msg(format!("Opening {} as the new TTY", tty_path.display()));
 
         let fd = match open(&tty_path, OFlag::O_RDWR | OFlag::O_NOCTTY | OFlag::O_NONBLOCK, Mode::empty()) {
             Ok(fd) => fd,
             Err(err) => {
-                logger.info().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("Failed to open terminal as stdin");
+                logger
+                    .info()
+                    .with_str("tty", tty_name)
+                    .with_string("error", err.to_string())
+                    .smsg("Failed to open terminal as stdin");
                 return Err(Some(err));
             }
         };
 
         unsafe {
-            if fchown(fd, 0, tty_group_id) != 0 || fchmod(fd, if tty_group_id != 0 {0o620} else {0o600}) != 0 {
+            if fchown(fd, 0, tty_group_id) != 0 || fchmod(fd, if tty_group_id != 0 { 0o620 } else { 0o600 }) != 0 {
                 match Errno::last() {
                     Errno::EROFS => {
-                        logger.debug().with_str("tty", tty_name).smsg("Failed to lock down terminal ownership");
-                    },
+                        logger
+                            .debug()
+                            .with_str("tty", tty_name)
+                            .smsg("Failed to lock down terminal ownership");
+                    }
                     _ => {
-                        logger.info().with_str("tty", tty_name).smsg("Failed to lock down terminal ownership");
+                        logger
+                            .info()
+                            .with_str("tty", tty_name)
+                            .smsg("Failed to lock down terminal ownership");
                         return Err(None);
                     }
                 }
@@ -463,21 +563,29 @@ fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Optio
                 if dev_type != FileType::CharacterDevice {
                     logger.info().with_str("tty", tty_name).smsg("TTY is not a terminal device");
                 }
-            },
+            }
             Err(err) => {
-                logger.info().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("Failed to stat tty");
+                logger
+                    .info()
+                    .with_str("tty", tty_name)
+                    .with_string("error", err.to_string())
+                    .smsg("Failed to stat tty");
             }
         }
 
         // Make sure it's a tty
         match isatty(fd) {
-            Ok(true) => {},
+            Ok(true) => {}
             Ok(false) => {
                 logger.info().with_str("tty", tty_name).smsg("Given device is not a TTY");
                 return Err(None);
-            },
+            }
             Err(err) => {
-                logger.info().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("Failed to check if tty is a terminal");
+                logger
+                    .info()
+                    .with_str("tty", tty_name)
+                    .with_string("error", err.to_string())
+                    .smsg("Failed to check if tty is a terminal");
                 return Err(Some(err));
             }
         };
@@ -488,12 +596,20 @@ fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Optio
         if options.should_hangup {
             unsafe {
                 match tiocnotty(fd) {
-                    Ok(0) => {},
+                    Ok(0) => {}
                     Ok(err) => {
-                        logger.debug().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("tiocnotty failed");
-                    },
+                        logger
+                            .debug()
+                            .with_str("tty", tty_name)
+                            .with_string("error", err.to_string())
+                            .smsg("tiocnotty failed");
+                    }
                     Err(err) => {
-                        logger.debug().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("tiocnotty failed");
+                        logger
+                            .debug()
+                            .with_str("tty", tty_name)
+                            .with_string("error", err.to_string())
+                            .smsg("tiocnotty failed");
                     }
                 }
             }
@@ -503,33 +619,42 @@ fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Optio
             close(STDERR_FD)?;
             already_closed = true;
 
-            unsafe { 
+            unsafe {
                 let hangup = vhangup();
                 if hangup != 0 {
-                    logger.info().with_str("tty", tty_name).with_string("error", hangup.to_string()).smsg("Failed to hangup exiting terminal. Bailing");
+                    logger
+                        .info()
+                        .with_str("tty", tty_name)
+                        .with_string("error", hangup.to_string())
+                        .smsg("Failed to hangup exiting terminal. Bailing");
                     return Err(None);
                 }
             }
-        }
-        else {
+        } else {
             close(fd)?;
         }
 
         match open(&tty_path, OFlag::O_RDWR | OFlag::O_NOCTTY | OFlag::O_NONBLOCK, Mode::empty()) {
-            Ok(0) => {},
+            Ok(0) => {}
             Ok(fd) => {
-                logger.info().with_str("tty", tty_name).msg(format!("Failed to open terminal as stdin - got FD {} instead", fd));
+                logger
+                    .info()
+                    .with_str("tty", tty_name)
+                    .msg(format!("Failed to open terminal as stdin - got FD {} instead", fd));
                 return Err(None);
             }
             Err(err) => {
-                logger.info().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("Failed to open terminal as stdin");
+                logger
+                    .info()
+                    .with_str("tty", tty_name)
+                    .with_string("error", err.to_string())
+                    .smsg("Failed to open terminal as stdin");
                 return Err(Some(err));
             }
         };
 
         try_reparenting(STDIN_FD, getpid(), &logger, tty_name);
-    }
-    else {
+    } else {
         // STDIN is already an open terminal port. Sanity check it
         match fcntl(STDIN_FD, FcntlArg::F_GETFL) {
             Ok(res) => {
@@ -537,18 +662,26 @@ fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Optio
                     logger.info().with_str("tty", tty_name).smsg("Given FD isn't open for R/W");
                     return Err(None);
                 }
-            },
+            }
             Err(err) => {
-                logger.info().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("Failed to stat given FD");
+                logger
+                    .info()
+                    .with_str("tty", tty_name)
+                    .with_string("error", err.to_string())
+                    .smsg("Failed to stat given FD");
                 return Err(Some(err));
             }
         }
     }
 
     match tcsetpgrp(STDIN_FD, getpid()) {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(err) => {
-            logger.debug().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("Failed to set terminal process group");
+            logger
+                .debug()
+                .with_str("tty", tty_name)
+                .with_string("error", err.to_string())
+                .smsg("Failed to set terminal process group");
         }
     }
 
@@ -558,14 +691,14 @@ fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Optio
     }
 
     match dup(STDIN_FD) {
-        Ok(STDOUT_FD) => {},
+        Ok(STDOUT_FD) => {}
         _ => {
             logger.info().with_str("tty", tty_name).smsg("Failed to create stdout stream");
         }
     }
 
     match dup(STDIN_FD) {
-        Ok(STDERR_FD) => {},
+        Ok(STDERR_FD) => {}
         _ => {
             logger.info().with_str("tty", tty_name).smsg("Failed to create stderr stream");
         }
@@ -574,7 +707,11 @@ fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Optio
     let termio_settings = match tcgetattr(STDIN_FD) {
         Ok(ts) => Ok(ts),
         Err(err) => {
-            logger.info().with_str("tty", tty_name).with_string("error", err.to_string()).smsg("Failed to get terminal settings");
+            logger
+                .info()
+                .with_str("tty", tty_name)
+                .with_string("error", err.to_string())
+                .smsg("Failed to get terminal settings");
             return Err(Some(err));
         }
     };
@@ -598,7 +735,6 @@ fn open_tty(tty_name: &str, options: &mut GettyOptions) -> Result<Termios, Optio
             }
         }
     }
-
 
     return termio_settings;
 }

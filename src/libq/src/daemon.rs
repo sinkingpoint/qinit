@@ -1,8 +1,8 @@
 use std::fs::{create_dir, File};
-use std::io::{BufReader,BufRead};
+use std::io::Write;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process;
-use std::io::Write;
 
 pub fn write_pid_file(path: PathBuf) -> Result<(), String> {
     if path.exists() {
@@ -15,13 +15,13 @@ pub fn write_pid_file(path: PathBuf) -> Result<(), String> {
 
         let buf_reader = BufReader::new(file);
         match buf_reader.lines().next() {
-            None => {},
+            None => {}
             Some(pid) => {
                 let proc_pathbuf: PathBuf = match pid {
                     Err(err) => {
                         return Err(format!("Failed to read from pidfile: {}", err));
-                    },
-                    Ok(pid) => ["/proc", pid.trim()].iter().collect()
+                    }
+                    Ok(pid) => ["/proc", pid.trim()].iter().collect(),
                 };
 
                 if proc_pathbuf.exists() {
@@ -39,7 +39,7 @@ pub fn write_pid_file(path: PathBuf) -> Result<(), String> {
             }
         }
     }
-    
+
     let mut file = match File::create(&path) {
         Ok(file) => file,
         Err(err) => {

@@ -1,16 +1,16 @@
-use std::io::Write;
-use std::collections::{VecDeque, HashMap};
-use std::os::unix::io::RawFd;
+use std::collections::{HashMap, VecDeque};
 use std::env;
 use std::ffi::{CStr, CString};
+use std::io::Write;
+use std::os::unix::io::RawFd;
 
+use nix::errno::Errno::{ECHILD, ENOENT};
 use nix::sys::signal;
-use nix::unistd::{fork, ForkResult, Pid, tcsetpgrp, tcgetpgrp, pipe, execvp, dup2, close, getpid, setpgid, getpgrp, isatty};
+use nix::sys::termios::{tcgetattr, tcsetattr, ControlFlags, LocalFlags, SetArg, SpecialCharacterIndices};
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
-use nix::errno::Errno::{ENOENT,ECHILD};
-use nix::sys::termios::{tcgetattr, tcsetattr, LocalFlags, ControlFlags, SetArg, SpecialCharacterIndices};
+use nix::unistd::{close, dup2, execvp, fork, getpgrp, getpid, isatty, pipe, setpgid, tcgetpgrp, tcsetpgrp, ForkResult, Pid};
 
-use libq::io::{STDIN_FD, STDOUT_FD, STDERR_FD};
+use libq::io::{STDERR_FD, STDIN_FD, STDOUT_FD};
 use libq::terminal::reset_virtual_console;
 
 use builtins;
@@ -29,12 +29,12 @@ impl IOTriple {
         return IOTriple {
             stdin: STDIN_FD,
             stdout: STDOUT_FD,
-            stderr: STDERR_FD
+            stderr: STDERR_FD,
         };
     }
 }
 
-/// Represents a process in the shell, with the appropriate state 
+/// Represents a process in the shell, with the appropriate state
 /// Until the process has been started with `execute`, only the proc_name and argv
 /// are valid
 pub struct Process {
@@ -58,7 +58,7 @@ pub struct Process {
 
 impl Process {
     /// Generates a new Process with the given proc_name and argv
-    pub fn new(proc_name: String, argv: Vec<String>, foreground: bool) -> Process{
+    pub fn new(proc_name: String, argv: Vec<String>, foreground: bool) -> Process {
         return Process {
             proc_name: proc_name,
             argv: argv,
@@ -73,7 +73,7 @@ impl Process {
 
     /// Attempts to execute this process as a builtin (Which _should not_ be in a forked child)
     /// If the builtin exists, returns Ok(exit_code), otherwise, returns Err(())
-    pub fn try_execute_as_builtin(&mut self, shell: &mut Shell, streams: &IOTriple) -> Result<i32, ()>{
+    pub fn try_execute_as_builtin(&mut self, shell: &mut Shell, streams: &IOTriple) -> Result<i32, ()> {
         if shell.is_builtin(&self.proc_name) {
             let exit_code = shell.run_builtin(&self.proc_name, &self.argv, streams);
             self.status = Some(exit_code);
@@ -85,7 +85,7 @@ impl Process {
         return Err(());
     }
 
-    pub fn cement_args(&mut self, shell: &Shell) -> Result<(), String>{
+    pub fn cement_args(&mut self, shell: &Shell) -> Result<(), String> {
         let mut new_argv = Vec::new();
         for arg in &self.argv {
             new_argv.append(&mut strings::do_value_pipeline(&arg, shell)?);
@@ -104,14 +104,14 @@ impl Process {
     /// be done before we enter here)
     /// Because this process exevp's, or panics in the event that doesn't work, this function can actually
     /// never exit
-    pub fn execute(&self, shell: &mut Shell, group: Option<Pid>, streams: &IOTriple) -> i32{
+    pub fn execute(&self, shell: &mut Shell, group: Option<Pid>, streams: &IOTriple) -> i32 {
         if shell.is_doing_job_control() {
             // If we're interactive, then we start a new process group (If one isn't given),
             // put ourselves into it, and take the foreground from the shell
             let pid = getpid();
             let pgid = match group {
                 None => pid,
-                Some(group_id) => group_id
+                Some(group_id) => group_id,
             };
             setpgid(pid, pgid).expect("Failed to open a new process group");
             if self.foreground {
@@ -149,19 +149,24 @@ impl Process {
 
         // Blastoff! Here we do some mangling to turn the UTF-8 Strings we have as args into CStrings
         let c_path = CString::new(self.proc_name.as_str()).unwrap();
-        let cstr_argv: Vec<Vec<u8>> = self.argv.iter().map(|arg| CString::new(arg.as_str()).unwrap().into_bytes_with_nul()).collect();
-        let argv = &cstr_argv.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
+        let cstr_argv: Vec<Vec<u8>> = self
+            .argv
+            .iter()
+            .map(|arg| CString::new(arg.as_str()).unwrap().into_bytes_with_nul())
+            .collect();
+        let argv = &cstr_argv
+            .iter()
+            .map(|arg| CStr::from_bytes_with_nul(arg).unwrap())
+            .collect::<Vec<&CStr>>()[..];
         match execvp(&c_path, argv) {
-            Ok(_) => {
-            },
+            Ok(_) => {}
             Err(e) => {
                 if let Some(errno) = e.as_errno() {
                     if errno == ENOENT {
                         eprintln!("No such command: {}", self.proc_name);
                         std::process::exit(127);
                     }
-                }
-                else {
+                } else {
                     panic!("Failed to exec: {}", e);
                 }
             }
@@ -177,71 +182,66 @@ pub struct Job {
     pgid: Option<Pid>,
 
     // A Vector of all the processes in this pipeline
-    processes: Vec<Process>
+    processes: Vec<Process>,
 }
 
 impl Job {
     // Creates a new Job from the given processes, default the pgid to None as we haven't executed yet
     pub fn new(processes: Vec<Process>) -> Job {
-        return Job{
+        return Job {
             processes: processes,
-            pgid: None
+            pgid: None,
         };
     }
 
     // Waits for all the jobs in this pipeline to either stop, or complete
     fn wait(&mut self) {
         while {
-            !self.handle_status_update(waitpid(None, Some(WaitPidFlag::__WALL | WaitPidFlag::WUNTRACED))) && 
-            !self.is_stopped() && !self.is_completed()
-        }{};
+            !self.handle_status_update(waitpid(None, Some(WaitPidFlag::__WALL | WaitPidFlag::WUNTRACED)))
+                && !self.is_stopped()
+                && !self.is_completed()
+        } {}
     }
 
     // Handles updates from `wait` events, doing some accounting around the child processes
     // Returns true if we've hit an irrecoverable error, or false if we've managed to successfully do the accounting
-    fn handle_status_update(&mut self, status: nix::Result<WaitStatus>) -> bool{
+    fn handle_status_update(&mut self, status: nix::Result<WaitStatus>) -> bool {
         match status {
             Ok(event) => {
                 match event {
                     // If the processes exitted, then we just mark it
-                    WaitStatus::Exited(pid, code) => {
-                        match self.find_process_by_pid(pid) {
-                            Some(process) => {
-                                process.completed = true;
-                                process.status = Some(code);
-                                return false;
-                            }
-                            None => {
-                                eprintln!("Failed to find child by pid: {}", pid);
-                                return true;
-                            }
+                    WaitStatus::Exited(pid, code) => match self.find_process_by_pid(pid) {
+                        Some(process) => {
+                            process.completed = true;
+                            process.status = Some(code);
+                            return false;
+                        }
+                        None => {
+                            eprintln!("Failed to find child by pid: {}", pid);
+                            return true;
                         }
                     },
                     // Otherwise we have to find the signal num and mark it
-                    WaitStatus::Signaled(pid, signal, _) => {
-                        match self.find_process_by_pid(pid) {
-                            Some(process) => {
-                                process.completed = true;
-                                process.status = Some(signal as i32);
-                                return false;
-                            }
-                            None => {
-                                eprintln!("Failed to find child by pid: {}", pid);
-                                return true;
-                            }
+                    WaitStatus::Signaled(pid, signal, _) => match self.find_process_by_pid(pid) {
+                        Some(process) => {
+                            process.completed = true;
+                            process.status = Some(signal as i32);
+                            return false;
+                        }
+                        None => {
+                            eprintln!("Failed to find child by pid: {}", pid);
+                            return true;
                         }
                     },
-                    WaitStatus::Stopped(pid, signal) => {
-                        match self.find_process_by_pid(pid) {
-                            Some(process) => {
-                                process.stopped = true;
-                                process.status = Some(signal as i32);
-                                return false;
-                            }
-                            None => {
-                                eprintln!("Failed to find child by pid: {}", pid);
-                                return true;
-                            }
+                    WaitStatus::Stopped(pid, signal) => match self.find_process_by_pid(pid) {
+                        Some(process) => {
+                            process.stopped = true;
+                            process.status = Some(signal as i32);
+                            return false;
+                        }
+                        None => {
+                            eprintln!("Failed to find child by pid: {}", pid);
+                            return true;
                         }
                     },
                     _ => {
@@ -249,14 +249,13 @@ impl Job {
                         return false;
                     }
                 }
-            },
+            }
             Err(err) => {
                 if let Some(errno) = err.as_errno() {
                     if errno != ECHILD {
                         eprintln!("Failed to wait: {}", err);
                     }
-                }
-                else {
+                } else {
                     eprintln!("Failed to wait: {}", err);
                 }
                 return true;
@@ -266,20 +265,23 @@ impl Job {
 
     // Searches the proceses in this Pipeline for one with the given pid
     fn find_process_by_pid(&mut self, pid: Pid) -> Option<&mut Process> {
-        return self.processes.iter_mut().find(|process| {process.pid == Some(pid)});
+        return self.processes.iter_mut().find(|process| process.pid == Some(pid));
     }
 
     // Returns true if all the processes in this pipeline are stopped or completed
-    fn is_stopped(&self) -> bool{
-        return self.processes.iter().all(|process| {!process.started || process.stopped || process.completed});
+    fn is_stopped(&self) -> bool {
+        return self
+            .processes
+            .iter()
+            .all(|process| !process.started || process.stopped || process.completed);
     }
 
     // Returns true if all the processes in this pipeline are completed
     fn is_completed(&self) -> bool {
-        return self.processes.iter().all(|process| {!process.started || process.completed});
+        return self.processes.iter().all(|process| !process.started || process.completed);
     }
 
-    pub fn execute(&mut self, shell: &mut Shell, group: Option<Pid>, streams: &IOTriple) -> i32{
+    pub fn execute(&mut self, shell: &mut Shell, group: Option<Pid>, streams: &IOTriple) -> i32 {
         if self.processes.len() == 0 {
             return 0; // Short circuit in the naive case where we have an empty Job
         }
@@ -299,21 +301,23 @@ impl Job {
                     Ok((src, dest)) => {
                         pipe_source = src;
                         outfile = dest;
-                    },
-                    Err(err) => panic!("Failed to create pipe: {}", err)
+                    }
+                    Err(err) => panic!("Failed to create pipe: {}", err),
                 }
-            }
-            else {
+            } else {
                 pipe_source = streams.stdin;
                 outfile = streams.stdout;
             }
 
-            match process.try_execute_as_builtin(shell, &IOTriple{
-                stdin: infile,
-                stdout: outfile,
-                stderr: streams.stderr
-            }) {
-                Ok(_exit_code) => {},
+            match process.try_execute_as_builtin(
+                shell,
+                &IOTriple {
+                    stdin: infile,
+                    stdout: outfile,
+                    stderr: streams.stderr,
+                },
+            ) {
+                Ok(_exit_code) => {}
                 Err(()) => {
                     match process.cement_args(shell) {
                         Err(err) => {
@@ -327,20 +331,24 @@ impl Job {
                                     if shell.job_control {
                                         self.pgid = match self.pgid {
                                             None => Some(child),
-                                            Some(_) => self.pgid
+                                            Some(_) => self.pgid,
                                         };
-                
+
                                         setpgid(child, self.pgid.unwrap()).expect("Failed to start new process group");
                                     }
                                     process.pid = Some(child);
                                 }
                                 Ok(ForkResult::Child) => {
-                                    process.execute(shell, group, &IOTriple{
-                                        stdin: infile,
-                                        stdout: outfile,
-                                        stderr: streams.stderr,
-                                    });
-                                },
+                                    process.execute(
+                                        shell,
+                                        group,
+                                        &IOTriple {
+                                            stdin: infile,
+                                            stdout: outfile,
+                                            stderr: streams.stderr,
+                                        },
+                                    );
+                                }
                                 Err(_) => {
                                     broken = true;
                                     process.started = false;
@@ -349,11 +357,11 @@ impl Job {
                             }
                         }
                     }
-                
+
                     if infile != streams.stdin {
                         close(infile).expect("Failed to close input stream");
                     }
-        
+
                     if outfile != streams.stdout {
                         close(outfile).expect("Failed to close output stream");
                     }
@@ -365,18 +373,15 @@ impl Job {
 
         if !shell.is_doing_job_control() {
             self.wait();
-        }
-        else if self.processes[0].foreground {
+        } else if self.processes[0].foreground {
             shell.put_job_in_foreground(self);
-        }
-        else {
+        } else {
             shell.put_job_in_background(self);
         }
 
         if let Some(status) = self.processes[0].status {
             return status;
-        }
-        else {
+        } else {
             return 255; // Somethings gone wrong in the pipeline. ENOENT or something, so just bail
         }
     }
@@ -396,11 +401,11 @@ pub struct Variable {
 }
 
 impl Variable {
-    pub fn new(name: String, value: String, environment: bool) -> Variable{
-        return Variable{
+    pub fn new(name: String, value: String, environment: bool) -> Variable {
+        return Variable {
             name: name,
             value: value,
-            environment: environment
+            environment: environment,
         };
     }
 }
@@ -414,7 +419,7 @@ pub struct Shell {
     builtins: HashMap<&'static str, builtins::Builtin>,
     exitcode: Option<u8>,
     variables: HashMap<String, Variable>,
-    history: VecDeque<String>
+    history: VecDeque<String>,
 }
 
 impl Shell {
@@ -428,7 +433,7 @@ impl Shell {
         };
 
         let mut job_control = is_interactive;
-    
+
         let mut my_pgid = getpgrp();
         if job_control {
             while {
@@ -447,8 +452,7 @@ impl Shell {
 
             if !job_control {
                 eprintln!("Failed to start job control. Continuing without it");
-            }
-            else {
+            } else {
                 unsafe {
                     signal::signal(signal::SIGINT, signal::SigHandler::SigIgn).unwrap();
                     signal::signal(signal::SIGQUIT, signal::SigHandler::SigIgn).unwrap();
@@ -465,24 +469,31 @@ impl Shell {
 
         let mut variables_map = HashMap::new();
         for (key, value) in env::vars() {
-            variables_map.insert(key.clone(), Variable{
-                name: key.clone(),
-                value: value,
-                environment: true
-            });
+            variables_map.insert(
+                key.clone(),
+                Variable {
+                    name: key.clone(),
+                    value: value,
+                    environment: true,
+                },
+            );
         }
 
-        variables_map.insert(String::from("@"), Variable {
-            name: String::from("@"),
-            value: args.join(" "),
-            environment: false
-        });
+        variables_map.insert(
+            String::from("@"),
+            Variable {
+                name: String::from("@"),
+                value: args.join(" "),
+                environment: false,
+            },
+        );
 
         let mut term_settings = tcgetattr(shell_terminal).unwrap();
         reset_virtual_console(&mut term_settings, false, true);
 
         term_settings.local_flags = LocalFlags::ECHOCTL | LocalFlags::ISIG;
-        term_settings.control_flags = ControlFlags::CS8 | ControlFlags::HUPCL | ControlFlags::CREAD | (term_settings.control_flags & ControlFlags::CLOCAL);
+        term_settings.control_flags =
+            ControlFlags::CS8 | ControlFlags::HUPCL | ControlFlags::CREAD | (term_settings.control_flags & ControlFlags::CLOCAL);
         term_settings.control_chars[SpecialCharacterIndices::VTIME as usize] = 0;
         term_settings.control_chars[SpecialCharacterIndices::VMIN as usize] = 1;
 
@@ -497,8 +508,8 @@ impl Shell {
             builtins: builtins::get_builtin_registry(),
             exitcode: None,
             variables: variables_map,
-            history: VecDeque::new()
-        }
+            history: VecDeque::new(),
+        };
     }
 
     pub fn put_job_in_foreground(&self, job: &mut Job) {
@@ -508,14 +519,12 @@ impl Shell {
                 tcsetpgrp(self.terminal_fd, pgid).expect("Failed to put job into foreground");
                 job.wait();
                 tcsetpgrp(self.terminal_fd, self.parent_pgid).expect("Failed to get job control back from child process");
-            },
+            }
             None => {}
         }
     }
 
-    pub fn put_job_in_background(&self, _job: &Job) {
-        
-    }
+    pub fn put_job_in_background(&self, _job: &Job) {}
 
     pub fn is_interactive(&self) -> bool {
         return self.is_interactive;
@@ -525,7 +534,7 @@ impl Shell {
         return self.job_control;
     }
 
-    pub fn is_builtin(&self, name: &str) -> bool{
+    pub fn is_builtin(&self, name: &str) -> bool {
         return self.builtins.contains_key(name) || name.contains("=");
     }
 
@@ -539,7 +548,7 @@ impl Shell {
     pub fn get_variable(&self, name: &str) -> &str {
         return match self.variables.get(name) {
             Some(var) => var.value.as_str(),
-            None => ""
+            None => "",
         };
     }
 
@@ -567,10 +576,10 @@ impl Shell {
     }
 
     pub fn set_last_exit_code(&mut self, exit_code: u8) {
-        self.set_variable(Variable{
-            name: "?".to_owned(), 
-            value: exit_code.to_string(), 
-            environment: false
+        self.set_variable(Variable {
+            name: "?".to_owned(),
+            value: exit_code.to_string(),
+            environment: false,
         });
     }
 

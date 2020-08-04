@@ -1,18 +1,18 @@
-use super::serde::{ServiceDef, StageDef, DependencyDef, RestartMode};
+use super::serde::{DependencyDef, RestartMode, ServiceDef, StageDef};
 use super::Identifier;
-use std::convert::From;
 use std::cmp::Eq;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::fmt;
+use std::convert::From;
 use std::ffi::{CStr, CString};
+use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::process::exit;
 
-use nix::unistd::{fork, ForkResult, execv, Pid, setuid, setgid, Uid, Gid};
 use nix::errno::Errno;
+use nix::unistd::{execv, fork, setgid, setuid, ForkResult, Gid, Pid, Uid};
 
 use libq::logger;
-use libq::passwd::{PasswdEntry, GroupEntry};
+use libq::passwd::{GroupEntry, PasswdEntry};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TaskStatus {
@@ -20,21 +20,18 @@ pub enum TaskStatus {
     Starting,
     Stopping,
     Stopped(i32),
-    Failed
+    Failed,
 }
 
 #[derive(Debug, Clone)]
 pub struct ServiceInstance {
     name: String,
-    args: HashMap<String, String>
+    args: HashMap<String, String>,
 }
 
 impl ServiceInstance {
     pub fn new(name: String, args: HashMap<String, String>) -> ServiceInstance {
-        return ServiceInstance {
-            name: name,
-            args: args
-        };
+        return ServiceInstance { name: name, args: args };
     }
 
     pub fn get_name(&self) -> &String {
@@ -73,9 +70,9 @@ impl From<DependencyDef> for ServiceInstance {
             name: item.name.to_lowercase(),
             args: match item.args {
                 None => HashMap::new(),
-                Some(a) => a
-            }
-        }
+                Some(a) => a,
+            },
+        };
     }
 }
 
@@ -93,10 +90,10 @@ impl PartialEq for ServiceInstance {
             match other.args.get(key) {
                 None => {
                     return false;
-                },
+                }
                 Some(other_val) if other_val != value => {
                     return false;
-                },
+                }
                 _ => {}
             }
         }
@@ -105,7 +102,7 @@ impl PartialEq for ServiceInstance {
     }
 }
 
-impl Eq for ServiceInstance{}
+impl Eq for ServiceInstance {}
 
 /// A trait that defines the minimum requirements for a task to be run by QInit
 pub trait Task {
@@ -138,15 +135,15 @@ impl From<ServiceDef> for Service {
             group: item.group,
             args: match item.args {
                 None => Vec::new(),
-                Some(args) => args
+                Some(args) => args,
             },
             restart_mode: item.restart.unwrap_or(RestartMode::OnCrash),
             requirements: match item.requirements {
                 None => Vec::new(),
-                Some(reqs) => reqs.into_iter().map(|dep| ServiceInstance::from(dep)).collect()
+                Some(reqs) => reqs.into_iter().map(|dep| ServiceInstance::from(dep)).collect(),
             },
-            command: item.command
-        }
+            command: item.command,
+        };
     }
 }
 
@@ -167,7 +164,7 @@ impl Task for Service {
         // Validate args
         if args.len() != self.args.len() {
             // Args are incomplete
-                return TaskStatus::Failed;
+            return TaskStatus::Failed;
         }
 
         for arg in self.args.iter() {
@@ -178,29 +175,25 @@ impl Task for Service {
         }
 
         let uid = match &self.user {
-            Some(Identifier::Name(name)) => {
-                match PasswdEntry::by_username(&name) {
-                    Some(user) => user.uid,
-                    None => {
-                        return TaskStatus::Failed;
-                    }
+            Some(Identifier::Name(name)) => match PasswdEntry::by_username(&name) {
+                Some(user) => user.uid,
+                None => {
+                    return TaskStatus::Failed;
                 }
             },
             Some(Identifier::ID(uid)) => *uid,
-            None => 0
+            None => 0,
         };
 
         let gid = match &self.user {
-            Some(Identifier::Name(name)) => {
-                match GroupEntry::by_groupname(&name) {
-                    Some(group) => group.gid,
-                    None => {
-                        return TaskStatus::Failed;
-                    }
+            Some(Identifier::Name(name)) => match GroupEntry::by_groupname(&name) {
+                Some(group) => group.gid,
+                None => {
+                    return TaskStatus::Failed;
                 }
             },
             Some(Identifier::ID(uid)) => *uid,
-            None => 0
+            None => 0,
         };
 
         // TODO: Do templating on command line string, split into argv, fork and record state
@@ -212,23 +205,29 @@ impl Task for Service {
         let logger = logger::with_name_as_json("qinit;task");
 
         let argv: Vec<&str> = replaced_command.split_whitespace().collect();
-        let argv: Vec<Vec<u8>> = argv.into_iter().map(|arg| CString::new(arg).unwrap().into_bytes_with_nul()).collect();
-        let argv = &argv.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
+        let argv: Vec<Vec<u8>> = argv
+            .into_iter()
+            .map(|arg| CString::new(arg).unwrap().into_bytes_with_nul())
+            .collect();
+        let argv = &argv
+            .iter()
+            .map(|arg| CStr::from_bytes_with_nul(arg).unwrap())
+            .collect::<Vec<&CStr>>()[..];
 
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
                 return TaskStatus::Running(Some(child));
-            },
+            }
             Ok(ForkResult::Child) => {
                 match setgid(Gid::from_raw(gid)) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(_) => {
                         exit(1);
                     }
                 };
 
                 match setuid(Uid::from_raw(uid)) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(_) => {
                         exit(1);
                     }
@@ -240,13 +239,12 @@ impl Task for Service {
                             if errno == Errno::ENOENT {
                                 std::process::exit(127);
                             }
-                        }
-                        else {
+                        } else {
                             logger.debug().with_string("error", err.to_string()).smsg("Failed to exec process");
                         }
                     }
                 }
-            },
+            }
             Err(_) => {
                 eprintln!("Fork failed");
             }

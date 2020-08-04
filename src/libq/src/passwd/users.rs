@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{BufReader, BufRead, Lines};
+use std::io::{BufRead, BufReader, Lines};
 use std::path::PathBuf;
 
 /// Represents a single line of /etc/passwd
@@ -11,19 +11,19 @@ pub struct PasswdEntry {
     pub gid: u32,
     pub groups: Vec<String>,
     pub home: PathBuf,
-    pub shell: PathBuf
+    pub shell: PathBuf,
 }
 
 pub struct Users {
-    lines: Lines<BufReader<File>>
+    lines: Lines<BufReader<File>>,
 }
 
 impl Users {
     pub fn new() -> Users {
         let file = File::open("/etc/passwd").expect("Failed to open /etc/passwd");
         return Users {
-            lines: BufReader::new(file).lines()
-        }
+            lines: BufReader::new(file).lines(),
+        };
     }
 }
 
@@ -32,8 +32,8 @@ impl Iterator for Users {
     fn next(&mut self) -> Option<Self::Item> {
         return match self.lines.next() {
             Some(Ok(line)) => Some(PasswdEntry::from_passwd_line(&line).unwrap()),
-            _ => None
-        }
+            _ => None,
+        };
     }
 }
 
@@ -51,7 +51,7 @@ impl PasswdEntry {
             gid: parts[3].parse().unwrap(),
             groups: parts[4].split_whitespace().map(|s| s.to_string()).collect(),
             home: PathBuf::from(parts[5]),
-            shell: PathBuf::from(parts[6])
+            shell: PathBuf::from(parts[6]),
         });
     }
 

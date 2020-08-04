@@ -1,14 +1,14 @@
 extern crate clap;
 extern crate nix;
 
-use clap::{App,Arg};
-use std::path::{Path};
+use clap::{App, Arg};
 use std::ffi::{CStr, CString};
+use std::path::Path;
 
-use nix::unistd::{chdir,chroot,close,execv};
-use nix::sys::stat::{stat,Mode};
 use nix::fcntl::{open, OFlag};
-use nix::mount::{mount, MsFlags, umount2, MntFlags};
+use nix::mount::{mount, umount2, MntFlags, MsFlags};
+use nix::sys::stat::{stat, Mode};
+use nix::unistd::{chdir, chroot, close, execv};
 
 fn switchroot(new_root: &Path) -> Result<(), ()> {
     if !new_root.exists() {
@@ -26,7 +26,10 @@ fn switchroot(new_root: &Path) -> Result<(), ()> {
         match stat(&*new_mount_path) {
             Ok(new_mount_stat) => {
                 if new_mount_stat.st_dev != new_root_stat.st_dev {
-                    eprintln!("System Filesystem {} is not on the current root. Skipping it.", new_mount_path.display());
+                    eprintln!(
+                        "System Filesystem {} is not on the current root. Skipping it.",
+                        new_mount_path.display()
+                    );
                 }
             }
             Err(e) => {
@@ -36,7 +39,12 @@ fn switchroot(new_root: &Path) -> Result<(), ()> {
         };
 
         if let Err(_) = mount::<Path, Path, str, str>(Some(&*old_mount_path), &*new_mount_path, None, MsFlags::MS_MOVE, None) {
-            eprintln!("Failed to move {} to {}, forcing umount of {}", old_mount_path.display(), new_mount_path.display(), old_mount_path.display());
+            eprintln!(
+                "Failed to move {} to {}, forcing umount of {}",
+                old_mount_path.display(),
+                new_mount_path.display(),
+                old_mount_path.display()
+            );
             umount2(old_mount_path, MntFlags::MNT_FORCE).expect("Failed to unmount old fs");
         }
     }
@@ -66,13 +74,35 @@ fn switchroot(new_root: &Path) -> Result<(), ()> {
 
 fn main() {
     let args = App::new("switch_root")
-                    .version("0.1")
-                    .author("Colin D. <colin@quirl.co.nz>")
-                    .about("Switch the root file system to another path, moving all mounted system fs' and deleting the old one")
-                    .arg(Arg::with_name("newroot").takes_value(true).value_name("NEWROOT").index(1).required(true).help("The new root directory"))
-                    .arg(Arg::with_name("init").takes_value(true).value_name("INIT").index(2).required(true).help("The init script to run"))
-                    .arg(Arg::with_name("initargs").takes_value(true).multiple(true).value_name("INITARGS").index(3).required(true).help("The args to give to the init script"))
-                    .get_matches();
+        .version("0.1")
+        .author("Colin D. <colin@quirl.co.nz>")
+        .about("Switch the root file system to another path, moving all mounted system fs' and deleting the old one")
+        .arg(
+            Arg::with_name("newroot")
+                .takes_value(true)
+                .value_name("NEWROOT")
+                .index(1)
+                .required(true)
+                .help("The new root directory"),
+        )
+        .arg(
+            Arg::with_name("init")
+                .takes_value(true)
+                .value_name("INIT")
+                .index(2)
+                .required(true)
+                .help("The init script to run"),
+        )
+        .arg(
+            Arg::with_name("initargs")
+                .takes_value(true)
+                .multiple(true)
+                .value_name("INITARGS")
+                .index(3)
+                .required(true)
+                .help("The args to give to the init script"),
+        )
+        .get_matches();
 
     let new_root = args.value_of("newroot").unwrap();
     if let Err(_) = switchroot(&Path::new(new_root)) {
@@ -82,9 +112,15 @@ fn main() {
     let init = args.value_of("init").unwrap();
     let mut init_args: Vec<&str> = args.values_of("initargs").unwrap().collect();
     init_args.insert(0, init);
-    
+
     let c_path = CString::new(init).unwrap();
-    let cstr_argv: Vec<Vec<u8>> = init_args.iter().map(|arg| CString::new(*arg).unwrap().into_bytes_with_nul()).collect();
-    let argv = &cstr_argv.iter().map(|arg| CStr::from_bytes_with_nul(arg).unwrap()).collect::<Vec<&CStr>>()[..];
+    let cstr_argv: Vec<Vec<u8>> = init_args
+        .iter()
+        .map(|arg| CString::new(*arg).unwrap().into_bytes_with_nul())
+        .collect();
+    let argv = &cstr_argv
+        .iter()
+        .map(|arg| CStr::from_bytes_with_nul(arg).unwrap())
+        .collect::<Vec<&CStr>>()[..];
     execv(&c_path, argv).expect("Failed executing init script");
 }

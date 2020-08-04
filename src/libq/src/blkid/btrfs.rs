@@ -1,10 +1,10 @@
-use strings::cstr_to_string;
-use super::superblock::{SuperBlock, OffsetSuperBlock};
 use super::device::UUID;
+use super::superblock::{OffsetSuperBlock, SuperBlock};
+use strings::cstr_to_string;
 
 /// BtrfsSuperBlock is a packed struct of the on disk structure of a
 /// superblock of a Btrfs file system
-#[repr (C, packed)]
+#[repr(C, packed)]
 pub struct BtrfsSuperBlock {
     checksum: [u8; 0x20],
     uuid: [u8; 0x10],
@@ -35,10 +35,10 @@ pub struct BtrfsSuperBlock {
     dev_items: [u16; 0x32],
     label: [u8; 0x100],
     cache_generation: u64,
-    uuid_tree_generation: u64
+    uuid_tree_generation: u64,
 }
 
-impl OffsetSuperBlock for BtrfsSuperBlock{
+impl OffsetSuperBlock for BtrfsSuperBlock {
     fn get_superblock_offset() -> u64 {
         // The first Btrfs superblock sits at 64k into the file system == 0x10000 bytes
         return 0x10000;

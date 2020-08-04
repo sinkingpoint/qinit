@@ -1,26 +1,26 @@
-extern crate libq;
-extern crate libfreudian;
 extern crate clap;
+extern crate libfreudian;
+extern crate libq;
 
 mod functions;
 
-use clap::{Arg, App};
+use clap::{App, Arg};
 
-use libfreudian::Bus;
 use libfreudian::api::{self, MessageType, ResponseType};
+use libfreudian::Bus;
 
-use functions::{handle_topic_request, handle_add_message, handle_get_message_request};
+use functions::{handle_add_message, handle_get_message_request, handle_topic_request};
 
-use std::os::unix::net::{UnixStream, UnixListener};
-use std::path::PathBuf;
 use std::fs;
-use std::thread;
 use std::io::{self, Read, Write};
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 use libq::daemon::write_pid_file;
 
-fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<(), io::Error>{
+fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<(), io::Error> {
     loop {
         let mut header_buffer = [0, 0, 0];
         stream.read_exact(&mut header_buffer)?;
@@ -29,7 +29,7 @@ fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<()
         let mut message_buffer: Vec<u8> = Vec::with_capacity(message_length);
         message_buffer.resize(message_length, 0 as u8);
         match stream.read_exact(&mut message_buffer) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 eprintln!("{}", e);
                 stream.write_all(&vec![ResponseType::MalformedRequest.into()])?;
@@ -43,7 +43,7 @@ fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<()
             MessageType::Subscribe => handle_topic_request(bus, api::parse_as_subscribe_request(&message_buffer)),
             MessageType::ProduceMessage => handle_add_message(bus, api::parse_as_put_message_request(&message_buffer)),
             MessageType::GetMessage => handle_get_message_request(bus, api::parse_as_get_message_request(&message_buffer)),
-            _ => Ok(vec![ResponseType::Ok.into()])
+            _ => Ok(vec![ResponseType::Ok.into()]),
         };
 
         let response = match response {
@@ -60,18 +60,28 @@ fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<()
 
 fn main() {
     let args = App::new("freudian")
-                    .version("0.1")
-                    .author("Colin D. <colin@quirl.co.nz>")
-                    .about("message bus daemon")
-                    .arg(Arg::with_name("pidfile").takes_value(true).long("pidfile").help("Sets the PID file to use"))
-                    .arg(Arg::with_name("socketfile").takes_value(true).long("socket").help("Sets the socket file to use"))
-                    .get_matches();
+        .version("0.1")
+        .author("Colin D. <colin@quirl.co.nz>")
+        .about("message bus daemon")
+        .arg(
+            Arg::with_name("pidfile")
+                .takes_value(true)
+                .long("pidfile")
+                .help("Sets the PID file to use"),
+        )
+        .arg(
+            Arg::with_name("socketfile")
+                .takes_value(true)
+                .long("socket")
+                .help("Sets the socket file to use"),
+        )
+        .get_matches();
 
     let pidfile = PathBuf::from(args.value_of("pidfile").unwrap_or("/run/freudian/active.pid"));
     let socketfile = PathBuf::from(args.value_of("socketfile").unwrap_or("/run/freudian/socket"));
 
     match write_pid_file(pidfile) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
             eprintln!("{}", err);
             return;
@@ -98,7 +108,7 @@ fn main() {
         match stream {
             Ok(stream) => {
                 let mut bus_ptr = Arc::clone(&bus);
-                children.push(thread::spawn(move|| handle_client(&mut bus_ptr, stream)));
+                children.push(thread::spawn(move || handle_client(&mut bus_ptr, stream)));
             }
             Err(err) => {
                 println!("Failed to handle connection... {}", err);

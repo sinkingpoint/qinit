@@ -1,9 +1,9 @@
 extern crate libfreudian;
 
+use std::cmp::min;
+use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::io::{self, Read, Write};
-use std::cmp::min;
 
 use libfreudian::api::{MessageType, OneValueRequest, PutMessageRequest};
 
@@ -45,7 +45,7 @@ fn decode_status_output(data: Vec<u8>) -> Result<ResponseType, FreudianClientErr
     return Err(FreudianClientError::ExtraData); // We received a non empty body, while we assume an empty one
 }
 
-fn decode_message_output(data: Vec<u8>) -> Result<(ResponseType, String), FreudianClientError>{
+fn decode_message_output(data: Vec<u8>) -> Result<(ResponseType, String), FreudianClientError> {
     if data.len() == 0 {
         return Err(FreudianClientError::EmptyResponse);
     }
@@ -63,7 +63,7 @@ fn decode_message_output(data: Vec<u8>) -> Result<(ResponseType, String), Freudi
 
     return match String::from_utf8(iter.map(|x| *x).collect()) {
         Ok(s) => Ok((response, s)),
-        Err(_) => Err(FreudianClientError::ServerResponse(response))
+        Err(_) => Err(FreudianClientError::ServerResponse(response)),
     };
 }
 
@@ -74,50 +74,63 @@ pub struct FreudianClient {
 impl FreudianClient {
     pub fn new(socket: PathBuf) -> Result<FreudianClient, io::Error> {
         return match UnixStream::connect(socket) {
-            Ok(connection) => Ok(FreudianClient {
-                connection: connection
-            }),
-            Err(err) => Err(err)
-        }
+            Ok(connection) => Ok(FreudianClient { connection: connection }),
+            Err(err) => Err(err),
+        };
     }
 
-    pub fn create_topic(&mut self, topic_name: &str) -> Result<ResponseType, FreudianClientError>  {
-        let request = make_request(MessageType::CreateTopic, OneValueRequest::new(MessageType::CreateTopic, topic_name.to_string()).into_bytes());
+    pub fn create_topic(&mut self, topic_name: &str) -> Result<ResponseType, FreudianClientError> {
+        let request = make_request(
+            MessageType::CreateTopic,
+            OneValueRequest::new(MessageType::CreateTopic, topic_name.to_string()).into_bytes(),
+        );
         return match self.send_to_socket(request) {
             Ok(response) => decode_status_output(response),
-            Err(_) => Err(FreudianClientError::BrokenSocket)
+            Err(_) => Err(FreudianClientError::BrokenSocket),
         };
     }
-    
+
     pub fn delete_topic(&mut self, topic_name: &str) -> Result<ResponseType, FreudianClientError> {
-        let request = make_request(MessageType::DeleteTopic, OneValueRequest::new(MessageType::DeleteTopic, topic_name.to_string()).into_bytes());
+        let request = make_request(
+            MessageType::DeleteTopic,
+            OneValueRequest::new(MessageType::DeleteTopic, topic_name.to_string()).into_bytes(),
+        );
         return match self.send_to_socket(request) {
             Ok(response) => decode_status_output(response),
-            Err(_) => Err(FreudianClientError::BrokenSocket)
+            Err(_) => Err(FreudianClientError::BrokenSocket),
         };
     }
-    
+
     pub fn create_subscription(&mut self, topic_name: &str) -> Result<(ResponseType, String), FreudianClientError> {
-        let request = make_request(MessageType::Subscribe, OneValueRequest::new(MessageType::Subscribe, topic_name.to_string()).into_bytes());
+        let request = make_request(
+            MessageType::Subscribe,
+            OneValueRequest::new(MessageType::Subscribe, topic_name.to_string()).into_bytes(),
+        );
         return match self.send_to_socket(request) {
             Ok(response) => decode_message_output(response),
-            Err(_) => Err(FreudianClientError::BrokenSocket)
+            Err(_) => Err(FreudianClientError::BrokenSocket),
         };
     }
-    
+
     pub fn read_message(&mut self, sub_id: &str) -> Result<(ResponseType, String), FreudianClientError> {
-        let request = make_request(MessageType::GetMessage, OneValueRequest::new(MessageType::GetMessage, sub_id.to_string()).into_bytes());
+        let request = make_request(
+            MessageType::GetMessage,
+            OneValueRequest::new(MessageType::GetMessage, sub_id.to_string()).into_bytes(),
+        );
         return match self.send_to_socket(request) {
             Ok(response) => decode_message_output(response),
-            Err(_) => Err(FreudianClientError::BrokenSocket)
+            Err(_) => Err(FreudianClientError::BrokenSocket),
         };
     }
-    
+
     pub fn send_message(&mut self, topic_id: &str, message: &str) -> Result<ResponseType, FreudianClientError> {
-        let request = make_request(MessageType::ProduceMessage, PutMessageRequest::new(topic_id.to_string(), message.bytes().collect()).into_bytes());
+        let request = make_request(
+            MessageType::ProduceMessage,
+            PutMessageRequest::new(topic_id.to_string(), message.bytes().collect()).into_bytes(),
+        );
         return match self.send_to_socket(request) {
             Ok(response) => decode_status_output(response),
-            Err(_) => Err(FreudianClientError::BrokenSocket)
+            Err(_) => Err(FreudianClientError::BrokenSocket),
         };
     }
 
@@ -127,7 +140,7 @@ impl FreudianClient {
         let mut buffer: Vec<u8> = vec![0, 0, 0];
         self.connection.read_exact(&mut buffer)?;
         let message_size = ((buffer[1] as u16) << 8 | buffer[2] as u16) as usize;
-        let mut message_buffer = vec![0;message_size];
+        let mut message_buffer = vec![0; message_size];
         self.connection.read_exact(&mut message_buffer)?;
 
         buffer.append(&mut message_buffer);

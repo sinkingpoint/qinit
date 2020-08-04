@@ -1,16 +1,16 @@
-use std::path::PathBuf;
-use std::fs::read_link;
-use std::fmt;
-use io::to_absolute_from_relative;
-use super::ext::{ExtSuperBlock, Ext3SuperBlock, Ext4SuperBlock};
-use super::fat::{FAT12SuperBlock, FAT16SuperBlock, FAT32SuperBlock};
 use super::btrfs::BtrfsSuperBlock;
-use super::superblock::{SuperBlock, FromDevice};
+use super::ext::{Ext3SuperBlock, Ext4SuperBlock, ExtSuperBlock};
+use super::fat::{FAT12SuperBlock, FAT16SuperBlock, FAT32SuperBlock};
+use super::superblock::{FromDevice, SuperBlock};
+use io::to_absolute_from_relative;
+use std::fmt;
+use std::fs::read_link;
+use std::path::PathBuf;
 
 /// Represents a Device in the /dev file system which can be probed
 #[derive(Debug)]
 pub struct Device {
-    path: PathBuf
+    path: PathBuf,
 }
 
 impl Device {
@@ -24,16 +24,12 @@ impl Device {
             }
         };
 
-        return Ok(Device{
-            path: link
-        });
+        return Ok(Device { path: link });
     }
 
     /// Constructs a device from a given path
     pub fn from_path(path: PathBuf) -> Result<Device, String> {
-        return Ok(Device{
-            path: path
-        });
+        return Ok(Device { path: path });
     }
 
     pub fn get_path(&self) -> PathBuf {
@@ -42,56 +38,56 @@ impl Device {
 
     pub fn probe(&self) -> Option<ProbeResult> {
         let probes: Vec<Box<Prober>> = vec![
-            Box::new(Prober{
+            Box::new(Prober {
                 name: "ext4",
                 version: "1.0",
                 usage: "filesystem",
-                probe: &Ext4SuperBlock::from_raw_device
+                probe: &Ext4SuperBlock::from_raw_device,
             }),
-            Box::new(Prober{
+            Box::new(Prober {
                 name: "ext3",
                 version: "1.0",
                 usage: "filesystem",
-                probe: &Ext3SuperBlock::from_raw_device
+                probe: &Ext3SuperBlock::from_raw_device,
             }),
-            Box::new(Prober{
+            Box::new(Prober {
                 name: "ext2",
                 version: "1.0",
                 usage: "filesystem",
-                probe: &ExtSuperBlock::from_raw_device
+                probe: &ExtSuperBlock::from_raw_device,
             }),
-            Box::new(Prober{
+            Box::new(Prober {
                 name: "btrfs",
                 version: "",
                 usage: "filesystem",
-                probe: &BtrfsSuperBlock::from_raw_device
+                probe: &BtrfsSuperBlock::from_raw_device,
             }),
-            Box::new(Prober{
+            Box::new(Prober {
                 name: "vfat",
                 version: "fat32",
                 usage: "filesystem",
-                probe: &FAT32SuperBlock::from_raw_device
+                probe: &FAT32SuperBlock::from_raw_device,
             }),
-            Box::new(Prober{
+            Box::new(Prober {
                 name: "vfat",
                 version: "fat32",
                 usage: "filesystem",
-                probe: &FAT16SuperBlock::from_raw_device
+                probe: &FAT16SuperBlock::from_raw_device,
             }),
-            Box::new(Prober{
+            Box::new(Prober {
                 name: "vfat",
                 version: "fat12",
                 usage: "filesystem",
-                probe: &FAT12SuperBlock::from_raw_device
-            })
+                probe: &FAT12SuperBlock::from_raw_device,
+            }),
         ];
-    
+
         for probe in probes.iter() {
             if let Some(superblock) = (probe.probe)(self) {
                 return Some(ProbeResult::from(self, probe, superblock));
             }
         }
-    
+
         return None;
     }
 }
@@ -99,22 +95,22 @@ impl Device {
 /// Represents a variable length (either 16 or 8 bytes) UUID for a device
 /// Has the ability to print them nicely as a string
 pub struct UUID {
-    bytes: Vec<u8>
+    bytes: Vec<u8>,
 }
 
 impl UUID {
     /// Constructs a 16 byte uuid from a 16 u8 long slice, printed as xxxx-xx-xx-xx-xxxxxx
-    pub fn from_slice16(bytes: [u8;16]) -> UUID {
-        return UUID{
-            bytes: bytes.iter().map(|x| *x).collect()
-        }
+    pub fn from_slice16(bytes: [u8; 16]) -> UUID {
+        return UUID {
+            bytes: bytes.iter().map(|x| *x).collect(),
+        };
     }
 
     /// Constructs a 8 byte uuid from a 8 u8 long slice, printed as xxxx-xxxx
-    pub fn from_slice8(bytes: [u8;8]) -> UUID {
-        return UUID{
-            bytes: bytes.iter().map(|x| *x).collect()
-        }
+    pub fn from_slice8(bytes: [u8; 8]) -> UUID {
+        return UUID {
+            bytes: bytes.iter().map(|x| *x).collect(),
+        };
     }
 }
 
@@ -123,18 +119,16 @@ impl fmt::Display for UUID {
         let parts: Vec<u8>;
         if self.bytes.len() == 16 {
             parts = vec![4, 2, 2, 2, 6];
-        }
-        else if self.bytes.len() == 8 {
+        } else if self.bytes.len() == 8 {
             parts = vec![4, 4];
-        }
-        else {
+        } else {
             return Ok(());
         }
-        
+
         let mut i = 0;
         for part_index in 0..parts.len() {
             for j in 0..parts[part_index] {
-                write!(f, "{:02x}", self.bytes[(i+j) as usize])?;
+                write!(f, "{:02x}", self.bytes[(i + j) as usize])?;
             }
 
             if part_index < parts.len() - 1 {
@@ -143,7 +137,7 @@ impl fmt::Display for UUID {
 
             i += parts[part_index];
         }
-        
+
         return Ok(());
     }
 }
@@ -152,7 +146,7 @@ struct Prober {
     name: &'static str,
     version: &'static str,
     usage: &'static str,
-    probe: &'static dyn Fn(&Device) -> Option<Box<dyn SuperBlock>>
+    probe: &'static dyn Fn(&Device) -> Option<Box<dyn SuperBlock>>,
 }
 
 pub struct ProbeResult {
@@ -195,7 +189,7 @@ impl fmt::Display for ProbeResult {
         if self.version != "" {
             write!(f, "VERSION=\"{}\" ", &self.version)?;
         }
-        
+
         write!(f, "TYPE=\"{}\" ", &self.fs_name)?;
         write!(f, "USAGE=\"{}\" ", &self.usage)?;
 

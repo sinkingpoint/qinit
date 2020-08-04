@@ -1,10 +1,10 @@
-use libq::terminal::{self, AnsiEscapeCode};
 use libq::io::STDIN_FD;
+use libq::terminal::{self, AnsiEscapeCode};
 
-use std::io::{self, stdout, Write, BufRead, StdoutLock};
-use std::fs::File;
-use std::cmp::{min, max};
+use std::cmp::{max, min};
 use std::convert::TryFrom;
+use std::fs::File;
+use std::io::{self, stdout, BufRead, StdoutLock, Write};
 
 use shell::Shell;
 
@@ -17,16 +17,16 @@ pub trait LineReader {
 pub struct ShStdin {
     typed_buffer: String,
     history_index: usize,
-    head: usize
+    head: usize,
 }
 
 pub struct InputFile {
-    stream: io::BufReader<File>
+    stream: io::BufReader<File>,
 }
 
 impl InputFile {
     pub fn new(f: File) -> InputFile {
-        return InputFile{
+        return InputFile {
             stream: io::BufReader::new(f),
         };
     }
@@ -37,8 +37,8 @@ impl ShStdin {
         return ShStdin {
             typed_buffer: String::new(),
             history_index: 0,
-            head: 0
-        }
+            head: 0,
+        };
     }
 
     fn reset(&mut self) {
@@ -54,14 +54,19 @@ impl ShStdin {
 
         if self.head == dest.len() {
             dest.pop();
-        }
-        else {
-            dest.remove(self.head-1);
+        } else {
+            dest.remove(self.head - 1);
         }
 
         self.head -= 1;
 
-        write!(stdout_handle, "{}{}{}", terminal::BACKSPACE_BYTE as char, AnsiEscapeCode::EraseInLine(0), &dest[self.head..]);
+        write!(
+            stdout_handle,
+            "{}{}{}",
+            terminal::BACKSPACE_BYTE as char,
+            AnsiEscapeCode::EraseInLine(0),
+            &dest[self.head..]
+        );
         if dest.len() > self.head {
             write!(stdout_handle, "{}", AnsiEscapeCode::CursorBack((dest.len() - self.head) as u32));
         }
@@ -86,8 +91,7 @@ impl ShStdin {
         self.head = (i32::try_from(self.head).unwrap() + new_amt) as usize;
         if new_amt > 0 {
             write!(stdout_handle, "{}", AnsiEscapeCode::CursorForward(amt as u32).to_string()).expect("Failed to write to stdout");
-        }
-        else if new_amt < 0 {
+        } else if new_amt < 0 {
             write!(stdout_handle, "{}", AnsiEscapeCode::CursorBack((-amt) as u32).to_string()).expect("Failed to write to stdout");
         }
     }
@@ -115,8 +119,7 @@ impl ShStdin {
         dest.clear();
         if self.history_index == 0 {
             dest.push_str(self.typed_buffer.as_str());
-        }
-        else {
+        } else {
             dest.push_str(shell.get_history_line(self.history_index - 1).unwrap().as_str());
         }
 
@@ -124,25 +127,24 @@ impl ShStdin {
         self.head = dest.len();
     }
 
-    fn handle_control_char(&mut self, dest: &mut String, shell: &mut Shell, byte: u8, stdout_handle: &mut StdoutLock) -> io::Result<()>{
+    fn handle_control_char(&mut self, dest: &mut String, shell: &mut Shell, byte: u8, stdout_handle: &mut StdoutLock) -> io::Result<()> {
         if byte == terminal::ESCAPE_CHAR {
             match AnsiEscapeCode::read_from_stdin() {
                 Some(AnsiEscapeCode::CursorForward(n)) => {
                     self.move_cursor(dest, i32::try_from(n).unwrap(), stdout_handle);
-                },
+                }
                 Some(AnsiEscapeCode::CursorBack(n)) => {
                     self.move_cursor(dest, -(i32::try_from(n).unwrap()), stdout_handle);
-                },
+                }
                 Some(AnsiEscapeCode::CursorUp(n)) => {
                     self.move_in_history(dest, shell, i32::try_from(n).unwrap(), stdout_handle);
-                },
+                }
                 Some(AnsiEscapeCode::CursorDown(n)) => {
                     self.move_in_history(dest, shell, -(i32::try_from(n).unwrap()), stdout_handle);
-                },
+                }
                 _ => {}
             }
-        }
-        else {
+        } else {
             stdout_handle.write_all(&[byte]).expect("Failed to write to stdout");
         }
 
@@ -153,11 +155,10 @@ impl ShStdin {
         let c: char = byte.into();
         if self.head == dest.len() {
             dest.push(c);
-        }
-        else {
+        } else {
             dest.insert(self.head, c);
         }
-        
+
         self.head += 1;
 
         write!(stdout_handle, "{}{}", AnsiEscapeCode::EraseInLine(0), &dest[self.head..]).expect("Failed to write to stdout");
@@ -189,25 +190,25 @@ impl LineReader for ShStdin {
                     if dest.len() == 0 {
                         return Ok(0);
                     }
-                },
+                }
                 terminal::DELETE_BYTE | terminal::BACKSPACE_BYTE => {
                     self.backspace(dest, &mut stdout);
-                },
+                }
                 terminal::NEW_LINE_BYTE => {
                     self.new_line(dest, &mut stdout)?;
                     return Ok(dest.len() + 1);
-                },
+                }
                 terminal::CTRL_C_BYTE => {
                     self.sigint(dest, shell, &mut stdout);
                     return Ok(1);
-                },
+                }
                 byte if (byte as char).is_control() => {
                     self.handle_control_char(dest, shell, byte, &mut stdout)?;
-                },
+                }
                 byte => {
                     stdout.write_all(&[byte])?;
                     self.push_char(dest, byte, &mut stdout);
-                },
+                }
             }
 
             stdout.flush()?;

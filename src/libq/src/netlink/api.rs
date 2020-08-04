@@ -1,13 +1,13 @@
+use super::super::mem::{int_from_bytes_little_endian, long_from_bytes_little_endian, short_from_bytes_little_endian};
 use nix::unistd::getpid;
-use std::io::{self, Read};
-use std::convert::TryFrom;
 use num_enum::TryFromPrimitive;
-use super::super::mem::{long_from_bytes_little_endian, int_from_bytes_little_endian, short_from_bytes_little_endian};
-use std::ffi::{CStr};
+use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::ffi::CStr;
 use std::fmt;
+use std::io::{self, Read};
 
-libc_bitflags!{
+libc_bitflags! {
     #[allow(non_camel_case_types, dead_code)]
     pub struct NLMsgFlags : u16 {
         NLM_F_REQUEST as u16;
@@ -49,7 +49,7 @@ libc_bitflags! {
     }
 }
 
-libc_enum!{
+libc_enum! {
     #[allow(non_camel_case_types, dead_code)]
     #[derive(TryFromPrimitive)]
     #[repr(u16)]
@@ -109,11 +109,11 @@ libc_enum!{
         ARPHRD_IEEE80211_RADIOTAP as u16,
         ARPHRD_IEEE802154 as u16,
         ARPHRD_VOID as u16,
-        ARPHRD_NONE as u16,                
+        ARPHRD_NONE as u16,
     }
 }
 
-libc_enum!{
+libc_enum! {
     #[allow(non_camel_case_types, dead_code)]
     #[derive(TryFromPrimitive)]
     #[repr(u16)]
@@ -176,11 +176,11 @@ libc_enum!{
 #[derive(Debug)]
 #[repr(C)]
 pub struct NLMsgHeader {
-    pub length:          u32,    /* Length of message including header */
-    pub msg_type:        MessageType,    /* Type of message content */
-    pub flags:           NLMsgFlags,    /* Additional flags */
-    pub sequence_number: u32,    /* Sequence number */
-    pub pid:             u32     /* Sending process PID */
+    pub length: u32,           /* Length of message including header */
+    pub msg_type: MessageType, /* Type of message content */
+    pub flags: NLMsgFlags,     /* Additional flags */
+    pub sequence_number: u32,  /* Sequence number */
+    pub pid: u32,              /* Sending process PID */
 }
 
 impl NLMsgHeader {
@@ -190,11 +190,11 @@ impl NLMsgHeader {
             msg_type: msg_type,
             flags: flags,
             sequence_number: sequence_number,
-            pid: getpid().as_raw() as u32
+            pid: getpid().as_raw() as u32,
         };
     }
 
-    pub unsafe fn from_slice(data: &[u8;16]) -> NLMsgHeader{
+    pub unsafe fn from_slice(data: &[u8; 16]) -> NLMsgHeader {
         let length = (data[3] as u32) << 24 | (data[2] as u32) << 16 | (data[1] as u32) << 8 | (data[0] as u32);
         let msg_type = (data[5] as u16) << 8 | data[4] as u16;
         let flags = (data[7] as u16) << 8 | data[6] as u16;
@@ -206,7 +206,7 @@ impl NLMsgHeader {
             msg_type: MessageType::try_from(msg_type).unwrap(),
             flags: NLMsgFlags::from_bits(flags).unwrap(),
             sequence_number: sequence_number,
-            pid: pid
+            pid: pid,
         };
     }
 }
@@ -214,12 +214,12 @@ impl NLMsgHeader {
 #[derive(Debug)]
 #[repr(C)]
 pub struct IFInfoMsg {
-    _ifi_family:     u8,
-    _ifi_pad:        u8,
-    pub interface_type:  InterfaceType, /* Device type */
-    pub interface_index: i32, /* Interface index */
+    _ifi_family: u8,
+    _ifi_pad: u8,
+    pub interface_type: InterfaceType,   /* Device type */
+    pub interface_index: i32,            /* Interface index */
     pub interface_flags: InterfaceFlags, /* Device flags  */
-    _ifi_change:     u32,
+    _ifi_change: u32,
 }
 
 impl IFInfoMsg {
@@ -230,7 +230,7 @@ impl IFInfoMsg {
             interface_type: msg_type,
             interface_index: index,
             interface_flags: flags,
-            _ifi_change: 0xFFFFFFFF
+            _ifi_change: 0xFFFFFFFF,
         };
     }
 
@@ -240,19 +240,23 @@ impl IFInfoMsg {
 }
 
 #[derive(Debug)]
-pub struct MacAddress(pub [u8;6]);
+pub struct MacAddress(pub [u8; 6]);
 
 impl fmt::Display for MacAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        return write!(f, "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}", self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]);
+        return write!(
+            f,
+            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
+        );
     }
 }
 
-pub type IPv4Addr = [u8;4];
+pub type IPv4Addr = [u8; 4];
 
 #[derive(Debug)]
 pub struct LinkStats {
-    rx_packets: u32,		/* total packets received	*/
+    rx_packets: u32, /* total packets received	*/
     u16tx_packets: u32,
     u16rx_bytes: u32,
     u16tx_bytes: u32,
@@ -262,7 +266,7 @@ pub struct LinkStats {
     u16tx_dropped: u32,
     u16multicast: u32,
     u16collisions: u32,
-    
+
     /* detailed rx_errors: */
     u16rx_length_errors: u32,
     u16rx_over_errors: u32,
@@ -270,18 +274,18 @@ pub struct LinkStats {
     u16rx_frame_errors: u32,
     u16rx_fifo_errors: u32,
     u16rx_missed_errors: u32,
-    
+
     /* detailed tx_errors */
     u16tx_aborted_errors: u32,
     u16tx_carrier_errors: u32,
     u16tx_fifo_errors: u32,
     u16tx_heartbeat_errors: u32,
     u16tx_window_errors: u32,
-    
+
     /* for cslip etc */
     u16rx_compressed: u32,
     u16tx_compressed: u32,
-    
+
     u16rx_nohandler: u32,
 }
 
@@ -292,7 +296,7 @@ impl TryFrom<Vec<u8>> for LinkStats {
             return Err("Length isn't 96 bytes");
         }
 
-        return Ok(LinkStats{
+        return Ok(LinkStats {
             rx_packets: int_from_bytes_little_endian(vec[0], vec[1], vec[2], vec[3]),
             u16tx_packets: int_from_bytes_little_endian(vec[4], vec[5], vec[6], vec[7]),
             u16rx_bytes: int_from_bytes_little_endian(vec[8], vec[9], vec[10], vec[11]),
@@ -323,7 +327,7 @@ impl TryFrom<Vec<u8>> for LinkStats {
 
 #[derive(Debug)]
 pub struct LinkStats64 {
-    rx_packets: u64,		/* total packets received	*/
+    rx_packets: u64, /* total packets received	*/
     u16tx_packets: u64,
     u16rx_bytes: u64,
     u16tx_bytes: u64,
@@ -333,7 +337,7 @@ pub struct LinkStats64 {
     u16tx_dropped: u64,
     u16multicast: u64,
     u16collisions: u64,
-    
+
     /* detailed rx_errors: */
     u16rx_length_errors: u64,
     u16rx_over_errors: u64,
@@ -341,18 +345,18 @@ pub struct LinkStats64 {
     u16rx_frame_errors: u64,
     u16rx_fifo_errors: u64,
     u16rx_missed_errors: u64,
-    
+
     /* detailed tx_errors */
     u16tx_aborted_errors: u64,
     u16tx_carrier_errors: u64,
     u16tx_fifo_errors: u64,
     u16tx_heartbeat_errors: u64,
     u16tx_window_errors: u64,
-    
+
     /* for cslip etc */
     u16rx_compressed: u64,
     u16tx_compressed: u64,
-    
+
     u16rx_nohandler: u64,
 }
 
@@ -363,7 +367,7 @@ impl TryFrom<Vec<u8>> for LinkStats64 {
             return Err("Length isn't 96 bytes");
         }
 
-        return Ok(LinkStats64{
+        return Ok(LinkStats64 {
             rx_packets: long_from_bytes_little_endian(vec[0], vec[1], vec[2], vec[3], vec[4], vec[5], vec[6], vec[7]),
             u16tx_packets: long_from_bytes_little_endian(vec[8], vec[9], vec[10], vec[11], vec[12], vec[13], vec[14], vec[15]),
             u16rx_bytes: long_from_bytes_little_endian(vec[16], vec[17], vec[18], vec[19], vec[20], vec[21], vec[22], vec[23]),
@@ -377,17 +381,33 @@ impl TryFrom<Vec<u8>> for LinkStats64 {
             u16rx_length_errors: long_from_bytes_little_endian(vec[80], vec[81], vec[82], vec[83], vec[84], vec[85], vec[86], vec[87]),
             u16rx_over_errors: long_from_bytes_little_endian(vec[88], vec[89], vec[90], vec[91], vec[92], vec[93], vec[94], vec[95]),
             u16rx_crc_errors: long_from_bytes_little_endian(vec[96], vec[97], vec[98], vec[99], vec[100], vec[101], vec[102], vec[103]),
-            u16rx_frame_errors: long_from_bytes_little_endian(vec[104], vec[105], vec[106], vec[107], vec[108], vec[109], vec[110], vec[111]),
-            u16rx_fifo_errors: long_from_bytes_little_endian(vec[112], vec[113], vec[114], vec[115], vec[116], vec[117], vec[118], vec[119]),
-            u16rx_missed_errors: long_from_bytes_little_endian(vec[120], vec[121], vec[122], vec[123], vec[124], vec[125], vec[126], vec[127]),
-            u16tx_aborted_errors: long_from_bytes_little_endian(vec[128], vec[129], vec[130], vec[131], vec[132], vec[133], vec[134], vec[135]),
-            u16tx_carrier_errors: long_from_bytes_little_endian(vec[136], vec[137], vec[138], vec[139], vec[140], vec[141], vec[142], vec[143]),
-            u16tx_fifo_errors: long_from_bytes_little_endian(vec[144], vec[145], vec[146], vec[147], vec[148], vec[149], vec[150], vec[151]),
-            u16tx_heartbeat_errors: long_from_bytes_little_endian(vec[152], vec[153], vec[154], vec[155], vec[156], vec[157], vec[158], vec[159]),
-            u16tx_window_errors: long_from_bytes_little_endian(vec[160], vec[161], vec[162], vec[163], vec[164], vec[165], vec[166], vec[167]),
+            u16rx_frame_errors: long_from_bytes_little_endian(
+                vec[104], vec[105], vec[106], vec[107], vec[108], vec[109], vec[110], vec[111],
+            ),
+            u16rx_fifo_errors: long_from_bytes_little_endian(
+                vec[112], vec[113], vec[114], vec[115], vec[116], vec[117], vec[118], vec[119],
+            ),
+            u16rx_missed_errors: long_from_bytes_little_endian(
+                vec[120], vec[121], vec[122], vec[123], vec[124], vec[125], vec[126], vec[127],
+            ),
+            u16tx_aborted_errors: long_from_bytes_little_endian(
+                vec[128], vec[129], vec[130], vec[131], vec[132], vec[133], vec[134], vec[135],
+            ),
+            u16tx_carrier_errors: long_from_bytes_little_endian(
+                vec[136], vec[137], vec[138], vec[139], vec[140], vec[141], vec[142], vec[143],
+            ),
+            u16tx_fifo_errors: long_from_bytes_little_endian(
+                vec[144], vec[145], vec[146], vec[147], vec[148], vec[149], vec[150], vec[151],
+            ),
+            u16tx_heartbeat_errors: long_from_bytes_little_endian(
+                vec[152], vec[153], vec[154], vec[155], vec[156], vec[157], vec[158], vec[159],
+            ),
+            u16tx_window_errors: long_from_bytes_little_endian(
+                vec[160], vec[161], vec[162], vec[163], vec[164], vec[165], vec[166], vec[167],
+            ),
             u16rx_compressed: long_from_bytes_little_endian(vec[168], vec[169], vec[170], vec[171], vec[172], vec[173], vec[174], vec[175]),
             u16tx_compressed: long_from_bytes_little_endian(vec[176], vec[177], vec[178], vec[179], vec[180], vec[181], vec[182], vec[183]),
-            u16rx_nohandler: long_from_bytes_little_endian(vec[184], vec[185], vec[186], vec[187], vec[188], vec[189], vec[190], vec[191]),        
+            u16rx_nohandler: long_from_bytes_little_endian(vec[184], vec[185], vec[186], vec[187], vec[188], vec[189], vec[190], vec[191]),
         });
     }
 }
@@ -397,7 +417,7 @@ pub enum RoutingAttribute {
     Unknown(u16, Vec<u8>),
     Address(MacAddress),
     Broadcast(MacAddress),
-    InterfaceName(String), 
+    InterfaceName(String),
     Mtu(u32),
     Link(u32),
     QDisc(String),
@@ -448,81 +468,162 @@ pub enum RoutingAttribute {
     MaxMtu(u32),
     PropList(Vec<u8>),
     AltIfName(Vec<u8>),
-    PermAddress(Vec<u8>)
+    PermAddress(Vec<u8>),
 }
 
 impl RoutingAttribute {
-    pub fn read<T>(data: &mut T) -> Result<(RoutingAttribute, u32), io::Error> where T: Read {
+    pub fn read<T>(data: &mut T) -> Result<(RoutingAttribute, u32), io::Error>
+    where
+        T: Read,
+    {
         const ALIGN_TO: u16 = 4;
-        let mut meta_buffer = [0;4];
+        let mut meta_buffer = [0; 4];
         data.read_exact(&mut meta_buffer)?;
 
         let length: u16 = short_from_bytes_little_endian(meta_buffer[0], meta_buffer[1]);
         let attr_type: u16 = short_from_bytes_little_endian(meta_buffer[2], meta_buffer[3]);
         let padding_length: u32 = (((length + ALIGN_TO - 1) & !(ALIGN_TO - 1)) - length) as u32;
 
-        let mut data_buffer = vec![0;length as usize - 4];
+        let mut data_buffer = vec![0; length as usize - 4];
         data.read_exact(&mut data_buffer);
 
-        let mut padding_buffer = vec![0;padding_length as usize];
+        let mut padding_buffer = vec![0; padding_length as usize];
         data.read_exact(&mut padding_buffer);
 
-        return Ok((match attr_type {
-            1 => RoutingAttribute::Address(MacAddress(data_buffer[..].try_into().unwrap())),
-            2 => RoutingAttribute::Broadcast(MacAddress(data_buffer[..].try_into().unwrap())),
-            3 => RoutingAttribute::InterfaceName(CStr::from_bytes_with_nul(&data_buffer).unwrap().to_str().unwrap().to_owned()),
-            4 => RoutingAttribute::Mtu(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            5 => RoutingAttribute::Link(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            6 => RoutingAttribute::QDisc(CStr::from_bytes_with_nul(&data_buffer).unwrap().to_str().unwrap().to_owned()),
-            7 => RoutingAttribute::Stats(LinkStats::try_from(data_buffer).unwrap()),
-            8 => RoutingAttribute::Cost(data_buffer),
-            9 => RoutingAttribute::Priority(data_buffer),
-            10 => RoutingAttribute::Master(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            11 => RoutingAttribute::Wireless(data_buffer),
-            12 => RoutingAttribute::ProtInfo(data_buffer),
-            13 => RoutingAttribute::TXQLen(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            14 => RoutingAttribute::Map(data_buffer),
-            15 => RoutingAttribute::Weight(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            16 => RoutingAttribute::OperationalState(data_buffer[0]),
-            17 => RoutingAttribute::LinkMode(data_buffer[0]),
-            18 => RoutingAttribute::LinkInfo(data_buffer),
-            19 => RoutingAttribute::NetNSPid(data_buffer),
-            20 => RoutingAttribute::Alias(CStr::from_bytes_with_nul(&data_buffer).unwrap().to_str().unwrap().to_owned()),
-            21 => RoutingAttribute::NumVfs(data_buffer),
-            22 => RoutingAttribute::VfInfoList(data_buffer),
-            23 => RoutingAttribute::Stats64(LinkStats64::try_from(data_buffer).unwrap()),
-            24 => RoutingAttribute::VfPorts(data_buffer),
-            25 => RoutingAttribute::PortSelf(data_buffer),
-            26 => RoutingAttribute::AfSpec(data_buffer),
-            27 => RoutingAttribute::Group((&data_buffer[..]).try_into().unwrap()),
-            28 => RoutingAttribute::NetNsFd(data_buffer),
-            29 => RoutingAttribute::ExtMask(data_buffer),
-            30 => RoutingAttribute::Promiscuity(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            31 => RoutingAttribute::NumTxQueues(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            32 => RoutingAttribute::NumRxQueues(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            33 => RoutingAttribute::Carrier(data_buffer[0]),
-            34 => RoutingAttribute::PhysPortId(data_buffer),
-            35 => RoutingAttribute::CarrierChanges(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            36 => RoutingAttribute::PhysSwitchId(data_buffer),
-            37 => RoutingAttribute::LinkNetNsId(data_buffer),
-            38 => RoutingAttribute::PhysPortName(data_buffer),
-            39 => RoutingAttribute::ProtoDown(data_buffer[0]),
-            40 => RoutingAttribute::GsoMaxSegs(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            41 => RoutingAttribute::GsoMaxSize(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            42 => RoutingAttribute::Pad(data_buffer),
-            43 => RoutingAttribute::Xdp(data_buffer),
-            44 => RoutingAttribute::Event(data_buffer),
-            45 => RoutingAttribute::NewNetNsId(data_buffer),
-            46 => RoutingAttribute::IfNetNsId(data_buffer),
-            47 => RoutingAttribute::CarrierUpCount(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            48 => RoutingAttribute::CarrierDownCount(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            49 => RoutingAttribute::NewIfIndex(data_buffer),
-            50 => RoutingAttribute::MinMtu(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            51 => RoutingAttribute::MaxMtu(int_from_bytes_little_endian(data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3])),
-            52 => RoutingAttribute::PropList(data_buffer),
-            53 => RoutingAttribute::AltIfName(data_buffer),
-            54 => RoutingAttribute::PermAddress(data_buffer),
-            _ => RoutingAttribute::Unknown(attr_type, data_buffer)
-        }, length as u32 + padding_length));
+        return Ok((
+            match attr_type {
+                1 => RoutingAttribute::Address(MacAddress(data_buffer[..].try_into().unwrap())),
+                2 => RoutingAttribute::Broadcast(MacAddress(data_buffer[..].try_into().unwrap())),
+                3 => RoutingAttribute::InterfaceName(CStr::from_bytes_with_nul(&data_buffer).unwrap().to_str().unwrap().to_owned()),
+                4 => RoutingAttribute::Mtu(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                5 => RoutingAttribute::Link(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                6 => RoutingAttribute::QDisc(CStr::from_bytes_with_nul(&data_buffer).unwrap().to_str().unwrap().to_owned()),
+                7 => RoutingAttribute::Stats(LinkStats::try_from(data_buffer).unwrap()),
+                8 => RoutingAttribute::Cost(data_buffer),
+                9 => RoutingAttribute::Priority(data_buffer),
+                10 => RoutingAttribute::Master(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                11 => RoutingAttribute::Wireless(data_buffer),
+                12 => RoutingAttribute::ProtInfo(data_buffer),
+                13 => RoutingAttribute::TXQLen(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                14 => RoutingAttribute::Map(data_buffer),
+                15 => RoutingAttribute::Weight(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                16 => RoutingAttribute::OperationalState(data_buffer[0]),
+                17 => RoutingAttribute::LinkMode(data_buffer[0]),
+                18 => RoutingAttribute::LinkInfo(data_buffer),
+                19 => RoutingAttribute::NetNSPid(data_buffer),
+                20 => RoutingAttribute::Alias(CStr::from_bytes_with_nul(&data_buffer).unwrap().to_str().unwrap().to_owned()),
+                21 => RoutingAttribute::NumVfs(data_buffer),
+                22 => RoutingAttribute::VfInfoList(data_buffer),
+                23 => RoutingAttribute::Stats64(LinkStats64::try_from(data_buffer).unwrap()),
+                24 => RoutingAttribute::VfPorts(data_buffer),
+                25 => RoutingAttribute::PortSelf(data_buffer),
+                26 => RoutingAttribute::AfSpec(data_buffer),
+                27 => RoutingAttribute::Group((&data_buffer[..]).try_into().unwrap()),
+                28 => RoutingAttribute::NetNsFd(data_buffer),
+                29 => RoutingAttribute::ExtMask(data_buffer),
+                30 => RoutingAttribute::Promiscuity(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                31 => RoutingAttribute::NumTxQueues(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                32 => RoutingAttribute::NumRxQueues(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                33 => RoutingAttribute::Carrier(data_buffer[0]),
+                34 => RoutingAttribute::PhysPortId(data_buffer),
+                35 => RoutingAttribute::CarrierChanges(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                36 => RoutingAttribute::PhysSwitchId(data_buffer),
+                37 => RoutingAttribute::LinkNetNsId(data_buffer),
+                38 => RoutingAttribute::PhysPortName(data_buffer),
+                39 => RoutingAttribute::ProtoDown(data_buffer[0]),
+                40 => RoutingAttribute::GsoMaxSegs(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                41 => RoutingAttribute::GsoMaxSize(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                42 => RoutingAttribute::Pad(data_buffer),
+                43 => RoutingAttribute::Xdp(data_buffer),
+                44 => RoutingAttribute::Event(data_buffer),
+                45 => RoutingAttribute::NewNetNsId(data_buffer),
+                46 => RoutingAttribute::IfNetNsId(data_buffer),
+                47 => RoutingAttribute::CarrierUpCount(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                48 => RoutingAttribute::CarrierDownCount(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                49 => RoutingAttribute::NewIfIndex(data_buffer),
+                50 => RoutingAttribute::MinMtu(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                51 => RoutingAttribute::MaxMtu(int_from_bytes_little_endian(
+                    data_buffer[0],
+                    data_buffer[1],
+                    data_buffer[2],
+                    data_buffer[3],
+                )),
+                52 => RoutingAttribute::PropList(data_buffer),
+                53 => RoutingAttribute::AltIfName(data_buffer),
+                54 => RoutingAttribute::PermAddress(data_buffer),
+                _ => RoutingAttribute::Unknown(attr_type, data_buffer),
+            },
+            length as u32 + padding_length,
+        ));
     }
 }

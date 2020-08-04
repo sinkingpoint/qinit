@@ -48,7 +48,10 @@ mod test_strings {
         let tokenizer = libq::strings::Tokenizer::new("cats #\"'and dogs\"", vec!['\n', ';', '|', '&', '#']);
         assert!(_is_same(vec!["cats", "#", "\"'and dogs\""], tokenizer.collect()));
         let tokenizer = libq::strings::Tokenizer::new("cats #\"'and dogs\"\nand pigs", vec!['\n', ';', '|', '&', '#']);
-        assert!(_is_same(vec!["cats", "#", "\"'and dogs\"", "\n", "and", "pigs"], tokenizer.collect()));
+        assert!(_is_same(
+            vec!["cats", "#", "\"'and dogs\"", "\n", "and", "pigs"],
+            tokenizer.collect()
+        ));
     }
 
     #[test]
@@ -111,10 +114,61 @@ done
 
 echo \"Mounting $root with options $options and type $root_type\"";
         let tokenizer = libq::strings::Tokenizer::new(program, vec!['\n', ';', '|', '&', '#']);
-        assert!(_is_same(vec!["cat", "/proc/cmdline", "|", "read", "cmdline", "\n", "local", "root=", "\n", "local", "root_type=auto", "\n", "local", "options=",
-                              "\n", "\n", "echo", "\"Parsing Commandline Flags\"", "\n", "for", "word", "in", "$cmdline", ";", "do", "\n",
-                              "case", "$word", "in", "\n", "root=*)", "\n", "echo", "\"Found root device line: $word\"", "\n", "root=${word#root=}", "\n", ";;", "\n",
-                              "ro)", "local", "options=\"$options,ro\"", ";;", "\n", "esac", "\n", "done", "\n", "\n", "echo", "\"Mounting $root with options $options and type $root_type\""],
-                        tokenizer.collect()));
+        assert!(_is_same(
+            vec![
+                "cat",
+                "/proc/cmdline",
+                "|",
+                "read",
+                "cmdline",
+                "\n",
+                "local",
+                "root=",
+                "\n",
+                "local",
+                "root_type=auto",
+                "\n",
+                "local",
+                "options=",
+                "\n",
+                "\n",
+                "echo",
+                "\"Parsing Commandline Flags\"",
+                "\n",
+                "for",
+                "word",
+                "in",
+                "$cmdline",
+                ";",
+                "do",
+                "\n",
+                "case",
+                "$word",
+                "in",
+                "\n",
+                "root=*)",
+                "\n",
+                "echo",
+                "\"Found root device line: $word\"",
+                "\n",
+                "root=${word#root=}",
+                "\n",
+                ";;",
+                "\n",
+                "ro)",
+                "local",
+                "options=\"$options,ro\"",
+                ";;",
+                "\n",
+                "esac",
+                "\n",
+                "done",
+                "\n",
+                "\n",
+                "echo",
+                "\"Mounting $root with options $options and type $root_type\""
+            ],
+            tokenizer.collect()
+        ));
     }
 }

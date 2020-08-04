@@ -1,14 +1,17 @@
-use std::io::{self, Write, Read};
 use std::fmt;
+use std::io::{self, Read, Write};
 
-use nix::pty::Winsize;
 use nix::libc::c_int;
-use nix::sys::termios::{Termios, ControlFlags, InputFlags, OutputFlags, LocalFlags, SpecialCharacterIndices};
+use nix::pty::Winsize;
+use nix::sys::termios::{ControlFlags, InputFlags, LocalFlags, OutputFlags, SpecialCharacterIndices, Termios};
 use nix::{ioctl_none, ioctl_read, ioctl_write_ptr};
 
 const ESC: &str = "\x1b[";
 
-pub fn set_cursor_position<T>(f: &mut T, x: u32, y: u32) -> Result<(), io::Error> where T: Write{
+pub fn set_cursor_position<T>(f: &mut T, x: u32, y: u32) -> Result<(), io::Error>
+where
+    T: Write,
+{
     // Format is ESC[x;yH
     f.write_all(&format!("{}{};{}H", ESC, x, y).as_bytes())?;
     return Ok(());
@@ -31,12 +34,15 @@ pub const DELETE_BYTE: u8 = 0x7F;
 pub const CARRIAGE_RETURN_BYTE: u8 = '\r' as u8;
 pub const NEW_LINE_BYTE: u8 = '\n' as u8;
 
-pub fn erase_display<T>(f: &mut T, mode: EraseDisplayMode) -> Result<(), io::Error> where T: Write{
+pub fn erase_display<T>(f: &mut T, mode: EraseDisplayMode) -> Result<(), io::Error>
+where
+    T: Write,
+{
     let mode_num = match mode {
         EraseDisplayMode::ToEnd => 0,
         EraseDisplayMode::FromBeginning => 1,
         EraseDisplayMode::All => 2,
-        EraseDisplayMode::AllAndClear => 3
+        EraseDisplayMode::AllAndClear => 3,
     };
 
     f.write_all(format!("{}{}J", ESC, mode_num).as_bytes())?;
@@ -84,40 +90,52 @@ impl TerminalColor {
             TerminalColor::BrightMagenta => 13,
             TerminalColor::BrightCyan => 14,
             TerminalColor::BrightWhite => 15,
-            TerminalColor::Reset => 39
-        }
+            TerminalColor::Reset => 39,
+        };
     }
 }
 
 /// Sets the terminals foreground color to the given color. Text after this will be that color
-pub fn set_foreground_color<T>(f: &mut T, c: TerminalColor) -> Result<(), io::Error> where T: Write{
+pub fn set_foreground_color<T>(f: &mut T, c: TerminalColor) -> Result<(), io::Error>
+where
+    T: Write,
+{
     let command: String = match c {
         TerminalColor::Reset => format!("{}39m", ESC),
-        _ => format!("{}38;5;{}m", ESC, c.to_num())
+        _ => format!("{}38;5;{}m", ESC, c.to_num()),
     };
     f.write_all(command.as_bytes())?;
     return Ok(());
 }
 
 /// Sets the terminals foreground color to the given raw rgb values
-pub fn set_foreground_color_raw<T>(f: &mut T, r: u8, g: u8, b: u8) -> Result<(), io::Error> where T: Write{
+pub fn set_foreground_color_raw<T>(f: &mut T, r: u8, g: u8, b: u8) -> Result<(), io::Error>
+where
+    T: Write,
+{
     let command: String = format!("{}38;2;{};{};{}m", ESC, r, g, b);
     f.write_all(command.as_bytes())?;
     return Ok(());
 }
 
 /// Sets the terminals background color to the given color. Text after this will be that color
-pub fn set_background_color<T>(f: &mut T, c: TerminalColor) -> Result<(), io::Error> where T: Write{
+pub fn set_background_color<T>(f: &mut T, c: TerminalColor) -> Result<(), io::Error>
+where
+    T: Write,
+{
     let command: String = match c {
         TerminalColor::Reset => format!("{}49m", ESC),
-        _ => format!("{}48;5;{}m", ESC, c.to_num())
+        _ => format!("{}48;5;{}m", ESC, c.to_num()),
     };
     f.write_all(command.as_bytes())?;
     return Ok(());
 }
 
 /// Sets the terminals background color to the given raw rgb values
-pub fn set_background_color_raw<T>(f: &mut T, r: u8, g: u8, b: u8) -> Result<(), io::Error> where T: Write{
+pub fn set_background_color_raw<T>(f: &mut T, r: u8, g: u8, b: u8) -> Result<(), io::Error>
+where
+    T: Write,
+{
     let command: String = format!("{}48;2;{};{};{}m", ESC, r, g, b);
     f.write_all(command.as_bytes())?;
     return Ok(());
@@ -129,8 +147,7 @@ pub fn set_echo_mode(settings: &mut Termios, echo: bool) {
 
     if echo {
         settings.local_flags |= local_flags;
-    }
-    else {
+    } else {
         settings.local_flags &= !local_flags;
     }
 }
@@ -138,7 +155,13 @@ pub fn set_echo_mode(settings: &mut Termios, echo: bool) {
 pub fn reset_virtual_console(settings: &mut Termios, keep_cflags: bool, utf8_support: bool) {
     let ttydef_iflag: InputFlags = InputFlags::BRKINT | InputFlags::ISTRIP | InputFlags::ICRNL | InputFlags::IXON | InputFlags::IXANY;
     let ttydef_oflag: OutputFlags = OutputFlags::OPOST | OutputFlags::ONLCR;
-    let ttydef_lflag: LocalFlags = LocalFlags::ECHO | LocalFlags::ICANON | LocalFlags::ISIG | LocalFlags::IEXTEN | LocalFlags::ECHOE | LocalFlags::ECHOCTL | LocalFlags::ECHOKE;
+    let ttydef_lflag: LocalFlags = LocalFlags::ECHO
+        | LocalFlags::ICANON
+        | LocalFlags::ISIG
+        | LocalFlags::IEXTEN
+        | LocalFlags::ECHOE
+        | LocalFlags::ECHOCTL
+        | LocalFlags::ECHOKE;
     let ttydef_cflag: ControlFlags = ControlFlags::CREAD | ControlFlags::CS7 | ControlFlags::PARENB | ControlFlags::HUPCL;
 
     settings.input_flags |= ttydef_iflag;
@@ -150,12 +173,27 @@ pub fn reset_virtual_console(settings: &mut Termios, keep_cflags: bool, utf8_sup
     }
 
     settings.input_flags |= InputFlags::BRKINT | InputFlags::ICRNL | InputFlags::IMAXBEL;
-    settings.input_flags &= !(InputFlags::IGNBRK | InputFlags::INLCR | InputFlags::IGNCR | InputFlags::IXOFF | InputFlags::IXANY | InputFlags::ISTRIP);
+    settings.input_flags &=
+        !(InputFlags::IGNBRK | InputFlags::INLCR | InputFlags::IGNCR | InputFlags::IXOFF | InputFlags::IXANY | InputFlags::ISTRIP);
 
-    settings.output_flags |= OutputFlags::OPOST | OutputFlags::ONLCR | OutputFlags::NL0 | OutputFlags::CR0 | OutputFlags::TAB0 | OutputFlags::BS0 | OutputFlags::VT0 | OutputFlags::FF0;
+    settings.output_flags |= OutputFlags::OPOST
+        | OutputFlags::ONLCR
+        | OutputFlags::NL0
+        | OutputFlags::CR0
+        | OutputFlags::TAB0
+        | OutputFlags::BS0
+        | OutputFlags::VT0
+        | OutputFlags::FF0;
     settings.output_flags &= !(OutputFlags::OLCUC | OutputFlags::OCRNL | OutputFlags::ONOCR | OutputFlags::ONLRET | OutputFlags::OFILL);
 
-    settings.local_flags |= LocalFlags::ISIG | LocalFlags::ICANON | LocalFlags::IEXTEN | LocalFlags::ECHO | LocalFlags::ECHOE | LocalFlags::ECHOK | LocalFlags::ECHOKE | LocalFlags::ECHOCTL;
+    settings.local_flags |= LocalFlags::ISIG
+        | LocalFlags::ICANON
+        | LocalFlags::IEXTEN
+        | LocalFlags::ECHO
+        | LocalFlags::ECHOE
+        | LocalFlags::ECHOK
+        | LocalFlags::ECHOKE
+        | LocalFlags::ECHOCTL;
     settings.local_flags &= !(LocalFlags::ECHONL | LocalFlags::ECHOPRT | LocalFlags::NOFLSH | LocalFlags::TOSTOP);
 
     if !keep_cflags {
@@ -165,8 +203,7 @@ pub fn reset_virtual_console(settings: &mut Termios, keep_cflags: bool, utf8_sup
 
     if utf8_support {
         settings.input_flags |= InputFlags::IUTF8;
-    }
-    else {
+    } else {
         settings.input_flags &= !(InputFlags::IUTF8);
     }
 
@@ -223,7 +260,7 @@ ioctl_read! {
 ioctl_read! {
     /// Gets current keyboard mode.  argp points to a long which is
     /// set to one of these:
-    /// 
+    ///
     /// K_RAW         0x00  /* Raw (scancode) mode */
     /// K_XLATE       0x01  /* Translate keycodes using keymap */
     /// K_MEDIUMRAW   0x02  /* Medium raw (scancode) mode */
@@ -256,7 +293,7 @@ pub enum AnsiEscapeCode {
     EraseInLine(u32),
     PageUp(u32),
     PageDown(u32),
-    Unknown(char, Option<u32>, Option<u32>, Option<u32>)
+    Unknown(char, Option<u32>, Option<u32>, Option<u32>),
 }
 
 impl fmt::Display for AnsiEscapeCode {
@@ -298,7 +335,7 @@ impl AnsiEscapeCode {
                 build.push(*cmd);
                 build
             }
-        }
+        };
     }
 
     pub fn read_from_stdin() -> Option<AnsiEscapeCode> {
@@ -314,7 +351,7 @@ impl AnsiEscapeCode {
                 Ok(0) | Err(_) => {
                     return None; // EOF before we completed
                 }
-                Ok(_) => {},
+                Ok(_) => {}
             };
 
             let byte = buffer[0];
@@ -322,12 +359,10 @@ impl AnsiEscapeCode {
 
             if chr != '[' && !hit_open {
                 return None; // Malformed. We expect [ immediately after the ESC which enters this function
-            }
-            else if chr == '[' {
+            } else if chr == '[' {
                 if hit_open {
                     return None; // Malformed, we expect [ only once
-                }
-                else {
+                } else {
                     hit_open = true;
                     continue;
                 }
@@ -336,7 +371,7 @@ impl AnsiEscapeCode {
             match chr {
                 c if c.is_numeric() => {
                     arg_buffer.push(c);
-                },
+                }
                 ';' => {
                     if num_args >= 3 {
                         return None; // Malformed. Too Many Args
@@ -347,7 +382,7 @@ impl AnsiEscapeCode {
                     args[num_args] = arg_buffer.parse().unwrap();
                     arg_buffer.clear();
                     num_args += 1;
-                },
+                }
                 c => {
                     command = c;
                     break;
@@ -378,15 +413,13 @@ impl AnsiEscapeCode {
             'K' => Some(AnsiEscapeCode::EraseInLine(args[0])),
             'S' => Some(AnsiEscapeCode::PageUp(args[0])),
             'T' => Some(AnsiEscapeCode::PageDown(args[0])),
-            c => {
-                match num_args {
-                    0 => Some(AnsiEscapeCode::Unknown(c, None, None, None)),
-                    1 => Some(AnsiEscapeCode::Unknown(c, Some(args[0]), None, None)),
-                    2 => Some(AnsiEscapeCode::Unknown(c, Some(args[0]), Some(args[1]), None)),
-                    3 => Some(AnsiEscapeCode::Unknown(c, Some(args[0]), Some(args[1]), Some(args[2]))),
-                    _ => None
-                }
-            }
-        }
+            c => match num_args {
+                0 => Some(AnsiEscapeCode::Unknown(c, None, None, None)),
+                1 => Some(AnsiEscapeCode::Unknown(c, Some(args[0]), None, None)),
+                2 => Some(AnsiEscapeCode::Unknown(c, Some(args[0]), Some(args[1]), None)),
+                3 => Some(AnsiEscapeCode::Unknown(c, Some(args[0]), Some(args[1]), Some(args[2]))),
+                _ => None,
+            },
+        };
     }
 }

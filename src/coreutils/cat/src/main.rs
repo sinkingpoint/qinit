@@ -1,20 +1,49 @@
 extern crate clap;
-use clap::{Arg, App};
-use std::io::{BufReader,BufRead};
+use clap::{App, Arg};
 use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 fn main() {
     let args = App::new("cat")
-                    .version("1.1")
-                    .author("Colin D. <colin@quirl.co.nz>")
-                    .about("concatenate files and print on the standard output")
-                    .arg(Arg::with_name("number-nonblank").short("b").long("number-nonblank").help("Print line numbers for non blank lines. Overrides -n").overrides_with("number"))
-                    .arg(Arg::with_name("show-ends").short("E").long("show-ends").help("display $ at end of each line"))
-                    .arg(Arg::with_name("number").short("-n").long("number").help("number all output lines"))
-                    .arg(Arg::with_name("squeeze-blank").short("-s").long("squeeze-blank").help("suppress repeated empty output lines"))
-                    .arg(Arg::with_name("show-tabs").short("-T").long("show-tabs").help("display TAB characters as ^I"))
-                    .arg(Arg::with_name("files").takes_value(true).value_name("FILE").multiple(true).index(1).default_value("/dev/stdin").hide_default_value(true))
-                    .get_matches();
+        .version("1.1")
+        .author("Colin D. <colin@quirl.co.nz>")
+        .about("concatenate files and print on the standard output")
+        .arg(
+            Arg::with_name("number-nonblank")
+                .short("b")
+                .long("number-nonblank")
+                .help("Print line numbers for non blank lines. Overrides -n")
+                .overrides_with("number"),
+        )
+        .arg(
+            Arg::with_name("show-ends")
+                .short("E")
+                .long("show-ends")
+                .help("display $ at end of each line"),
+        )
+        .arg(Arg::with_name("number").short("-n").long("number").help("number all output lines"))
+        .arg(
+            Arg::with_name("squeeze-blank")
+                .short("-s")
+                .long("squeeze-blank")
+                .help("suppress repeated empty output lines"),
+        )
+        .arg(
+            Arg::with_name("show-tabs")
+                .short("-T")
+                .long("show-tabs")
+                .help("display TAB characters as ^I"),
+        )
+        .arg(
+            Arg::with_name("files")
+                .takes_value(true)
+                .value_name("FILE")
+                .multiple(true)
+                .index(1)
+                .default_value("/dev/stdin")
+                .hide_default_value(true),
+        )
+        .get_matches();
 
     let number_nonblank = args.is_present("number-nonblank");
     let number = number_nonblank || args.is_present("number");
@@ -46,7 +75,7 @@ fn main() {
             };
 
             let is_whitespace = line.trim().len() == 0;
-            if is_whitespace && squeeze_blank{
+            if is_whitespace && squeeze_blank {
                 if currently_squeezing {
                     continue;
                 }

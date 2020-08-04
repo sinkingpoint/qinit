@@ -1,13 +1,13 @@
-use std::os::unix::io::{FromRawFd, RawFd};
-use std::io::{Read, Error, ErrorKind};
-use std::path::PathBuf;
-use nix::unistd::{write, read};
 use nix::sys::stat::FileStat;
+use nix::unistd::{read, write};
+use std::io::{Error, ErrorKind, Read};
+use std::os::unix::io::{FromRawFd, RawFd};
+use std::path::PathBuf;
 
 pub const STDIN_FD: RawFd = 0;
 pub const STDOUT_FD: RawFd = 1;
 pub const STDERR_FD: RawFd = 2;
-pub fn full_write_bytes(fd: RawFd, buf: &[u8]) -> nix::Result<usize>{
+pub fn full_write_bytes(fd: RawFd, buf: &[u8]) -> nix::Result<usize> {
     let mut count: usize = 0;
     while count < buf.len() {
         let size = match write(fd, &buf[count..]) {
@@ -15,8 +15,7 @@ pub fn full_write_bytes(fd: RawFd, buf: &[u8]) -> nix::Result<usize>{
             Err(errno) => {
                 if count == 0 {
                     return Err(errno);
-                }
-                else {
+                } else {
                     return Ok(count);
                 }
             }
@@ -28,20 +27,20 @@ pub fn full_write_bytes(fd: RawFd, buf: &[u8]) -> nix::Result<usize>{
     return Ok(count);
 }
 
-pub fn full_write_str(fd: RawFd, buf: &String) -> nix::Result<usize>{
+pub fn full_write_str(fd: RawFd, buf: &String) -> nix::Result<usize> {
     return full_write_bytes(fd, buf.as_bytes());
 }
 
 pub struct RawFdReader {
     /// RawFdReader provides a Read interface on a RawFd. Unlike a std::io::File, doesn't claim
     /// ownership of the underlying fd so `close`ing must be handled external to this
-    fd: RawFd
+    fd: RawFd,
 }
 
 impl FromRawFd for RawFdReader {
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
         Self { fd }
-    }   
+    }
 }
 
 impl Read for RawFdReader {
@@ -55,7 +54,7 @@ impl Read for RawFdReader {
                 }
                 return Err(Error::new(ErrorKind::Other, e));
             }
-        }
+        };
     }
 }
 
@@ -66,14 +65,14 @@ pub fn to_absolute_from_relative(base: &PathBuf, rel_path: &PathBuf) -> Result<P
     return new_path.canonicalize();
 }
 
-pub const S_IFMT:   u32 = 0o170000;
+pub const S_IFMT: u32 = 0o170000;
 pub const S_IFSOCK: u32 = 0o140000;
-pub const S_IFLNK:  u32 = 0o120000;
-pub const S_IFREG:  u32 = 0o100000;
-pub const S_IFBLK:  u32 = 0o060000;
-pub const S_IFDIR:  u32 = 0o040000;
-pub const S_IFCHR:  u32 = 0o020000;
-pub const S_IFIFO:  u32 = 0o010000;
+pub const S_IFLNK: u32 = 0o120000;
+pub const S_IFREG: u32 = 0o100000;
+pub const S_IFBLK: u32 = 0o060000;
+pub const S_IFDIR: u32 = 0o040000;
+pub const S_IFCHR: u32 = 0o020000;
+pub const S_IFIFO: u32 = 0o010000;
 
 pub const S_ISUID: u32 = 0o04000;
 pub const S_ISGID: u32 = 0o02000;
@@ -96,8 +95,7 @@ pub const S_IROTH: u32 = 0o00004;
 pub const S_IWOTH: u32 = 0o00002;
 pub const S_IXOTH: u32 = 0o00001;
 
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum FileType {
     Socket,
     Link,
@@ -105,25 +103,25 @@ pub enum FileType {
     BlockDevice,
     Directory,
     CharacterDevice,
-    Fifo
+    Fifo,
 }
 
 impl FileType {
-    pub fn from_stat(stat_result: FileStat) -> Result<FileType, ()>{
+    pub fn from_stat(stat_result: FileStat) -> Result<FileType, ()> {
         return FileType::from_mode(stat_result.st_mode);
     }
 
     pub fn from_mode(mode: u32) -> Result<FileType, ()> {
         return match mode & S_IFMT {
             S_IFSOCK => Ok(FileType::Socket),
-            S_IFLNK  => Ok(FileType::Link),
-            S_IFREG  => Ok(FileType::Regular),
-            S_IFBLK  => Ok(FileType::BlockDevice),
-            S_IFDIR  => Ok(FileType::Directory),
-            S_IFCHR  => Ok(FileType::CharacterDevice),
-            S_IFIFO  => Ok(FileType::Fifo),
-            _ => Err(())
-        }
+            S_IFLNK => Ok(FileType::Link),
+            S_IFREG => Ok(FileType::Regular),
+            S_IFBLK => Ok(FileType::BlockDevice),
+            S_IFDIR => Ok(FileType::Directory),
+            S_IFCHR => Ok(FileType::CharacterDevice),
+            S_IFIFO => Ok(FileType::Fifo),
+            _ => Err(()),
+        };
     }
 
     pub fn to_char(&self) -> char {
@@ -134,7 +132,7 @@ impl FileType {
             FileType::BlockDevice => 'b',
             FileType::Directory => 'd',
             FileType::CharacterDevice => 'c',
-            FileType::Fifo => 'f'
+            FileType::Fifo => 'f',
         }
     }
 }

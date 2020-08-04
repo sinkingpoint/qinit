@@ -16,10 +16,7 @@ pub fn read_struct<T, R: Read>(read: &mut R) -> io::Result<T> {
 }
 
 pub unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
-    ::std::slice::from_raw_parts(
-        (p as *const T) as *const u8,
-        ::std::mem::size_of::<T>(),
-    )
+    ::std::slice::from_raw_parts((p as *const T) as *const u8, ::std::mem::size_of::<T>())
 }
 
 #[inline]
@@ -34,5 +31,12 @@ pub fn int_from_bytes_little_endian(a: u8, b: u8, c: u8, d: u8) -> u32 {
 
 #[inline]
 pub fn long_from_bytes_little_endian(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) -> u64 {
-    return ((h as u64) << 56) | ((g as u64) << 48) | ((f as u64) << 40) | ((e as u64) << 32) | ((d as u64) << 24) | ((c as u64) << 16) | ((b as u64) << 8) | a as u64;
+    return ((h as u64) << 56)
+        | ((g as u64) << 48)
+        | ((f as u64) << 40)
+        | ((e as u64) << 32)
+        | ((d as u64) << 24)
+        | ((c as u64) << 16)
+        | ((b as u64) << 8)
+        | a as u64;
 }

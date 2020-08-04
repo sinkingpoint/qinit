@@ -1,7 +1,7 @@
-use super::device::{Device,UUID};
+use super::device::{Device, UUID};
 use mem::read_struct;
-use std::io::{Error, SeekFrom, Seek};
 use std::fs::File;
+use std::io::{Error, Seek, SeekFrom};
 
 pub trait SuperBlock {
     fn get_label(&self) -> Option<String>;
@@ -9,16 +9,23 @@ pub trait SuperBlock {
     fn validate_superblock(&self) -> bool;
 }
 
-pub trait OffsetSuperBlock : SuperBlock {
+pub trait OffsetSuperBlock: SuperBlock {
     fn get_superblock_offset() -> u64;
 }
 
-pub trait FromDevice where Self: Sized, Self: OffsetSuperBlock {
+pub trait FromDevice
+where
+    Self: Sized,
+    Self: OffsetSuperBlock,
+{
     fn from_raw_device(&Device) -> Option<Box<dyn SuperBlock>>;
     fn from_raw_device_unchecked(&Device) -> Result<Self, Error>;
 }
 
-impl<T: 'static> FromDevice for T where T: OffsetSuperBlock {
+impl<T: 'static> FromDevice for T
+where
+    T: OffsetSuperBlock,
+{
     fn from_raw_device_unchecked(d: &Device) -> Result<Self, Error> {
         let mut f = File::open(d.get_path())?;
         // First, seek into the file to the superblock offset

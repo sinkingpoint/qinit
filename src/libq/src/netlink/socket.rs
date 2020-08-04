@@ -1,25 +1,25 @@
-use nix::sys::socket::{AddressFamily, SockType, SockFlag, socket, sendmsg, MsgFlags};
+use nix::sys::socket::{sendmsg, socket, AddressFamily, MsgFlags, SockFlag, SockType};
 use nix::sys::uio::IoVec;
 use std::os::unix::io::RawFd;
 
-use super::super::mem::{any_as_u8_slice};
 use super::super::io::RawFdReader;
-use super::api::{NLMsgHeader, MessageType};
-use super::commands::{GetInterfacesCommand, NewInterfaceCommand, Interface};
+use super::super::mem::any_as_u8_slice;
+use super::api::{MessageType, NLMsgHeader};
+use super::commands::{GetInterfacesCommand, Interface, NewInterfaceCommand};
+use std::io::{BufReader, Read};
 use std::os::unix::io::FromRawFd;
-use std::io::{Read, BufReader};
 
 pub struct NLSocket {
     socket_fd: RawFd,
-    sequence_number: u32
+    sequence_number: u32,
 }
 
 impl NLSocket {
-    pub fn new() -> NLSocket{
+    pub fn new() -> NLSocket {
         return NLSocket {
             socket_fd: socket(AddressFamily::Netlink, SockType::Datagram, SockFlag::empty(), None).unwrap(),
-            sequence_number: 1
-        }
+            sequence_number: 1,
+        };
     }
 
     pub fn get_interfaces(&self) -> Vec<Interface> {
@@ -30,13 +30,11 @@ impl NLSocket {
         }
 
         match sendmsg(self.socket_fd, &[IoVec::from_slice(data)], &[], MsgFlags::empty(), None) {
-            Ok(_) => {},
-            Err(e) => {
-
-            }
+            Ok(_) => {}
+            Err(e) => {}
         }
 
-        let mut reader = unsafe{ BufReader::new(RawFdReader::from_raw_fd(self.socket_fd)) };
+        let mut reader = unsafe { BufReader::new(RawFdReader::from_raw_fd(self.socket_fd)) };
         let mut header_buffer: [u8; 16] = [0; 16];
 
         let mut interfaces = Vec::new();

@@ -1,27 +1,32 @@
+use super::api::ResponseType;
 use super::subscriber::Subscription;
 use std::collections::HashMap;
-use super::api::ResponseType;
-use std::thread;
 use std::fmt;
+use std::thread;
 
 #[derive(PartialEq)]
 pub enum TopicState {
     Steady,
     MarkedForDeletion,
-    MarkedForRecreation
+    MarkedForRecreation,
 }
 
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Message {
     offset: u64,
     message: Vec<u8>,
-    to_read_count: u32 // Count of subscribers yet to read this message
+    to_read_count: u32, // Count of subscribers yet to read this message
 }
 
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        return writeln!(f, "Message:<ID: {}, Contents: [{}], Still to Read: {}>", self.offset, self.message.iter().map(|m| m.to_string()).collect::<Vec<String>>().join(", "), self.to_read_count);
+        return writeln!(
+            f,
+            "Message:<ID: {}, Contents: [{}], Still to Read: {}>",
+            self.offset,
+            self.message.iter().map(|m| m.to_string()).collect::<Vec<String>>().join(", "),
+            self.to_read_count
+        );
     }
 }
 
@@ -42,7 +47,7 @@ impl Topic {
             subscribers: HashMap::new(),
             messages: Vec::new(),
             waiting_threads: Vec::new(),
-            current_offset: 1
+            current_offset: 1,
         };
     }
 
@@ -61,10 +66,10 @@ impl Topic {
 
         let new_offset = self.current_offset;
         self.current_offset += 1; // This is thread safe because we assume we're in the context of a locked Bus
-        let new_msg = Message{
+        let new_msg = Message {
             offset: new_offset,
             message: message,
-            to_read_count: self.subscribers.len() as u32
+            to_read_count: self.subscribers.len() as u32,
         };
 
         self.messages.push(new_msg);
@@ -87,7 +92,7 @@ impl Topic {
                         // TODO: Remove from messages self.messages.remove_item(message);
                     }
                     return Ok(Some(message.message.clone()));
-                },
+                }
                 None => {
                     return Ok(None);
                 }

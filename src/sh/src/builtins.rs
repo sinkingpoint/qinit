@@ -1,9 +1,9 @@
 use shell;
 
-use libq::io::{RawFdReader};
-use std::os::unix::io::FromRawFd;
+use libq::io::RawFdReader;
+use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader};
-use std::collections::{HashMap,VecDeque};
+use std::os::unix::io::FromRawFd;
 use strings;
 
 pub type Builtin = fn(&mut shell::Shell, &Vec<String>, &shell::IOTriple) -> i32;
@@ -25,7 +25,7 @@ trait ComparisonOperator {
     fn execute(&self, left: &Option<&String>, right: &Option<&String>) -> bool;
 }
 
-struct EqualsComparison{}
+struct EqualsComparison {}
 impl ComparisonOperator for EqualsComparison {
     fn as_string(&self) -> String {
         return String::from("==");
@@ -35,12 +35,12 @@ impl ComparisonOperator for EqualsComparison {
         return true;
     }
 
-    fn execute(&self, left: &Option<&String>, right: &Option<&String>) -> bool{
+    fn execute(&self, left: &Option<&String>, right: &Option<&String>) -> bool {
         return left.unwrap() == right.unwrap();
     }
 }
 
-struct NotEqualsComparison{}
+struct NotEqualsComparison {}
 impl ComparisonOperator for NotEqualsComparison {
     fn as_string(&self) -> String {
         return String::from("!=");
@@ -50,12 +50,12 @@ impl ComparisonOperator for NotEqualsComparison {
         return true;
     }
 
-    fn execute(&self, left: &Option<&String>, right: &Option<&String>) -> bool{
+    fn execute(&self, left: &Option<&String>, right: &Option<&String>) -> bool {
         return left.unwrap() != right.unwrap();
     }
 }
 
-struct NullComparison{}
+struct NullComparison {}
 impl ComparisonOperator for NullComparison {
     fn as_string(&self) -> String {
         return String::from("-n");
@@ -65,12 +65,12 @@ impl ComparisonOperator for NullComparison {
         return false;
     }
 
-    fn execute(&self, _left: &Option<&String>, right: &Option<&String>) -> bool{
+    fn execute(&self, _left: &Option<&String>, right: &Option<&String>) -> bool {
         return right.unwrap() == "";
     }
 }
 
-struct NotNullComparison{}
+struct NotNullComparison {}
 impl ComparisonOperator for NotNullComparison {
     fn as_string(&self) -> String {
         return String::from("-z");
@@ -80,18 +80,17 @@ impl ComparisonOperator for NotNullComparison {
         return false;
     }
 
-    fn execute(&self, _left: &Option<&String>, right: &Option<&String>) -> bool{
+    fn execute(&self, _left: &Option<&String>, right: &Option<&String>) -> bool {
         return right.unwrap() != "";
     }
 }
 
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 enum ComparisonState {
     Left,
     Comparison,
     Right,
-    Done
+    Done,
 }
 
 #[derive(Debug)]
@@ -99,38 +98,34 @@ struct ComparisonBuilder {
     state: ComparisonState,
     left: Option<String>,
     comparison: Option<String>,
-    right: Option<String>
+    right: Option<String>,
 }
 
 impl ComparisonBuilder {
-    fn new() -> ComparisonBuilder{
-        return ComparisonBuilder{
+    fn new() -> ComparisonBuilder {
+        return ComparisonBuilder {
             state: ComparisonState::Left,
             left: None,
             comparison: None,
             right: None,
-        }
+        };
     }
 
     fn ingest_token(&mut self, token: &String) -> Result<(), ()> {
-        if token.starts_with("-") && self.state == ComparisonState::Left{
+        if token.starts_with("-") && self.state == ComparisonState::Left {
             self.comparison = Some(token.clone());
             self.state = ComparisonState::Right;
-        }
-        else if self.state == ComparisonState::Left {
+        } else if self.state == ComparisonState::Left {
             self.left = Some(token.clone());
             self.state = ComparisonState::Comparison;
-        }
-        else if self.state == ComparisonState::Comparison {
+        } else if self.state == ComparisonState::Comparison {
             self.comparison = Some(token.clone());
             self.state = ComparisonState::Right;
-        }
-        else if self.state == ComparisonState::Right {
+        } else if self.state == ComparisonState::Right {
             self.right = Some(token.clone());
             self.state = ComparisonState::Done;
-        }
-        else if self.state == ComparisonState::Done && token == &String::from("]"){}
-        else {
+        } else if self.state == ComparisonState::Done && token == &String::from("]") {
+        } else {
             return Err(());
         }
 
@@ -143,38 +138,34 @@ impl ComparisonBuilder {
 
     fn execute(&self, shell: &shell::Shell) -> i32 {
         let comparisons: Vec<&dyn ComparisonOperator> = vec![
-            &EqualsComparison{},
-            &NotEqualsComparison{},
-            &NullComparison{},
-            &NotNullComparison{}
+            &EqualsComparison {},
+            &NotEqualsComparison {},
+            &NullComparison {},
+            &NotNullComparison {},
         ];
 
         for comparison in comparisons.iter() {
             if &comparison.as_string() == self.comparison.as_ref().unwrap() {
                 let left = match &self.left {
                     None => None,
-                    Some(left) => {
-                        match strings::do_value_pipeline(&left, shell) {
-                            Ok(words) => Some(words.join(" ")),
-                            Err(err) => {
-                                eprintln!("Bad Subtitution: {}", err);
-                                return 128;
-                            }
+                    Some(left) => match strings::do_value_pipeline(&left, shell) {
+                        Ok(words) => Some(words.join(" ")),
+                        Err(err) => {
+                            eprintln!("Bad Subtitution: {}", err);
+                            return 128;
                         }
-                    }
+                    },
                 };
 
                 let right = match &self.right {
                     None => None,
-                    Some(right) => {
-                        match strings::do_value_pipeline(&right, shell) {
-                            Ok(words) => Some(words.join(" ")),
-                            Err(err) => {
-                                eprintln!("Bad Subtitution: {}", err);
-                                return 128;
-                            }
+                    Some(right) => match strings::do_value_pipeline(&right, shell) {
+                        Ok(words) => Some(words.join(" ")),
+                        Err(err) => {
+                            eprintln!("Bad Subtitution: {}", err);
+                            return 128;
                         }
-                    }
+                    },
                 };
 
                 if comparison.requires_two_args() && left.is_none() {
@@ -244,18 +235,16 @@ fn _set_variables(shell: &mut shell::Shell, argv: &Vec<String>, environment: boo
 
         let (name, value) = match parts.len() {
             1 => (String::from(parts[0]), String::from(shell.get_variable(parts[0]))),
-            2 => {
-                match strings::do_value_pipeline(&String::from(parts[1]), shell) {
-                    Ok(words) => (String::from(parts[0]), words.join(" ")),
-                    Err(_err) => {
-                        eprintln!("Bad Substitution: {}", parts[1]);
-                        continue;
-                    }
+            2 => match strings::do_value_pipeline(&String::from(parts[1]), shell) {
+                Ok(words) => (String::from(parts[0]), words.join(" ")),
+                Err(_err) => {
+                    eprintln!("Bad Substitution: {}", parts[1]);
+                    continue;
                 }
             },
             _ => {
                 eprintln!("Bad Substitution: {}", token);
-                return 1
+                return 1;
             }
         };
 
@@ -265,11 +254,11 @@ fn _set_variables(shell: &mut shell::Shell, argv: &Vec<String>, environment: boo
 }
 
 fn export(shell: &mut shell::Shell, argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
-    return _set_variables(shell, argv, true)
+    return _set_variables(shell, argv, true);
 }
 
 fn local(shell: &mut shell::Shell, argv: &Vec<String>, _streams: &shell::IOTriple) -> i32 {
-    return _set_variables(shell, argv, false)
+    return _set_variables(shell, argv, false);
 }
 
 fn read(shell: &mut shell::Shell, argv: &Vec<String>, streams: &shell::IOTriple) -> i32 {
@@ -292,7 +281,7 @@ fn read(shell: &mut shell::Shell, argv: &Vec<String>, streams: &shell::IOTriple)
 
     let mut buffer = String::new();
     match input_file.read_line(&mut buffer) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => {
             println!("Failed to read from stdin");
             return 1;
@@ -309,12 +298,15 @@ fn read(shell: &mut shell::Shell, argv: &Vec<String>, streams: &shell::IOTriple)
                 shell.set_variable(shell::Variable::new(variable_name, current_variable, false));
                 current_variable = String::new();
             }
-        }
-        else {
+        } else {
             current_variable.push(chr);
         }
     }
 
-    shell.set_variable(shell::Variable::new(variable_names.pop_front().unwrap().trim_end().to_string(), current_variable, false));
+    shell.set_variable(shell::Variable::new(
+        variable_names.pop_front().unwrap().trim_end().to_string(),
+        current_variable,
+        false,
+    ));
     return 0;
 }

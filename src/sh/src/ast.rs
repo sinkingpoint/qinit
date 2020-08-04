@@ -1,9 +1,9 @@
-use shell;
 use nix::unistd::Pid;
+use shell;
 use std::fmt;
 use strings;
 
-pub trait ASTNode: fmt::Display{
+pub trait ASTNode: fmt::Display {
     fn execute(&self, &mut shell::Shell, Option<Pid>, &shell::IOTriple) -> i32;
     fn ingest_token(&mut self, &String) -> Result<bool, ParseError>;
     fn is_started(&self) -> bool;
@@ -21,15 +21,15 @@ impl ParseError {
     fn new(error: &str, continuable: bool) -> ParseError {
         return ParseError {
             error: String::from(error),
-            continuable: continuable
+            continuable: continuable,
         };
     }
 
     fn from_string(error: String, continuable: bool) -> ParseError {
         return ParseError {
             error: error,
-            continuable: continuable
-        }
+            continuable: continuable,
+        };
     }
 }
 
@@ -39,38 +39,38 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
     }
 
     let mut current_node: Box<dyn ASTNode> = Box::new(PipelineNode::new());
-    let mut block_stack:Vec<Box<dyn ASTNode>> = Vec::new();
+    let mut block_stack: Vec<Box<dyn ASTNode>> = Vec::new();
     let mut in_comment = false;
     block_stack.push(Box::new(ASTHead::new()));
-    
+
     for token in tokens {
         match token.as_str() {
-            _ if in_comment => {},
+            _ if in_comment => {}
             "#" => {
                 in_comment = true;
             }
             "if" if current_node.as_ref().is_complete() => {
                 block_stack.push(Box::new(IfNode::new()) as Box<dyn ASTNode>);
-            },
+            }
             "for" if current_node.as_ref().is_complete() => {
                 block_stack.push(Box::new(ForNode::new()) as Box<dyn ASTNode>);
-            },
+            }
             "case" if current_node.as_ref().is_complete() => {
                 block_stack.push(Box::new(CaseNode::new()) as Box<dyn ASTNode>);
-            },
+            }
             "then" | "fi" | "do" | "done" | "in" | ";;" | "esac" => {
                 if current_node.is_started() {
                     block_stack.last_mut().unwrap().ingest_node(current_node)?;
                 }
                 current_node = Box::new(PipelineNode::new());
-                
+
                 match block_stack.last_mut().unwrap().ingest_token(token) {
                     Ok(true) => {
                         let new_block = block_stack.pop().unwrap();
                         let last_block = block_stack.last_mut().unwrap();
                         last_block.ingest_node(new_block)?;
-                    },
-                    Ok(false) => {},
+                    }
+                    Ok(false) => {}
                     Err(err) => {
                         return Err(err);
                     }
@@ -81,16 +81,16 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
                     let last_block = block_stack.last_mut().unwrap();
                     last_block.ingest_node(new_block)?;
                 }
-            },
-            "&&" => {}, // TODO: And statements
-            "||" => {}, // TODO: Or Statements
+            }
+            "&&" => {} // TODO: And statements
+            "||" => {} // TODO: Or Statements
             _ => {
                 if token == "\n" && in_comment {
                     in_comment = false;
                 }
                 let node = match block_stack.last_mut() {
                     Some(node) if node.takes_tokens() => node,
-                    _ => &mut current_node
+                    _ => &mut current_node,
                 };
 
                 match node.ingest_token(token) {
@@ -99,13 +99,13 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
                             block_stack.last_mut().unwrap().ingest_node(current_node)?;
                         }
                         current_node = Box::new(PipelineNode::new());
-                    },
-                    Ok(false) => {},
+                    }
+                    Ok(false) => {}
                     Err(err) => {
                         return Err(err);
                     }
                 }
-            },
+            }
         }
     }
 
@@ -117,8 +117,7 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
         let new_block = block_stack.pop().unwrap();
         let last_block = block_stack.last_mut().unwrap();
         last_block.ingest_node(new_block)?;
-    }
-    else if block_stack.len() > 1 {
+    } else if block_stack.len() > 1 {
         return Err(ParseError::new("Unclosed block", true));
     }
 
@@ -126,14 +125,12 @@ pub fn parse_into_ast(tokens: &Vec<String>) -> Result<Box<dyn ASTNode>, ParseErr
 }
 
 struct ASTHead {
-    nodes: Vec<Box<dyn ASTNode>>
+    nodes: Vec<Box<dyn ASTNode>>,
 }
 
 impl ASTHead {
     fn new() -> ASTHead {
-        return ASTHead{
-            nodes: Vec::new()
-        };
+        return ASTHead { nodes: Vec::new() };
     }
 }
 
@@ -146,7 +143,7 @@ impl ASTNode for ASTHead {
 
         return match exit_codes.last() {
             None => 0,
-            Some(code) => *code
+            Some(code) => *code,
         };
     }
 
@@ -181,27 +178,26 @@ impl fmt::Display for ASTHead {
     }
 }
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 enum ConditionalBuildState {
     Variable,
     Condition,
     EndCondition,
     Body,
-    Done
+    Done,
 }
 
 struct Case {
     glob: String,
-    body: Vec<Box<dyn ASTNode>>
+    body: Vec<Box<dyn ASTNode>>,
 }
 
 impl Case {
-    fn new(glob:String) -> Case {
+    fn new(glob: String) -> Case {
         return Case {
             glob: glob,
-            body: Vec::new()
-        }
+            body: Vec::new(),
+        };
     }
 
     fn execute(&self, shell: &mut shell::Shell, pgid: Option<Pid>, streams: &shell::IOTriple) -> i32 {
@@ -217,7 +213,7 @@ impl Case {
 struct CaseNode {
     state: ConditionalBuildState,
     variable: String,
-    cases: Vec<Case>
+    cases: Vec<Case>,
 }
 
 impl CaseNode {
@@ -225,7 +221,7 @@ impl CaseNode {
         return CaseNode {
             state: ConditionalBuildState::Variable,
             variable: String::new(),
-            cases: Vec::new()
+            cases: Vec::new(),
         };
     }
 }
@@ -256,7 +252,7 @@ impl ASTNode for CaseNode {
     fn takes_tokens(&self) -> bool {
         return match &self.state {
             ConditionalBuildState::Variable | ConditionalBuildState::Condition => true,
-            _ => false
+            _ => false,
         };
     }
 
@@ -269,8 +265,7 @@ impl ASTNode for CaseNode {
                 if self.variable == "" {
                     self.variable = token.clone();
                     return Ok(false);
-                }
-                else if token == "in" {
+                } else if token == "in" {
                     self.state = ConditionalBuildState::Condition;
                     return Ok(false);
                 }
@@ -281,20 +276,22 @@ impl ASTNode for CaseNode {
                     self.cases.push(Case::new(token.trim_end_matches(")").to_string()));
                     self.state = ConditionalBuildState::Body;
                     return Ok(false);
-                }
-                else if token == "esac" {
+                } else if token == "esac" {
                     self.state = ConditionalBuildState::Done;
                     return Ok(true);
                 }
                 return Err(ParseError::from_string(format!("Parse error near {}", token), false));
-            },
+            }
             ConditionalBuildState::Body => {
                 if token == ";;" {
                     self.state = ConditionalBuildState::Condition;
                     return Ok(false);
                 }
-                return Err(ParseError::from_string(format!("Unexpected token `{}`. Expected start of new case", token), false));
-            },
+                return Err(ParseError::from_string(
+                    format!("Unexpected token `{}`. Expected start of new case", token),
+                    false,
+                ));
+            }
             _ => {
                 return Err(ParseError::from_string(format!("Unexpected token `{}`", token), false));
             }
@@ -308,7 +305,7 @@ impl ASTNode for CaseNode {
     fn is_complete(&self) -> bool {
         return match &self.state {
             ConditionalBuildState::Done => true,
-            _ => false
+            _ => false,
         };
     }
 
@@ -317,7 +314,7 @@ impl ASTNode for CaseNode {
             ConditionalBuildState::Body => {
                 self.cases.last_mut().unwrap().body.push(node);
                 return Ok(true);
-            },
+            }
             _ => {}
         }
 
@@ -344,7 +341,7 @@ struct ForNode {
     variable: String,
     state: ConditionalBuildState,
     iter: Vec<String>,
-    body: Vec<Box<dyn ASTNode>>
+    body: Vec<Box<dyn ASTNode>>,
 }
 
 impl ForNode {
@@ -354,7 +351,7 @@ impl ForNode {
             variable: String::new(),
             iter: Vec::new(),
             body: Vec::new(),
-        }
+        };
     }
 }
 
@@ -370,7 +367,7 @@ impl ASTNode for ForNode {
                             last_exit = node.execute(shell, pgid, streams);
                         }
                     }
-                },
+                }
                 Err(err) => {
                     eprintln!("{}", err);
                     last_exit = 255;
@@ -384,7 +381,7 @@ impl ASTNode for ForNode {
     fn takes_tokens(&self) -> bool {
         return match &self.state {
             ConditionalBuildState::Variable | ConditionalBuildState::Condition => true,
-            _ => false
+            _ => false,
         };
     }
 
@@ -393,55 +390,57 @@ impl ASTNode for ForNode {
             return Ok(false); // Skip whitespace chars
         }
         match &self.state {
-            ConditionalBuildState::Variable => {
-                match token.as_str() {
-                    "in" => {
-                        if self.variable == "" {
-                            return Err(ParseError::new("Expecting variable in for", false));
-                        }
-                        self.state = ConditionalBuildState::Condition;
-                        return Ok(false);
-                    },
-                    _ => {
-                        if self.variable != "" {
-                            return Err(ParseError::new("Expecting `in`", false));
-                        }
-                        self.variable = token.clone();
-                        return Ok(false);
+            ConditionalBuildState::Variable => match token.as_str() {
+                "in" => {
+                    if self.variable == "" {
+                        return Err(ParseError::new("Expecting variable in for", false));
                     }
+                    self.state = ConditionalBuildState::Condition;
+                    return Ok(false);
+                }
+                _ => {
+                    if self.variable != "" {
+                        return Err(ParseError::new("Expecting `in`", false));
+                    }
+                    self.variable = token.clone();
+                    return Ok(false);
                 }
             },
             ConditionalBuildState::Condition => {
                 match token.as_str() {
                     ";" => {
                         self.state = ConditionalBuildState::EndCondition;
-                    },
+                    }
                     _ => {
                         self.iter.push(token.to_string());
                     }
                 }
                 return Ok(false);
-            },
+            }
             ConditionalBuildState::EndCondition => {
                 match token.as_str() {
                     "do" => {
                         self.state = ConditionalBuildState::Body;
-                    },
+                    }
                     _ => {
-                        return Err(ParseError::from_string(format!("Unexpected token `{}`. Expected `do`", token), false));
+                        return Err(ParseError::from_string(
+                            format!("Unexpected token `{}`. Expected `do`", token),
+                            false,
+                        ));
                     }
                 }
                 return Ok(false);
-            },
-            ConditionalBuildState::Body => {
-                match token.as_str() {
-                    "done" => {
-                        self.state = ConditionalBuildState::Done;
-                        return Ok(true);
-                    },
-                    _ => {
-                        return Err(ParseError::from_string(format!("Unexpected token `{}`. Expected `done`", token), false));
-                    }
+            }
+            ConditionalBuildState::Body => match token.as_str() {
+                "done" => {
+                    self.state = ConditionalBuildState::Done;
+                    return Ok(true);
+                }
+                _ => {
+                    return Err(ParseError::from_string(
+                        format!("Unexpected token `{}`. Expected `done`", token),
+                        false,
+                    ));
                 }
             },
             ConditionalBuildState::Done => {
@@ -457,7 +456,7 @@ impl ASTNode for ForNode {
     fn is_complete(&self) -> bool {
         return match &self.state {
             ConditionalBuildState::Done => true,
-            _ => false
+            _ => false,
         };
     }
 
@@ -466,7 +465,7 @@ impl ASTNode for ForNode {
             ConditionalBuildState::Body => {
                 self.body.push(node);
                 return Ok(true);
-            },
+            }
             _ => {}
         }
 
@@ -492,7 +491,7 @@ impl fmt::Display for ForNode {
 struct IfNode {
     state: ConditionalBuildState,
     condition: Vec<Box<dyn ASTNode>>,
-    body: Vec<Box<dyn ASTNode>>
+    body: Vec<Box<dyn ASTNode>>,
 }
 
 impl IfNode {
@@ -539,7 +538,7 @@ impl ASTNode for IfNode {
     fn is_complete(&self) -> bool {
         return match self.state {
             ConditionalBuildState::Done => true,
-            _ => false
+            _ => false,
         };
     }
 
@@ -548,15 +547,17 @@ impl ASTNode for IfNode {
             ConditionalBuildState::Condition => {
                 self.condition.push(node);
                 return Ok(true);
-            },
+            }
             ConditionalBuildState::Body => {
                 self.body.push(node);
                 return Ok(true);
-            },
+            }
             ConditionalBuildState::Done => {
                 return Err(ParseError::from_string(format!("Expected token `fi`"), false));
-            },
-            _ => {panic!("Unreachable");}
+            }
+            _ => {
+                panic!("Unreachable");
+            }
         }
     }
 
@@ -587,8 +588,8 @@ struct ProcessNode {
 }
 
 impl ProcessNode {
-    fn new() -> ProcessNode{
-        return ProcessNode{
+    fn new() -> ProcessNode {
+        return ProcessNode {
             proc_name: String::new(),
             argv: Vec::new(),
             foreground: true,
@@ -596,7 +597,11 @@ impl ProcessNode {
     }
 
     fn to_process(&self) -> shell::Process {
-        return shell::Process::new(self.proc_name.clone(), self.argv.iter().map(|a| { a.to_owned().clone() }).collect(), self.foreground);
+        return shell::Process::new(
+            self.proc_name.clone(),
+            self.argv.iter().map(|a| a.to_owned().clone()).collect(),
+            self.foreground,
+        );
     }
 }
 
@@ -606,15 +611,15 @@ impl ASTNode for ProcessNode {
         return process.execute(shell, group, streams);
     }
 
-    fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError>{
+    fn ingest_token(&mut self, token: &String) -> Result<bool, ParseError> {
         match token.as_str() {
             "|" => {
                 return Ok(true);
-            },
+            }
             "&" => {
                 self.foreground = false;
                 return Ok(true);
-            },
+            }
             _ => {
                 if self.proc_name == "" {
                     self.proc_name = token.clone();
@@ -654,17 +659,17 @@ struct PipelineNode {
 }
 
 impl PipelineNode {
-    fn new() -> PipelineNode{
+    fn new() -> PipelineNode {
         return PipelineNode {
             processes: Vec::new(),
-            finished: true
+            finished: true,
         };
     }
 }
 
 impl ASTNode for PipelineNode {
     fn execute(&self, shell: &mut shell::Shell, group: Option<Pid>, streams: &shell::IOTriple) -> i32 {
-        let processes = self.processes.iter().map(|process| { process.to_process() }).collect();
+        let processes = self.processes.iter().map(|process| process.to_process()).collect();
         let mut job = shell::Job::new(processes);
         return job.execute(shell, group, streams);
     }
@@ -674,7 +679,7 @@ impl ASTNode for PipelineNode {
             "\n" | ";" => {
                 self.finished = true;
                 return Ok(true); // If we hit a ; or a \n, we're at the end of the whole pipeline
-            },
+            }
             _ => {}
         }
 
@@ -690,8 +695,7 @@ impl ASTNode for PipelineNode {
                     return Err(err);
                 }
             }
-        }
-        else {
+        } else {
             self.finished = match self.processes.last_mut().unwrap().ingest_token(token) {
                 Ok(true) => true,
                 Ok(false) => false,

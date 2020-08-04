@@ -1,8 +1,7 @@
-use std::convert::From;
 use super::topic::Topic;
+use std::convert::From;
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum MessageType {
     CreateTopic,
     DeleteTopic,
@@ -11,7 +10,7 @@ pub enum MessageType {
     ProduceMessage,
     GetMessage,
     Unknown,
-    Invalid
+    Invalid,
 }
 
 impl From<u8> for MessageType {
@@ -23,7 +22,7 @@ impl From<u8> for MessageType {
             3 => MessageType::Unsubscribe,
             4 => MessageType::ProduceMessage,
             5 => MessageType::GetMessage,
-            _ => MessageType::Unknown
+            _ => MessageType::Unknown,
         }
     }
 }
@@ -37,7 +36,7 @@ impl Into<u8> for MessageType {
             MessageType::Unsubscribe => 3,
             MessageType::ProduceMessage => 4,
             MessageType::GetMessage => 5,
-            _ => 255
+            _ => 255,
         }
     }
 }
@@ -60,7 +59,7 @@ impl From<u8> for ResponseType {
             2 => ResponseType::No,
             3 => ResponseType::DoesntExist,
             4 => ResponseType::ServerError,
-            _ => ResponseType::MalformedRequest
+            _ => ResponseType::MalformedRequest,
         }
     }
 }
@@ -73,7 +72,7 @@ impl Into<u8> for ResponseType {
             ResponseType::No => 2,
             ResponseType::DoesntExist => 3,
             ResponseType::ServerError => 4,
-            ResponseType::MalformedRequest => 5
+            ResponseType::MalformedRequest => 5,
         }
     }
 }
@@ -86,8 +85,9 @@ impl ResponseType {
             ResponseType::No => "No (Permission Denied)",
             ResponseType::DoesntExist => "Resource Doesn't Exist",
             ResponseType::ServerError => "Server Error",
-            ResponseType::MalformedRequest => "Malformed Request"
-        }.to_string();
+            ResponseType::MalformedRequest => "Malformed Request",
+        }
+        .to_string();
     }
 }
 
@@ -99,17 +99,17 @@ pub struct OneValueRequest {
 
 impl OneValueRequest {
     pub fn new(class: MessageType, value: String) -> OneValueRequest {
-        return OneValueRequest{
+        return OneValueRequest {
             class: class,
-            value: value
+            value: value,
         };
     }
 
     fn new_broken() -> OneValueRequest {
-        return OneValueRequest{
+        return OneValueRequest {
             class: MessageType::Invalid,
-            value: String::new()
-        }
+            value: String::new(),
+        };
     }
 
     pub fn into_bytes(mut self) -> Vec<u8> {
@@ -117,13 +117,17 @@ impl OneValueRequest {
 
         if self.value.len() >= 2 << 16 {
             bytes.append(&mut [255, 255].into_iter().copied().collect());
-        }
-        else{
+        } else {
             let length = self.value.len() as u16;
-            bytes.append(&mut [((length & 0xFF00) >> 8) as u8, (length & 0xFF) as u8].into_iter().copied().collect());
+            bytes.append(
+                &mut [((length & 0xFF00) >> 8) as u8, (length & 0xFF) as u8]
+                    .into_iter()
+                    .copied()
+                    .collect(),
+            );
         }
 
-        self.value.truncate(2<<16-1);
+        self.value.truncate(2 << 16 - 1);
         bytes.append(&mut self.value.into_bytes());
         return bytes;
     }
@@ -143,7 +147,11 @@ impl From<&Vec<u8>> for OneValueRequest {
 
         let topic_name_length = ((*bytes.next().unwrap() as u16) << 8 | (*bytes.next().unwrap() as u16)) as usize;
         if raw.len() - 2 != topic_name_length {
-            eprintln!("Failed to parse into OneValueRequest: Topic length {}, but only {} bytes left", topic_name_length, raw.len()-2);
+            eprintln!(
+                "Failed to parse into OneValueRequest: Topic length {}, but only {} bytes left",
+                topic_name_length,
+                raw.len() - 2
+            );
             // Rest of the bytes are the wrong length
             return OneValueRequest::new_broken();
         }
@@ -153,8 +161,8 @@ impl From<&Vec<u8>> for OneValueRequest {
                 eprintln!("Failed to parse into OneValueRequest: TopicName is not utf8");
                 // Rest of the bytes are invalid utf-8
                 return OneValueRequest::new_broken();
-            },
-            Ok(s) => s
+            }
+            Ok(s) => s,
         };
 
         return OneValueRequest::new(MessageType::Unknown, String::from(topic_name));
@@ -189,20 +197,18 @@ pub fn parse_as_subscribe_request(raw: &Vec<u8>) -> Option<OneValueRequest> {
 }
 
 pub struct EmptyRequest {
-    pub class: MessageType
+    pub class: MessageType,
 }
 
 impl EmptyRequest {
     fn new(class: MessageType) -> EmptyRequest {
-        return EmptyRequest{
-            class: class
-        };
+        return EmptyRequest { class: class };
     }
 
     fn new_broken() -> EmptyRequest {
-        return EmptyRequest{
-            class: MessageType::Invalid
-        }
+        return EmptyRequest {
+            class: MessageType::Invalid,
+        };
     }
 
     pub fn into_bytes(self) -> Vec<u8> {
@@ -233,24 +239,24 @@ pub fn parse_as_get_message_request(raw: &Vec<u8>) -> Option<OneValueRequest> {
 pub struct PutMessageRequest {
     pub class: MessageType,
     pub topic_id: String,
-    pub message: Vec<u8>
+    pub message: Vec<u8>,
 }
 
 impl PutMessageRequest {
     pub fn new(topic_id: String, message: Vec<u8>) -> PutMessageRequest {
-        return PutMessageRequest{
+        return PutMessageRequest {
             class: MessageType::ProduceMessage,
             topic_id: topic_id,
             message: message,
-        }
+        };
     }
 
     fn new_broken() -> PutMessageRequest {
-        return PutMessageRequest{
+        return PutMessageRequest {
             class: MessageType::Invalid,
             topic_id: String::new(),
             message: Vec::new(),
-        }
+        };
     }
 
     pub fn into_bytes(&self) -> Vec<u8> {
@@ -280,20 +286,25 @@ impl From<&Vec<u8>> for PutMessageRequest {
 
         let topic_name_length = ((*bytes.next().unwrap() as u16) << 8 | (*bytes.next().unwrap() as u16)) as usize;
         if raw.len() - 2 < topic_name_length {
-            eprintln!("Failed to parse into PutMessageRequest: Topic length {}, but {} bytes left", topic_name_length, raw.len()-2);
+            eprintln!(
+                "Failed to parse into PutMessageRequest: Topic length {}, but {} bytes left",
+                topic_name_length,
+                raw.len() - 2
+            );
             // Rest of the bytes are the wrong length
             return PutMessageRequest::new_broken();
         }
 
-        let (topic_name_iter, message_iter): (Vec<(usize, &u8)>, Vec<(usize, &u8)>) = bytes.enumerate().partition(|(i, _)| i < &topic_name_length);
+        let (topic_name_iter, message_iter): (Vec<(usize, &u8)>, Vec<(usize, &u8)>) =
+            bytes.enumerate().partition(|(i, _)| i < &topic_name_length);
 
         let topic_name = match String::from_utf8(topic_name_iter.into_iter().map(|(_, b)| *b).collect()) {
             Err(_err) => {
                 eprintln!("Failed to parse into PutMessageRequest: TopicName is not utf8");
                 // Rest of the bytes are invalid utf-8
                 return PutMessageRequest::new_broken();
-            },
-            Ok(s) => s
+            }
+            Ok(s) => s,
         };
 
         let message: Vec<u8> = message_iter.into_iter().map(|(_, b)| *b).collect();

@@ -1,7 +1,7 @@
-use shell;
-use std::str::Chars;
-use std::iter::Peekable;
 use regex::Regex;
+use shell;
+use std::iter::Peekable;
+use std::str::Chars;
 
 struct VariableBuilder {
     build: String,
@@ -9,53 +9,49 @@ struct VariableBuilder {
     done: bool,
 
     // Variable substitution options
-    ltrim: Option<String>
+    ltrim: Option<String>,
 }
 
 impl VariableBuilder {
     fn new() -> VariableBuilder {
-        return VariableBuilder{
+        return VariableBuilder {
             build: String::new(),
             in_braces: false,
             done: false,
-            ltrim: None
-        }
+            ltrim: None,
+        };
     }
 
-    fn ingest_char(&mut self, c: char) -> Result<(), String>{
-        if self.done || 
-           (c == '$' && self.build.len() > 0) || 
-           (c == '?' && self.build.len() > 0) ||
-           (c == '{' && self.build.len() > 0) ||
-           (c == '#' && self.build.len() == 0) ||
-           (c == '#' && !self.in_braces) ||
-           (c == '}' && !self.in_braces) || 
-           (c == '{' && self.in_braces){
+    fn ingest_char(&mut self, c: char) -> Result<(), String> {
+        if self.done
+            || (c == '$' && self.build.len() > 0)
+            || (c == '?' && self.build.len() > 0)
+            || (c == '{' && self.build.len() > 0)
+            || (c == '#' && self.build.len() == 0)
+            || (c == '#' && !self.in_braces)
+            || (c == '}' && !self.in_braces)
+            || (c == '{' && self.in_braces)
+        {
             return Err(format!("Invalid char: {}", c));
         }
 
         if c == '{' {
             self.in_braces = true;
-        }
-        else if c == '}' {
+        } else if c == '}' {
             self.in_braces = false;
             self.done = true;
-        }
-        else if c == '$' || c == '?' {
+        } else if c == '$' || c == '?' {
             self.build.push(c);
             self.done = true;
-        }
-        else if c == '#' {
+        } else if c == '#' {
             if self.ltrim.is_some() {
                 return Err(String::from("Invalid char: #"));
             }
             self.ltrim = Some(String::new());
-        }
-        else {
+        } else {
             if self.ltrim.is_some() {
                 self.ltrim.as_mut().unwrap().push(c);
-            }
-            else {
+            } else {
                 self.build.push(c);
             }
         }
@@ -63,8 +59,8 @@ impl VariableBuilder {
         return Ok(());
     }
 
-    fn could_be_done(&self) -> bool{
-        return !self.in_braces || self.done
+    fn could_be_done(&self) -> bool {
+        return !self.in_braces || self.done;
     }
 
     fn resolve<'a>(&self, shell: &'a shell::Shell) -> &'a str {
@@ -85,10 +81,10 @@ fn glob_to_regex(glob: &String) -> String {
         match chr {
             '*' => {
                 result.push_str(".*");
-            },
+            }
             '?' => {
                 result.push('.');
-            },
+            }
             '[' => {
                 let mut build = String::new();
                 if iter.peek().is_some() && iter.peek().unwrap() != &'!' {
@@ -105,22 +101,20 @@ fn glob_to_regex(glob: &String) -> String {
 
                 if iter.peek().is_none() {
                     result.push_str("\\[");
-                }
-                else {
+                } else {
                     iter.next(); // Skip the ]
                     build = build.replace("\\", "\\\\");
                     if build.starts_with("!") {
                         build = build.replacen("!", "^", 1);
-                    }
-                    else if build.starts_with("^") {
+                    } else if build.starts_with("^") {
                         build.insert(0, '\\');
                     }
                     result.push_str(&format!("[{}]", build));
                 }
-            },
+            }
             '(' | ')' | ']' | '{' | '}' | '+' | '-' | '|' | '^' | '$' | '\\' | '.' | '&' | '~' | '#' | ' ' | '\t' | '\n' | '\r' => {
                 result.push_str(&format!("\\{}", chr));
-            },
+            }
             _ => {
                 result.push(chr);
             }
@@ -135,14 +129,12 @@ pub fn match_glob(glob: &String, value: &String) -> bool {
     return glob_regex.is_match(&value);
 }
 
-#[derive(Debug)]
-#[derive(PartialEq)]
-#[derive(Copy)]
+#[derive(Debug, PartialEq, Copy)]
 pub enum QuoteType {
     None,
     Single,
     Double,
-    Meta // Meta quotes are quotes that have started a quote block. 
+    Meta, // Meta quotes are quotes that have started a quote block.
 }
 
 impl QuoteType {
@@ -150,8 +142,8 @@ impl QuoteType {
         return match c {
             '\'' => QuoteType::Single,
             '\"' => QuoteType::Double,
-            _ => QuoteType::None
-        }
+            _ => QuoteType::None,
+        };
     }
 }
 
@@ -161,27 +153,27 @@ impl Clone for QuoteType {
             QuoteType::None => QuoteType::None,
             QuoteType::Single => QuoteType::Single,
             QuoteType::Double => QuoteType::Double,
-            QuoteType::Meta => QuoteType::Meta
-        }
+            QuoteType::Meta => QuoteType::Meta,
+        };
     }
 }
 
 pub struct StringIterWithQuoteContext<'a> {
     base_iter: Peekable<Chars<'a>>,
     current_quote: QuoteType,
-    include_quotes: bool
+    include_quotes: bool,
 }
 
 pub struct CharWithQuoteContext {
     pub chr: char,
-    pub context: QuoteType
+    pub context: QuoteType,
 }
 
 impl CharWithQuoteContext {
     fn new(chr: char, context: QuoteType) -> CharWithQuoteContext {
-        return CharWithQuoteContext{
+        return CharWithQuoteContext {
             chr: chr,
-            context: context
+            context: context,
         };
     }
 }
@@ -191,8 +183,8 @@ impl StringIterWithQuoteContext<'_> {
         return StringIterWithQuoteContext {
             base_iter: base.chars().peekable(),
             current_quote: QuoteType::None,
-            include_quotes: include_quotes
-        }
+            include_quotes: include_quotes,
+        };
     }
 }
 
@@ -209,12 +201,12 @@ impl Iterator for StringIterWithQuoteContext<'_> {
                                 return Some(CharWithQuoteContext::new(self.base_iter.next().unwrap(), self.current_quote));
                             }
                             return Some(CharWithQuoteContext::new('\\', self.current_quote));
-                        },
+                        }
                         None => {
                             return Some(CharWithQuoteContext::new('\\', self.current_quote));
                         }
                     }
-                },
+                }
                 quote if QuoteType::from_chr(quote) != QuoteType::None => {
                     let new_quote = QuoteType::from_chr(quote);
                     if self.current_quote == QuoteType::None {
@@ -222,14 +214,12 @@ impl Iterator for StringIterWithQuoteContext<'_> {
                         if self.include_quotes {
                             return Some(CharWithQuoteContext::new(quote, QuoteType::Meta));
                         }
-                    }
-                    else if new_quote == self.current_quote {
+                    } else if new_quote == self.current_quote {
                         self.current_quote = QuoteType::None;
                         if self.include_quotes {
                             return Some(CharWithQuoteContext::new(quote, QuoteType::Meta));
                         }
-                    }
-                    else {
+                    } else {
                         return Some(CharWithQuoteContext::new(quote, self.current_quote));
                     }
                 }
@@ -264,10 +254,9 @@ fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<Strin
     let mut var_build: Option<VariableBuilder> = None;
     for nchr in token.chars_with_quotes(true) {
         let chr = nchr.chr;
-        if chr == '$' && nchr.context != QuoteType::Single && var_build.is_none(){
+        if chr == '$' && nchr.context != QuoteType::Single && var_build.is_none() {
             var_build = Some(VariableBuilder::new());
-        }
-        else {
+        } else {
             match &mut var_build {
                 Some(builder) => {
                     if nchr.context == QuoteType::Meta || nchr.chr.is_whitespace() || nchr.chr == ',' || nchr.chr == '.' {
@@ -277,14 +266,13 @@ fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<Strin
                             build.push(chr);
                             var_build = None;
                             continue;
-                        }
-                        else {
+                        } else {
                             return Err(format!("Parse error"));
                         }
                     }
-                    
+
                     match builder.ingest_char(chr) {
-                        Ok(()) => {},
+                        Ok(()) => {}
                         Err(err) => {
                             return Err(format!("Substitution Error: {}", err));
                         }
@@ -294,7 +282,7 @@ fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<Strin
                         build.push_str(builder.resolve(shell));
                         var_build = None;
                     }
-                },
+                }
                 None => {
                     build.push(chr);
                 }
@@ -306,11 +294,10 @@ fn do_string_interpolation(token: &String, shell: &shell::Shell) -> Result<Strin
         Some(builder) => {
             if builder.could_be_done() {
                 build.push_str(builder.resolve(shell));
-            }
-            else {
+            } else {
                 return Err(String::from("Unclosed variable substitution"));
             }
-        },
+        }
         None => {}
     }
 
@@ -329,8 +316,7 @@ fn do_word_splitting(token: &String) -> Vec<String> {
                 words.push(build);
             }
             build = String::new();
-        }
-        else {
+        } else {
             build.push(chr);
         }
     }
@@ -343,6 +329,6 @@ fn do_word_splitting(token: &String) -> Vec<String> {
 pub fn do_value_pipeline(token: &String, shell: &shell::Shell) -> Result<Vec<String>, String> {
     return match do_string_interpolation(token, shell) {
         Ok(s) => Ok(do_word_splitting(&s)),
-        Err(e) => Err(e)
-    }
+        Err(e) => Err(e),
+    };
 }

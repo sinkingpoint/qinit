@@ -1,27 +1,27 @@
+use super::terminal::{set_foreground_color, set_foreground_color_raw, TerminalColor};
 use std::collections::HashMap;
 use std::io::{self, Write};
-use super::terminal::{TerminalColor, set_foreground_color, set_foreground_color_raw};
 
-/// An enum representing the level of a log. 
+/// An enum representing the level of a log.
 /// Very opinionatedly we only offer two levels here, where a Debug log is a message to a developer
 /// and an info log is a message to a user
 #[derive(PartialEq)]
 enum Level {
     /// The Debug level
-    /// 
+    ///
     /// Designates messages to a developer who needs to debug the application
     Debug,
 
     /// The Info Level
-    /// 
+    ///
     /// Designates messages to a user who is using the tool
-    Info
+    Info,
 }
 impl Level {
     fn to_str(&self) -> &str {
         return match self {
             Level::Debug => "debug",
-            Level::Info => "info"
+            Level::Info => "info",
         };
     }
 }
@@ -29,16 +29,23 @@ impl Level {
 /// A trait representing the ability to output a log record in some format
 pub trait RecordWriter {
     /// Takes a record and writes it to `out` in some format. Optionally includes the logger name in the payload
-    fn write_record<T>(&self, out: &mut T, logger_name: &str, record: &Record<Self>) -> Result<(), io::Error> where T: Write, Self: Sized;
+    fn write_record<T>(&self, out: &mut T, logger_name: &str, record: &Record<Self>) -> Result<(), io::Error>
+    where
+        T: Write,
+        Self: Sized;
 }
 
 /// A struct which represents a `RecordWriter` that outputs logs in ndjson format
 /// i.e. logs are in JSON format, one per line
 /// For any daemons, or non interactive software where humans aren't going to be directly reading the logs
 /// this is the one to use
-pub struct JSONRecordWriter{}
+pub struct JSONRecordWriter {}
 impl RecordWriter for JSONRecordWriter {
-    fn write_record<T>(&self, out: &mut T, logger_name: &str, record: &Record<Self>) -> Result<(), io::Error> where T: Write, Self: Sized{
+    fn write_record<T>(&self, out: &mut T, logger_name: &str, record: &Record<Self>) -> Result<(), io::Error>
+    where
+        T: Write,
+        Self: Sized,
+    {
         out.write(&b"{"[..])?; // {
         for (key, value) in &record.kvs {
             out.write(&b"\""[..])?;
@@ -47,7 +54,7 @@ impl RecordWriter for JSONRecordWriter {
             out.write(value.as_bytes())?;
             out.write(&b"\", "[..])?;
         }
-        
+
         out.write(&b"\"level\": \""[..])?;
         out.write(record.level.to_str().as_bytes())?;
         out.write(&b"\", "[..])?;
@@ -66,14 +73,18 @@ impl RecordWriter for JSONRecordWriter {
 
 /// A struct which represents a `RecordWriter` that outputs logs in a human readable format
 /// This should be used for user facing applications where humans are expected to read the output
-pub struct ConsoleRecordWriter{}
+pub struct ConsoleRecordWriter {}
 impl RecordWriter for ConsoleRecordWriter {
-    fn write_record<T>(&self, out: &mut T, _logger_name: &str, record: &Record<Self>) -> Result<(), io::Error> where T: Write, Self: Sized{
+    fn write_record<T>(&self, out: &mut T, _logger_name: &str, record: &Record<Self>) -> Result<(), io::Error>
+    where
+        T: Write,
+        Self: Sized,
+    {
         match record.level {
             Level::Info => {
                 set_foreground_color(out, TerminalColor::Green)?;
                 out.write(&b"INF "[..])?;
-            },
+            }
             Level::Debug => {
                 set_foreground_color(out, TerminalColor::Yellow)?;
                 out.write(&b"DBG "[..])?;
@@ -99,28 +110,37 @@ impl RecordWriter for ConsoleRecordWriter {
     }
 }
 
-/// A struct which has the ability to create records and filter them by a given level. 
-pub struct Logger<T> where T: RecordWriter{
+/// A struct which has the ability to create records and filter them by a given level.
+pub struct Logger<T>
+where
+    T: RecordWriter,
+{
     name: String,
     debug_enabled: bool,
     writer: T,
 }
 
-/// A struct which holds all the information of a log message to be outputted. 
-pub struct Record<'a, T> where T: RecordWriter {
+/// A struct which holds all the information of a log message to be outputted.
+pub struct Record<'a, T>
+where
+    T: RecordWriter,
+{
     logger: &'a Logger<T>,
     message: Option<String>,
     level: Level,
-    kvs: HashMap<&'a str, String>
+    kvs: HashMap<&'a str, String>,
 }
 
-impl<'a, T> Record<'a, T> where T: RecordWriter{
-    fn new(logger: &'a Logger<T>, level: Level) -> Record<'a, T>{
+impl<'a, T> Record<'a, T>
+where
+    T: RecordWriter,
+{
+    fn new(logger: &'a Logger<T>, level: Level) -> Record<'a, T> {
         return Record {
             logger: logger,
             message: None,
             level: level,
-            kvs: HashMap::new()
+            kvs: HashMap::new(),
         };
     }
 
@@ -180,22 +200,28 @@ impl<'a, T> Record<'a, T> where T: RecordWriter{
 }
 
 pub fn with_name_as_json(name: &str) -> Logger<JSONRecordWriter> {
-    return with_name_and_format(name, JSONRecordWriter{});
+    return with_name_and_format(name, JSONRecordWriter {});
 }
 
 pub fn with_name_as_console(name: &str) -> Logger<ConsoleRecordWriter> {
-    return with_name_and_format(name, ConsoleRecordWriter{});
+    return with_name_and_format(name, ConsoleRecordWriter {});
 }
 
-pub fn with_name_and_format<T>(name: &str, format: T) -> Logger<T> where T: RecordWriter{
+pub fn with_name_and_format<T>(name: &str, format: T) -> Logger<T>
+where
+    T: RecordWriter,
+{
     return Logger {
         name: name.to_owned(),
         debug_enabled: false,
-        writer: format
+        writer: format,
     };
 }
 
-impl<T> Logger<T> where T: RecordWriter {
+impl<T> Logger<T>
+where
+    T: RecordWriter,
+{
     pub fn set_debug_mode(&mut self, enabled: bool) {
         self.debug_enabled = enabled;
     }
@@ -215,8 +241,7 @@ impl<T> Logger<T> where T: RecordWriter {
 
         if record.level == Level::Debug {
             self.writer.write_record(&mut io::stderr(), &self.name, record)?;
-        }
-        else {
+        } else {
             self.writer.write_record(&mut io::stdout(), &self.name, record)?;
         }
 

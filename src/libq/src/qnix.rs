@@ -6,6 +6,6 @@ pub fn to_mode(mode: String) -> Result<Mode, String> {
             return Ok(mode);
         }
     }
-    
+
     return Err(format!("Invalid mode: {}", mode));
 }

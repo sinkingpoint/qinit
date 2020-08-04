@@ -1,21 +1,21 @@
-use super::task::{Stage, Service, Task, ServiceInstance, TaskStatus};
-use super::serde::{ServiceDef, StageDef, RestartMode};
+use super::serde::{RestartMode, ServiceDef, StageDef};
+use super::task::{Service, ServiceInstance, Stage, Task, TaskStatus};
+use libq::logger::{self, JSONRecordWriter, Logger};
 use std::collections::HashMap;
 use std::fs::File;
-use std::path::PathBuf;
 use std::io::{self, Read};
-use libq::logger::{self, Logger, JSONRecordWriter};
+use std::path::PathBuf;
 
 use nix::unistd::Pid;
 
 pub struct TaskRegistry {
     tasks: HashMap<String, Box<dyn Task + Send>>,
     logger: Logger<JSONRecordWriter>,
-    statuses: HashMap<ServiceInstance, TaskStatus>
+    statuses: HashMap<ServiceInstance, TaskStatus>,
 }
 
 impl TaskRegistry {
-    pub fn load_from_disk(task_def_folders: &Vec<PathBuf>) -> Result<TaskRegistry, io::Error>{
+    pub fn load_from_disk(task_def_folders: &Vec<PathBuf>) -> Result<TaskRegistry, io::Error> {
         let logger = {
             let mut l = logger::with_name_as_json("TaskRegistry");
             l.set_debug_mode(true);
@@ -25,7 +25,10 @@ impl TaskRegistry {
         let mut tasks: HashMap<String, Box<dyn Task + Send>> = HashMap::new();
         for loc in task_def_folders.iter() {
             if !loc.exists() || !loc.is_dir() {
-                logger.debug().msg(format!("{} either doesn't exist or isn't a directory. Either way, skipping it for task definitions", loc.display()));
+                logger.debug().msg(format!(
+                    "{} either doesn't exist or isn't a directory. Either way, skipping it for task definitions",
+                    loc.display()
+                ));
                 continue;
             }
 
@@ -35,7 +38,7 @@ impl TaskRegistry {
                 if child.is_err() {
                     continue;
                 }
-    
+
                 let child = child.unwrap();
                 let path = child.path();
                 let mut contents = String::new();
@@ -49,17 +52,21 @@ impl TaskRegistry {
                         Ok(service) => {
                             println!("{:?}", service);
                             if tasks.contains_key(&service.name) {
-                                logger.info().msg(format!("Found duplicate defintion of {}. Skipping", &service.name));
+                                logger
+                                    .info()
+                                    .msg(format!("Found duplicate defintion of {}. Skipping", &service.name));
                             }
                             let service = Service::from(service);
                             tasks.insert(service.get_name().clone(), Box::new(service));
-                        },
+                        }
                         Err(err) => {
-                            logger.info().with_string("error", format!("{}", err)).msg(format!("Failed to load task definition {} as service definition", child.path().display()));
+                            logger.info().with_string("error", format!("{}", err)).msg(format!(
+                                "Failed to load task definition {} as service definition",
+                                child.path().display()
+                            ));
                         }
                     }
-                }
-                else if extension == "stage" {
+                } else if extension == "stage" {
                     match toml::from_str::<StageDef>(&contents) {
                         Ok(stage) => {
                             if tasks.contains_key(&stage.name) {
@@ -67,13 +74,15 @@ impl TaskRegistry {
                             }
                             let stage = Stage::from(stage);
                             tasks.insert(stage.get_name().clone(), Box::new(stage));
-                        },
+                        }
                         Err(err) => {
-                            logger.info().with_string("error", format!("{}", err)).msg(format!("Failed to load task definition {} as service definition", child.path().display()));
+                            logger.info().with_string("error", format!("{}", err)).msg(format!(
+                                "Failed to load task definition {} as service definition",
+                                child.path().display()
+                            ));
                         }
                     }
-                }
-                else {
+                } else {
                     logger.info().msg(format!("Encountered unknown task type: {}", extension));
                 }
             }
@@ -82,7 +91,7 @@ impl TaskRegistry {
         return Ok(TaskRegistry {
             tasks: tasks,
             logger: logger,
-            statuses: HashMap::new()
+            statuses: HashMap::new(),
         });
     }
 
@@ -111,7 +120,7 @@ impl TaskRegistry {
                     for dep in task.get_deps() {
                         to_process_deps.push(dep);
                     }
-                },
+                }
                 None => {
                     return Err(());
                 }
@@ -137,7 +146,7 @@ impl TaskRegistry {
                 for (instance, state) in statuses.into_iter() {
                     self.statuses.insert(instance, state);
                 }
-            },
+            }
             Err(()) => {
                 // TODO: Stop all started deps
                 return Err(());
@@ -151,7 +160,7 @@ impl TaskRegistry {
         let mut found_data = None;
         for (instance, state) in self.statuses.iter_mut() {
             if let TaskStatus::Running(Some(test_pid)) = state {
-                if  test_pid == &child_pid {
+                if test_pid == &child_pid {
                     *state = new_state.clone();
                     found_data = Some((instance.get_name().clone(), instance.get_args().clone()));
                     break;
@@ -172,11 +181,9 @@ impl TaskRegistry {
 
         if restart_mode.is_some() && restart_mode.unwrap() != &RestartMode::Never {
             match new_state {
-                TaskStatus::Stopped(_) | TaskStatus::Failed => {
-                    match self.execute_task(&name, &args) {
-                        Ok(_) => {},
-                        Err(_) => {}
-                    }
+                TaskStatus::Stopped(_) | TaskStatus::Failed => match self.execute_task(&name, &args) {
+                    Ok(_) => {}
+                    Err(_) => {}
                 },
                 _ => {}
             }

@@ -1,13 +1,12 @@
 use std::fs::File;
-use std::io::{BufReader, BufRead, Lines};
+use std::io::{BufRead, BufReader, Lines};
 
 use super::crypt_sha2::{crypt_sha2, Sha2Mode};
 
-/// An enum representing a possible algorithm used to hash 
+/// An enum representing a possible algorithm used to hash
 /// a password in /etc/shadow. Currently we only support hashing SHA2 variants,
 /// but we include the others for completeness
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum PasswdAlgorithm {
     /// Indicates the hash has been done using MD5
     MD5,
@@ -33,7 +32,7 @@ impl PasswdAlgorithm {
             "2" | "2a" | "2x" | "2y" => Some(PasswdAlgorithm::BCrypt(id.to_string())),
             "5" => Some(PasswdAlgorithm::SHA256),
             "6" => Some(PasswdAlgorithm::SHA512),
-            _ => None
+            _ => None,
         };
     }
 
@@ -44,8 +43,9 @@ impl PasswdAlgorithm {
             PasswdAlgorithm::BCrypt(algo) => algo.as_str(),
             PasswdAlgorithm::MD5 => "1",
             PasswdAlgorithm::SHA256 => "5",
-            PasswdAlgorithm::SHA512 => "6"
-        }.to_string();
+            PasswdAlgorithm::SHA512 => "6",
+        }
+        .to_string();
     }
 
     /// Hashes the given salt and password using the given number of rounds using this algorithm
@@ -55,7 +55,7 @@ impl PasswdAlgorithm {
         return match self {
             PasswdAlgorithm::SHA256 => crypt_sha2(salt, password, Sha2Mode::Sha256(rounds)),
             PasswdAlgorithm::SHA512 => crypt_sha2(salt, password, Sha2Mode::Sha512(rounds)),
-            _ => None
+            _ => None,
         };
     }
 }
@@ -65,7 +65,7 @@ pub struct UnixPasswordHash {
     pub algorithm: PasswdAlgorithm,
     pub rounds: Option<u32>,
     pub salt: String,
-    pub hash: String
+    pub hash: String,
 }
 
 impl UnixPasswordHash {
@@ -91,19 +91,17 @@ impl UnixPasswordHash {
                 algorithm: algorithm,
                 rounds: None,
                 salt: String::new(),
-                hash: parts[2].to_owned()
+                hash: parts[2].to_owned(),
             });
-        }
-        else if parts.len() == 4 {
+        } else if parts.len() == 4 {
             // We have an algorithm, a salt and a password hash
             return Some(UnixPasswordHash {
                 algorithm: algorithm,
                 rounds: None,
                 salt: parts[2].to_owned(),
-                hash: parts[3].to_owned()
+                hash: parts[3].to_owned(),
             });
-        }
-        else if parts.len() == 5{
+        } else if parts.len() == 5 {
             // We have an algorithm, rounds, a salt and a password hash
 
             // If we have any other kvs except for rounds=, reject the line as unsupported
@@ -123,14 +121,14 @@ impl UnixPasswordHash {
                 algorithm: algorithm,
                 rounds: Some(rounds),
                 salt: parts[3].to_owned(),
-                hash: parts[4].to_owned()
+                hash: parts[4].to_owned(),
             });
         }
 
         return None;
     }
 
-    pub fn from_unix_hash(hash: &String) -> Option<UnixPasswordHash>{
+    pub fn from_unix_hash(hash: &String) -> Option<UnixPasswordHash> {
         return UnixPasswordHash::from_unix_hash_str(hash.as_str());
     }
 
@@ -138,10 +136,8 @@ impl UnixPasswordHash {
     /// hashes into the same hash as this hash
     pub fn verify_str(&self, password: &str) -> bool {
         return match self.algorithm.hash(&self.salt.as_bytes(), &password.as_bytes(), self.rounds) {
-            Some(b64digest) => {
-                b64digest == self.hash
-            },
-            None => false // Unsupported algorithm, or an invalid hash
+            Some(b64digest) => b64digest == self.hash,
+            None => false, // Unsupported algorithm, or an invalid hash
         };
     }
 
@@ -161,7 +157,7 @@ pub struct ShadowEntry {
     pub max_time_days: u32,
     pub warn_time_days: u32,
     pub inactive_time_days: u32,
-    pub expire_time_days: u32
+    pub expire_time_days: u32,
 }
 
 impl ShadowEntry {
@@ -178,7 +174,7 @@ impl ShadowEntry {
             }
         };
 
-        return Ok(ShadowEntry{
+        return Ok(ShadowEntry {
             username: parts[0].to_string(),
             password_hash: pw_hash,
             day_of_last_change: parts[2].parse().unwrap_or(0),
@@ -201,15 +197,15 @@ impl ShadowEntry {
 
 /// An iterator over the ShadowEntry's in /etc/shadow
 pub struct Shadows {
-    lines: Lines<BufReader<File>>
+    lines: Lines<BufReader<File>>,
 }
 
 impl Shadows {
     pub fn new() -> Shadows {
         let file = File::open("/etc/shadow").expect("Failed to open /etc/shadow");
         return Shadows {
-            lines: BufReader::new(file).lines()
-        }
+            lines: BufReader::new(file).lines(),
+        };
     }
 }
 
@@ -218,7 +214,7 @@ impl Iterator for Shadows {
     fn next(&mut self) -> Option<Self::Item> {
         return match self.lines.next() {
             Some(Ok(line)) => Some(ShadowEntry::from_shadow_line(&line).unwrap()),
-            _ => None
+            _ => None,
         };
     }
 }

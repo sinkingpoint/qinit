@@ -1,15 +1,15 @@
-use std::fs::File;
 use libq::logger;
+use libq::passwd::{GroupEntry, Groups, PasswdEntry};
 use libq::strings::Tokenizer;
-use libq::passwd::{GroupEntry, PasswdEntry, Groups};
 use std::collections::HashMap;
-use std::io::{BufReader, BufRead};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 use nix::unistd::getuid;
 
 /// An Enum representing all the Options that we know how
-/// to handle. 
+/// to handle.
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub enum SudoersOptions {
     EchoPassword,
@@ -19,15 +19,15 @@ pub enum SudoersOptions {
     EnvKeep,
     NoPasswd,
     SecurePath,
-    AlwaysQueryGroupPlugin
+    AlwaysQueryGroupPlugin,
 }
 
 /// An Enum representing the _value_ of a given option
-/// in the configuration. 
+/// in the configuration.
 #[derive(Debug, Clone)]
 pub enum OptionsType {
     Flag(bool),
-    Valued(bool, Vec<String>)
+    Valued(bool, Vec<String>),
 }
 
 impl SudoersOptions {
@@ -38,8 +38,7 @@ impl SudoersOptions {
         let (arg, is_true) = {
             if line[0].starts_with("!") {
                 (line[0].trim_start_matches("!"), false)
-            }
-            else {
+            } else {
                 (line[0], true)
             }
         };
@@ -51,7 +50,7 @@ impl SudoersOptions {
             "env_reset" => Some(SudoersOptions::EnvReset),
             "always_query_group_plugin" => Some(SudoersOptions::AlwaysQueryGroupPlugin),
             "nopasswd" => Some(SudoersOptions::NoPasswd),
-            _ => None
+            _ => None,
         };
 
         if flag.is_some() {
@@ -64,12 +63,17 @@ impl SudoersOptions {
         }
 
         let append = line[1] == "+=";
-        let values = line.iter().skip(2).map(|part| part.trim_start_matches("\"").trim_end_matches("\"")).map(|part| part.clone().to_owned()).collect::<Vec<String>>();
+        let values = line
+            .iter()
+            .skip(2)
+            .map(|part| part.trim_start_matches("\"").trim_end_matches("\""))
+            .map(|part| part.clone().to_owned())
+            .collect::<Vec<String>>();
 
         return match arg {
             "env_keep" => Some((SudoersOptions::EnvKeep, OptionsType::Valued(append, values))),
             "secure_path" => Some((SudoersOptions::SecurePath, OptionsType::Valued(append, values))),
-            _ => None
+            _ => None,
         };
     }
 }
@@ -81,7 +85,7 @@ pub enum Identity {
     User(String),
     Gid(u32),
     Group(String),
-    All
+    All,
 }
 
 impl PartialEq<Identity> for Identity {
@@ -92,7 +96,7 @@ impl PartialEq<Identity> for Identity {
         let id_a = match self.normalize_to_id() {
             Some(Identity::All) => {
                 return true;
-            },
+            }
             Some(id) => id,
             None => {
                 return false;
@@ -102,7 +106,7 @@ impl PartialEq<Identity> for Identity {
         let id_b = match other.normalize_to_id() {
             Some(Identity::All) => {
                 return true;
-            },
+            }
             Some(id) => id,
             None => {
                 return false;
@@ -114,14 +118,12 @@ impl PartialEq<Identity> for Identity {
         }
 
         return match id_a {
-            Identity::Uid(id_a) | Identity::Gid(id_a) => {
-                match id_b {
-                    Identity::Uid(id_b) | Identity::Gid(id_b) => id_a == id_b,
-                    _ => false
-                }
+            Identity::Uid(id_a) | Identity::Gid(id_a) => match id_b {
+                Identity::Uid(id_b) | Identity::Gid(id_b) => id_a == id_b,
+                _ => false,
             },
-            _ => false
-        }
+            _ => false,
+        };
     }
 }
 
@@ -130,13 +132,13 @@ impl Identity {
     fn is_user(&self) -> bool {
         return match self {
             Identity::Uid(_) | Identity::User(_) => true,
-            _ => false
-        }
+            _ => false,
+        };
     }
 
     /// Normalises this Identity to a u32 Identifier of the right type
     /// Nominally this means that Group becomes Gid and User becomes Uid
-    /// Gid, Uid, and All Identities aren't changed. 
+    /// Gid, Uid, and All Identities aren't changed.
     /// This is done by reading the appropriate files (/etc/passwd, etc/group)
     /// So if this is a named entry, and an appropriate entry doesn't exist in those
     /// files, this returns None
@@ -153,7 +155,7 @@ impl Identity {
                 };
 
                 Identity::Uid(id)
-            },
+            }
             Identity::Group(name) => {
                 let id = match GroupEntry::by_groupname(name) {
                     Some(group) => group.gid,
@@ -163,8 +165,8 @@ impl Identity {
                 };
 
                 Identity::Gid(id)
-            },
-            Identity::All => Identity::All
+            }
+            Identity::All => Identity::All,
         });
     }
 
@@ -176,7 +178,7 @@ impl Identity {
             let id = match s {
                 s if s.starts_with("#") => &s[1..],
                 s if s.starts_with("%#") => &s[2..],
-                s => s
+                s => s,
             };
 
             let id = match id.parse() {
@@ -188,15 +190,12 @@ impl Identity {
 
             if s.starts_with("#") {
                 return Some(Identity::Uid(id));
-            }
-            else {
+            } else {
                 return Some(Identity::Gid(id));
             }
-        }
-        else if s.starts_with("%") {
+        } else if s.starts_with("%") {
             return Some(Identity::Group(String::from(&s[1..])));
-        }
-        else {
+        } else {
             if s == "ALL" {
                 return Some(Identity::All);
             }
@@ -221,10 +220,10 @@ struct Command {
     name: String,
 
     /// The arguments of the command to be allowed to run with. len() == 0 means any args, len() == 1 && args[0] == "" means no args
-    args: Vec<String>
+    args: Vec<String>,
 }
 
-/// A struct representing a Permission granted in a sudoers file. Can be read as 
+/// A struct representing a Permission granted in a sudoers file. Can be read as
 /// Users who match `id` can run `commands` on `machine` with `options
 #[derive(Debug)]
 pub struct Permission {
@@ -251,17 +250,14 @@ impl Permission {
             if &command.as_user == as_user && &command.as_group == as_group {
                 if command.name == "ALL" {
                     return true;
-                }
-                else if command.name == argv[0] && command.args.len() == 0 {
+                } else if command.name == argv[0] && command.args.len() == 0 {
                     return true;
-                }
-                else if command.name == argv[0] && command.args.len() == 2 && command.args[1] == "" && argv.len() == 1{
+                } else if command.name == argv[0] && command.args.len() == 2 && command.args[1] == "" && argv.len() == 1 {
                     return true;
-                }
-                else if command.name == argv[0] && argv.len() == command.args.len() + 1 {
+                } else if command.name == argv[0] && argv.len() == command.args.len() + 1 {
                     let mut matches = true;
                     for i in 1..argv.len() {
-                        if command.args[i-1] != argv[i] {
+                        if command.args[i - 1] != argv[i] {
                             matches = false;
                             break;
                         }
@@ -307,8 +303,7 @@ impl Permission {
             if tokens_iter.peek()? == ":" {
                 tokens_iter.next()?;
                 group = Identity::from_str(&tokens_iter.next()?)?;
-            }
-            else {
+            } else {
                 group = Identity::from_str("ALL")?;
             }
 
@@ -321,7 +316,7 @@ impl Permission {
                 match SudoersOptions::from_sudoers_line(&[&option.trim_end_matches(":")[..]]) {
                     Some((option_type, option_value)) => {
                         options.insert(option_type, option_value);
-                    },
+                    }
                     None => {
                         return None;
                     }
@@ -338,12 +333,12 @@ impl Permission {
                 if tokens_iter.peek().is_some() && tokens_iter.peek()? == "," {
                     tokens_iter.next(); // Skip the ,
                 }
-    
-                commands.push(Command{
+
+                commands.push(Command {
                     as_user: user.clone(),
                     as_group: group.clone(),
                     name: command,
-                    args: args
+                    args: args,
                 });
             }
         }
@@ -356,7 +351,7 @@ impl Permission {
             id: user,
             machine: host,
             commands: commands,
-            options: options
+            options: options,
         });
     }
 }
@@ -364,18 +359,23 @@ impl Permission {
 #[derive(Debug)]
 pub struct Sudoers {
     defaults: HashMap<SudoersOptions, OptionsType>,
-    permissions: Vec<Permission>
+    permissions: Vec<Permission>,
 }
 
 impl Sudoers {
     pub fn new() -> Sudoers {
         return Sudoers {
             defaults: HashMap::new(),
-            permissions: Vec::new()
+            permissions: Vec::new(),
         };
     }
 
-    pub fn is_allowed(&self, argv: Vec<&str>, as_user: Identity, as_group: Identity) -> (bool, Option<HashMap<SudoersOptions, OptionsType>>) {
+    pub fn is_allowed(
+        &self,
+        argv: Vec<&str>,
+        as_user: Identity,
+        as_group: Identity,
+    ) -> (bool, Option<HashMap<SudoersOptions, OptionsType>>) {
         let mut options = self.defaults.clone();
         let mut identities = Vec::new();
         let user = PasswdEntry::by_uid(getuid().as_raw());
@@ -384,7 +384,9 @@ impl Sudoers {
         }
         let user = user.unwrap();
         identities.push(Identity::Uid(user.uid));
-        let groups = Groups::new().filter(|group| group.users.contains(&user.username)).map(|g| Identity::Gid(g.gid));
+        let groups = Groups::new()
+            .filter(|group| group.users.contains(&user.username))
+            .map(|g| Identity::Gid(g.gid));
         identities.append(&mut groups.collect());
 
         for perm in self.permissions.iter() {
@@ -399,13 +401,17 @@ impl Sudoers {
         return (false, None);
     }
 
-    pub fn process_line(&mut self, line: &str) -> Result<(), ()>{
+    pub fn process_line(&mut self, line: &str) -> Result<(), ()> {
         if line.trim() == "" {
             return Ok(());
         }
 
         let parts = line.trim().split_whitespace().collect::<Vec<&str>>();
-        if parts[0].starts_with("#") && !(parts[0] == "#include" || parts[0] == "#includedir" || (parts[0].len() > 1 && parts[0].chars().nth(1).unwrap().is_numeric())) {
+        if parts[0].starts_with("#")
+            && !(parts[0] == "#include"
+                || parts[0] == "#includedir"
+                || (parts[0].len() > 1 && parts[0].chars().nth(1).unwrap().is_numeric()))
+        {
             return Ok(()); // Comment
         }
 
@@ -420,21 +426,17 @@ impl Sudoers {
 
                 if let OptionsType::Flag(_) = value {
                     self.defaults.insert(flag_name, value);
-                }
-                else if let OptionsType::Valued(append, mut values) = value {
+                } else if let OptionsType::Valued(append, mut values) = value {
                     if self.defaults.contains_key(&flag_name) && append {
                         if let OptionsType::Valued(_, old_values) = self.defaults.get_mut(&flag_name).unwrap() {
                             old_values.append(&mut values);
                         }
-                    }
-                    else {
+                    } else {
                         self.defaults.insert(flag_name, OptionsType::Valued(append, values));
                     }
                 }
-            },
-            "#includedir" => {
-
-            },
+            }
+            "#includedir" => {}
             _ => {
                 let permission = match Permission::from_str(line) {
                     Some(perm) => perm,
@@ -455,7 +457,10 @@ impl Sudoers {
         let file = match File::open(PathBuf::from("/etc/sudoers")) {
             Ok(f) => f,
             Err(e) => {
-                logger.info().with_string("error", e.to_string()).smsg("Failed to open /etc/sudoers");
+                logger
+                    .info()
+                    .with_string("error", e.to_string())
+                    .smsg("Failed to open /etc/sudoers");
                 return None;
             }
         };
@@ -467,13 +472,16 @@ impl Sudoers {
             let line = match line {
                 Ok(line) => line,
                 Err(e) => {
-                    logger.info().with_string("error", e.to_string()).smsg("Failed to read /etc/sudoers");
+                    logger
+                        .info()
+                        .with_string("error", e.to_string())
+                        .smsg("Failed to read /etc/sudoers");
                     return None;
                 }
             };
 
             match config.process_line(&line) {
-                Ok(()) => {},
+                Ok(()) => {}
                 Err(()) => {
                     logger.info().msg(format!("Invalid configuration line: {}", line));
                 }

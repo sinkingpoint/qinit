@@ -7,9 +7,8 @@ fn main() {
 
     let length = buffer.len();
     if length > 0 {
-        buffer[length-1] = b'\n';
-    }
-    else {
+        buffer[length - 1] = b'\n';
+    } else {
         buffer.push(b'\n');
     }
 
