@@ -8,7 +8,7 @@ git_repository(
 
 git_repository(
     name = "io_bazel_rules_rust",
-    commit = "a1d8936161beddadddd17d2b1c335ceac77d1d53",
+    commit = "fdf9655ba95616e0314b4e0ebab40bb0c5fe005c",
     remote = "https://github.com/bazelbuild/rules_rust.git",
 )
 

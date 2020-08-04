@@ -12,7 +12,7 @@ package(default_visibility = [
 ])
 
 licenses([
-  "notice", # "BSD-3-Clause"
+  "notice", # BSD-3-Clause from expression "BSD-3-Clause"
 ])
 
 load(
@@ -27,19 +27,21 @@ load(
 
 rust_library(
     name = "num_enum",
-    crate_root = "src/lib.rs",
     crate_type = "lib",
-    edition = "2018",
-    srcs = glob(["**/*.rs"]),
     deps = [
+    ],
+    srcs = glob(["**/*.rs"]),
+    crate_root = "src/lib.rs",
+    edition = "2018",
+    proc_macro_deps = [
         "//src/cargo/vendor/derivative-2.1.1:derivative",
         "//src/cargo/vendor/num_enum_derive-0.5.0:num_enum_derive",
     ],
     rustc_flags = [
         "--cap-lints=allow",
     ],
-    
     version = "0.5.0",
+    tags = ["cargo-raze"],
     crate_features = [
         "default",
         "std",

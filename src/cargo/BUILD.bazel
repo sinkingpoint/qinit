@@ -11,52 +11,65 @@ licenses([
 alias(
     name = "base64",
     actual = "//src/cargo/vendor/base64-0.11.0:base64",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "bitflags",
     actual = "//src/cargo/vendor/bitflags-1.2.1:bitflags",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "chrono",
     actual = "//src/cargo/vendor/chrono-0.4.13:chrono",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "clap",
     actual = "//src/cargo/vendor/clap-2.33.1:clap",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "libc",
-    actual = "//src/cargo/vendor/libc-0.2.72:libc",
+    actual = "//src/cargo/vendor/libc-0.2.74:libc",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "nix",
     actual = "//src/cargo/vendor/nix-0.17.0:nix",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "num_enum",
     actual = "//src/cargo/vendor/num_enum-0.5.0:num_enum",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "regex",
     actual = "//src/cargo/vendor/regex-1.3.9:regex",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "ring",
     actual = "//src/cargo/vendor/ring-0.16.15:ring",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "rustls",
     actual = "//src/cargo/vendor/rustls-0.17.0:rustls",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "serde",
     actual = "//src/cargo/vendor/serde-1.0.114:serde",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "serde_derive",
     actual = "//src/cargo/vendor/serde_derive-1.0.114:serde_derive",
+    tags = ["cargo-raze"],
 )
 alias(
     name = "toml",
     actual = "//src/cargo/vendor/toml-0.4.10:toml",
+    tags = ["cargo-raze"],
 )

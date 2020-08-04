@@ -26,12 +26,12 @@ path = "fake_lib.rs"
 workspace_path = "//src/cargo"
 output_buildfile_suffix = "BUILD.bazel"
 
-[raze.crates.libc.'0.2.72']
+[raze.crates.libc.'0.2.74']
 additional_flags = [
     "--cfg=libc_align"
 ]
 
-[raze.crates.proc-macro2.'1.0.18']
+[raze.crates.proc-macro2.'1.0.19']
 additional_flags = [
     "--cfg=use_proc_macro"
 ]

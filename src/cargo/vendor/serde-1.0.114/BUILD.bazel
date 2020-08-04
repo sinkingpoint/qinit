@@ -12,7 +12,7 @@ package(default_visibility = [
 ])
 
 licenses([
-  "restricted", # "MIT OR Apache-2.0"
+  "notice", # MIT from expression "MIT OR Apache-2.0"
 ])
 
 load(
@@ -27,18 +27,20 @@ load(
 
 rust_library(
     name = "serde",
-    crate_root = "src/lib.rs",
     crate_type = "lib",
-    edition = "2015",
-    srcs = glob(["**/*.rs"]),
     deps = [
+    ],
+    srcs = glob(["**/*.rs"]),
+    crate_root = "src/lib.rs",
+    edition = "2015",
+    proc_macro_deps = [
         "//src/cargo/vendor/serde_derive-1.0.114:serde_derive",
     ],
     rustc_flags = [
         "--cap-lints=allow",
     ],
-    
     version = "1.0.114",
+    tags = ["cargo-raze"],
     crate_features = [
         "default",
         "derive",

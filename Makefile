@@ -1,3 +1,7 @@
+.PHONY: raze
+raze:
+	cd src/cargo; cargo generate-lockfile; cargo vendor --versioned-dirs --locked; cargo raze
+
 .PHONY: initramfs
 initramfs:
 	mkdir /tmp/initramfs/dev -p

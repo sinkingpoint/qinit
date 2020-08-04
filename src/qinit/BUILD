@@ -26,10 +26,12 @@ rust_library(
     ],
     deps = [
         "//src/cargo:serde",
-        "//src/cargo:serde_derive",
         "//src/cargo:toml",
         "//src/cargo:nix",
         "//src/libq"
+    ],
+    proc_macro_deps = [
+        "//src/cargo:serde_derive",
     ],
     visibility = ["//visibility:public",],
 )
