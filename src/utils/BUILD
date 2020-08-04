@@ -110,3 +110,16 @@ rust_binary(
         "//src/libq"
     ]
 )
+
+rust_binary(
+    name = "insmod",
+    srcs = [
+        "insmod/src/main.rs"
+    ],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:clap",
+        "//src/cargo:nix",
+        "//src/libq"
+    ]
+)
