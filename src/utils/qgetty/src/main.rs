@@ -177,7 +177,7 @@ fn main() -> Result<(), ()> {
 
     let login_bin = CString::new("/sbin/login").unwrap();
     let args: Vec<Vec<u8>> = ["/sbin/login", username.as_str()]
-        .into_iter()
+        .iter()
         .map(|arg| CString::new(*arg).unwrap().into_bytes_with_nul())
         .collect();
     let args = &args
@@ -186,7 +186,7 @@ fn main() -> Result<(), ()> {
         .collect::<Vec<&CStr>>()[..];
 
     let env: Vec<Vec<u8>> = [format!("TERM={}", options.term_type.unwrap()).as_str()]
-        .into_iter()
+        .iter()
         .map(|env| CString::new(*env).unwrap().into_bytes_with_nul())
         .collect();
     let env = &env

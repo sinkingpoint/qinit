@@ -116,12 +116,12 @@ impl OneValueRequest {
         let mut bytes: Vec<u8> = Vec::new();
 
         if self.value.len() >= 2 << 16 {
-            bytes.append(&mut [255, 255].into_iter().copied().collect());
+            bytes.append(&mut [255, 255].iter().copied().collect());
         } else {
             let length = self.value.len() as u16;
             bytes.append(
                 &mut [((length & 0xFF00) >> 8) as u8, (length & 0xFF) as u8]
-                    .into_iter()
+                    .iter()
                     .copied()
                     .collect(),
             );

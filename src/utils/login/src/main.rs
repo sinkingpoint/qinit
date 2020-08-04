@@ -108,7 +108,7 @@ fn main() {
         let shell = user_passwd.shell.to_str().unwrap();
         let shell_bin = CString::new(shell).unwrap();
         let args: Vec<Vec<u8>> = [shell]
-            .into_iter()
+            .iter()
             .map(|arg| CString::new(*arg).unwrap().into_bytes_with_nul())
             .collect();
         let args = &args
@@ -116,7 +116,7 @@ fn main() {
             .map(|arg| CStr::from_bytes_with_nul(arg).unwrap())
             .collect::<Vec<&CStr>>()[..];
         let env: Vec<Vec<u8>> = [format!("PATH=/bin").as_str()]
-            .into_iter()
+            .iter()
             .map(|env| CString::new(*env).unwrap().into_bytes_with_nul())
             .collect();
         let env = &env

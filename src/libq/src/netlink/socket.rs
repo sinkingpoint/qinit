@@ -31,7 +31,8 @@ impl NLSocket {
 
         match sendmsg(self.socket_fd, &[IoVec::from_slice(data)], &[], MsgFlags::empty(), None) {
             Ok(_) => {}
-            Err(e) => {}
+            // TODO: Send back an error message here
+            Err(_e) => {}
         }
 
         let mut reader = unsafe { BufReader::new(RawFdReader::from_raw_fd(self.socket_fd)) };
