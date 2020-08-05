@@ -19,14 +19,14 @@ where
     Self: OffsetSuperBlock,
 {
     fn from_raw_device(&Device) -> Option<Box<dyn SuperBlock>>;
-    fn from_raw_device_unchecked(&Device) -> Result<Self, Error>;
+    unsafe fn from_raw_device_unchecked(&Device) -> Result<Self, Error>;
 }
 
 impl<T: 'static> FromDevice for T
 where
     T: OffsetSuperBlock,
 {
-    fn from_raw_device_unchecked(d: &Device) -> Result<Self, Error> {
+    unsafe fn from_raw_device_unchecked(d: &Device) -> Result<Self, Error> {
         let mut f = File::open(d.get_path())?;
         // First, seek into the file to the superblock offset
         if let Err(err) = f.seek(SeekFrom::Start(T::get_superblock_offset())) {
@@ -38,12 +38,14 @@ where
     }
 
     fn from_raw_device(d: &Device) -> Option<Box<dyn SuperBlock>> {
-        if let Ok(superblock) = Self::from_raw_device_unchecked(d) {
-            if superblock.validate_superblock() {
-                return Some(Box::new(superblock));
+        unsafe {
+            if let Ok(superblock) = Self::from_raw_device_unchecked(d) {
+                if superblock.validate_superblock() {
+                    return Some(Box::new(superblock));
+                }
             }
         }
-
+        
         return None;
     }
 }

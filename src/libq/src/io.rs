@@ -1,8 +1,10 @@
 use nix::sys::stat::FileStat;
 use nix::unistd::{read, write};
-use std::io::{Error, ErrorKind, Read};
+use std::io::{self, Error, ErrorKind, Read};
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
+
+use mem::{short_from_bytes_little_endian, long_from_bytes_little_endian, int_from_bytes_little_endian};
 
 pub const STDIN_FD: RawFd = 0;
 pub const STDOUT_FD: RawFd = 1;
@@ -40,6 +42,33 @@ pub struct RawFdReader {
 impl FromRawFd for RawFdReader {
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
         Self { fd }
+    }
+}
+
+pub struct BufferReader<'a> {
+    buffer: &'a [u8],
+    offset: usize
+}
+
+impl<'a> BufferReader<'a> {
+    pub fn new(buffer: &'a [u8]) -> BufferReader<'a> {
+        return BufferReader {
+            buffer: buffer,
+            offset: 0
+        };
+    }
+}
+
+impl<'a> Read for BufferReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let mut dst_offset = 0;
+        while self.offset < self.buffer.len() && dst_offset < buf.len() {
+            buf[dst_offset] = self.buffer[self.offset];
+            dst_offset += 1;
+            self.offset += 1;
+        }
+
+        return Ok(dst_offset);
     }
 }
 
@@ -135,4 +164,28 @@ impl FileType {
             FileType::Fifo => 'f',
         }
     }
+}
+
+pub fn read_u8<T: Read>(r: &mut T) -> io::Result<u8> {
+    let mut buffer = [0; 1];
+    r.read_exact(&mut buffer)?;
+    return Ok(buffer[0]);
+}
+
+pub fn read_u16<T: Read>(r: &mut T) -> io::Result<u16> {
+    let mut buffer = [0; 2];
+    r.read_exact(&mut buffer)?;
+    return Ok(short_from_bytes_little_endian(buffer[0], buffer[1]));
+}
+
+pub fn read_u32<T: Read>(r: &mut T) -> io::Result<u32> {
+    let mut buffer = [0; 4];
+    r.read_exact(&mut buffer)?;
+    return Ok(int_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3]));
+}
+
+pub fn read_u64<T: Read>(r: &mut T) -> io::Result<u64> {
+    let mut buffer = [0; 8];
+    r.read_exact(&mut buffer)?;
+    return Ok(long_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7]));
 }

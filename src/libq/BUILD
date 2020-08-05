@@ -32,3 +32,23 @@ rust_test(
         ":libq"
     ]
 )
+
+rust_test(
+    name = "libq_io_test",
+    srcs = [
+        "tests/test_io.rs",
+    ],
+    deps = [
+        ":libq"
+    ]
+)
+
+rust_test(
+    name = "libq_elf_test",
+    srcs = [
+        "tests/test_elf.rs",
+    ],
+    deps = [
+        ":libq"
+    ]
+)

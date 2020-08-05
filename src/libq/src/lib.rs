@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate bitflags;
 extern crate libc;
 extern crate nix;
@@ -17,3 +18,4 @@ pub mod qnix;
 pub mod rand;
 pub mod strings;
 pub mod terminal;
+pub mod elf;

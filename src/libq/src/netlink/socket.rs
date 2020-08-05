@@ -46,9 +46,11 @@ impl NLSocket {
             if header.msg_type == MessageType::NLMSG_DONE {
                 break;
             }
-
-            let body = NewInterfaceCommand::read_after_header(header, &mut reader).unwrap();
-            interfaces.push(body.into());
+            
+            unsafe {
+                let body = NewInterfaceCommand::read_after_header(header, &mut reader).unwrap();
+                interfaces.push(body.into());
+            }
         }
 
         return interfaces;

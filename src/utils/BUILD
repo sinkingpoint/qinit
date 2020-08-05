@@ -123,3 +123,16 @@ rust_binary(
         "//src/libq"
     ]
 )
+
+rust_binary(
+    name = "readelf",
+    srcs = [
+        "readelf/src/main.rs"
+    ],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:clap",
+        "//src/cargo:nix",
+        "//src/libq"
+    ]
+)

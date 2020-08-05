@@ -1,16 +1,14 @@
 use std::io::{self, Read};
 
-pub fn read_struct<T, R: Read>(read: &mut R) -> io::Result<T> {
+pub unsafe fn read_struct<T, R: Read>(read: &mut R) -> io::Result<T> {
     let num_bytes = ::std::mem::size_of::<T>();
-    unsafe {
-        let mut s = std::mem::MaybeUninit::<T>::uninit();
-        let buffer = std::slice::from_raw_parts_mut((&mut s).as_ptr() as *mut T as *mut u8, num_bytes);
-        match read.read_exact(buffer) {
-            Ok(()) => Ok(s.assume_init()),
-            Err(e) => {
-                ::std::mem::forget(s);
-                Err(e)
-            }
+    let mut s = std::mem::MaybeUninit::<T>::uninit();
+    let buffer = std::slice::from_raw_parts_mut((&mut s).as_ptr() as *mut T as *mut u8, num_bytes);
+    match read.read_exact(buffer) {
+        Ok(()) => Ok(s.assume_init()),
+        Err(e) => {
+            ::std::mem::forget(s);
+            Err(e)
         }
     }
 }
@@ -39,4 +37,14 @@ pub fn long_from_bytes_little_endian(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g
         | ((c as u64) << 16)
         | ((b as u64) << 8)
         | a as u64;
+}
+
+pub trait ReadableFromRaw {
+    unsafe fn read_from_raw<R: Read>(read: &mut R) -> io::Result<Self> where Self: Sized;
+}
+
+impl<T> ReadableFromRaw for T where Self: Sized {
+    unsafe fn read_from_raw<R: Read>(read: &mut R) -> io::Result<Self> {
+        return read_struct(read);
+    }
 }

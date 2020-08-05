@@ -34,7 +34,7 @@ pub struct NewInterfaceCommand {
 }
 
 impl NewInterfaceCommand {
-    pub fn read_after_header<T>(header: NLMsgHeader, buffer: &mut T) -> Result<NewInterfaceCommand, io::Error>
+    pub unsafe fn read_after_header<T>(header: NLMsgHeader, buffer: &mut T) -> Result<NewInterfaceCommand, io::Error>
     where
         T: Read,
     {
