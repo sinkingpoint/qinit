@@ -30,17 +30,18 @@ fn print_elf_header(binary: &ElfBinary) {
 }
 
 fn print_section_headers(binary: &ElfBinary) {
-    println!("Section Headers: {}", binary.section_headers.len());
+    println!("Section Headers:");
+    println!("  {: <21} {: <25} {: <8} {: <8} {: <8} {: <8} {: <2} {: <2}", "Name", "Type", "Address", "Offset", "Size", "Entry Size", "Link", "Info");
     for section in binary.section_headers.iter() {
-        println!("{:?}", section);
-        // println!("  Type:       {}", section.header_type);
-        // println!("  Address:    {}", section.virtual_address);
-        // println!("  Offset:     {}", section.offset);
-        // println!("  Size:       {}", section.size);
-        // println!("  Entry Size: {}", section.entry_size);
-        // println!("  Link:       {}", section.link_index);
-        // println!("  Info:       {}", section.extra_info);
-        // println!("");
+        println!("  {: <21} {: <25} {: <8} {: <8} {: <8} {: <8} {: <2} {: <2}", section.name, section.section_type, section.virtual_address, section.offset, section.size, section.entry_size, section.link_index, section.extra_info);
+    }
+}
+
+fn print_program_headers(binary: &ElfBinary) {
+    println!("Program Headers:");
+    println!("  {: <21} {: <10} {: <8} {: <8} {: <8} {: <8} {: <2} {: <2}", "Type", "Offset", "VirtAddr", "PhysAddr", "FileSiz", "MemSiz", "Flags", "Align");
+    for section in binary.program_headers.iter() {
+        println!("  {: <21} {: <10} {: <8} {: <8} {: <8} {: <8} {: <2} {: <2}", section.section_type, section.offset, section.virtual_address, section.physical_address, section.file_size, section.mem_size, section.flags, section.alignment);
     }
 }
 
@@ -85,4 +86,5 @@ fn main() {
 
     print_elf_header(&binary);
     print_section_headers(&binary);
+    print_program_headers(&binary);
 }

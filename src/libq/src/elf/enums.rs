@@ -324,9 +324,6 @@ pub enum ProgramHeaderEntryType {
     InterpreterInfo,
     AuxInfo,
 
-    /// Reserved for future use
-    ShLib,
-
     /// Entry containing the program header itself
     ProgramHeader,
     ThreadLocalStorage,
@@ -357,12 +354,45 @@ impl TryFrom<u32> for ProgramHeaderEntryType {
             0x2 => Ok(ProgramHeaderEntryType::DynamicLinkingInfo),
             0x3 => Ok(ProgramHeaderEntryType::InterpreterInfo),
             0x4 => Ok(ProgramHeaderEntryType::AuxInfo),
-            0x5 => Ok(ProgramHeaderEntryType::ShLib),
             0x6 => Ok(ProgramHeaderEntryType::ProgramHeader),
             0x7 => Ok(ProgramHeaderEntryType::ThreadLocalStorage),
             a if a >= PT_LOOS && a <= PT_HIOS => Ok(ProgramHeaderEntryType::OsSpecific(a)),
             a if a >= PT_LOPROC && a <= PT_HIPROC => Ok(ProgramHeaderEntryType::ProcessorSpecific(a)),
             _ => Err(InvalidELFFormatError::InvalidProgramHeaderEntryType(u))
+        }
+    }
+}
+
+// OS Specific Section Type Constants
+
+/// The array element specifies the location and size of the exception handling information as defined by the .eh_frame_hdr section.
+const PT_GNU_EH_FRAME: u32 = 0x6474e550;
+
+/// The p_flags member specifies the permissions on the segment containing the stack and is used to indicate wether the stack should be executable. The absense of this header indicates that the stack will be executable.
+const PT_GNU_STACK: u32 = 0x6474e551;
+
+/// The array element specifies the location and size of a segment which may be made read-only after relocations have been processed.
+const PT_GNU_RELRO: u32 = 0x6474e552;
+
+/// The segment contains .note.gnu.property
+const PT_GNU_PROPERTY: u32 = 0x6474e553;
+
+impl fmt::Display for ProgramHeaderEntryType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        return match self {
+            ProgramHeaderEntryType::None => write!(f, "NONE"),
+            ProgramHeaderEntryType::Loadable => write!(f, "LOAD"),
+            ProgramHeaderEntryType::DynamicLinkingInfo => write!(f, "DYNAMIC"),
+            ProgramHeaderEntryType::InterpreterInfo => write!(f, "INTERP"),
+            ProgramHeaderEntryType::AuxInfo => write!(f, "NOTE"),
+            ProgramHeaderEntryType::ProgramHeader => write!(f, "PHDR"),
+            ProgramHeaderEntryType::ThreadLocalStorage => write!(f, "TLS"),
+            ProgramHeaderEntryType::OsSpecific(PT_GNU_EH_FRAME) => write!(f, "GNU EH Frame"),
+            ProgramHeaderEntryType::OsSpecific(PT_GNU_STACK) => write!(f, "GNU Stack"),
+            ProgramHeaderEntryType::OsSpecific(PT_GNU_RELRO) => write!(f, "Relocation Read-Only"),
+            ProgramHeaderEntryType::OsSpecific(PT_GNU_PROPERTY) => write!(f, "GNU Property"),
+            ProgramHeaderEntryType::OsSpecific(a) => write!(f, "OS Specific ({:x})", a),
+            ProgramHeaderEntryType::ProcessorSpecific(a) => write!(f, "Processor Specific ({})", a)
         }
     }
 }
@@ -419,6 +449,21 @@ impl TryFrom<u32> for SectionHeaderEntryType {
     }
 }
 
+/// Incremental Build Data
+const SHT_GNU_INCREMENTAL_INPUTS: u32 = 0x6fff4700;
+
+/// LLVM ODR table
+const SHT_LLVM_ODRTAB: u32 = 0x6fff4c00;
+
+/// Object attributes
+const SHT_GNU_ATTRIBUTES: u32 = 0x6ffffff5;
+
+/// GNU style symbol hash table
+const SHT_GNU_HASH: u32 = 0x6ffffff6;
+
+/// List of prelink dependencies
+const SHT_GNU_LIBLIST: u32 = 0x6ffffff7;
+
 impl fmt::Display for SectionHeaderEntryType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         return match self {
@@ -438,7 +483,12 @@ impl fmt::Display for SectionHeaderEntryType {
             SectionHeaderEntryType::PreConstructorArray => write!(f, "PREINIT_ARRAY"),
             SectionHeaderEntryType::SectionGroup => write!(f, "GROUP"),
             SectionHeaderEntryType::SectionIndices => write!(f, "INDICES"),
-            SectionHeaderEntryType::OsSpecific(a) => write!(f, "OS Specific ({})", a),
+            SectionHeaderEntryType::OsSpecific(SHT_GNU_INCREMENTAL_INPUTS) => write!(f, "GNU Incremental"),
+            SectionHeaderEntryType::OsSpecific(SHT_LLVM_ODRTAB) => write!(f, "LLVM ODR Tab"),
+            SectionHeaderEntryType::OsSpecific(SHT_GNU_ATTRIBUTES) => write!(f, "GNU Attributes"),
+            SectionHeaderEntryType::OsSpecific(SHT_GNU_HASH) => write!(f, "GNU Hash Table"),
+            SectionHeaderEntryType::OsSpecific(SHT_GNU_LIBLIST) => write!(f, "GNU Lib List"),
+            SectionHeaderEntryType::OsSpecific(a) => write!(f, "OS Specific ({:x})", a),
         }
     }
 }

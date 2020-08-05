@@ -1,5 +1,7 @@
 use std::io::{Read, Seek, SeekFrom};
 use std::convert::TryFrom;
+use std::char;
+
 use io::{read_u8, read_u16, read_u32, read_u64};
 use super::enums::{ProgramHeaderEntryType, SectionHeaderEntryType, SectionHeaderEntryFlags, ElfTargetArch, ElfObjectType, ElfABI, Endianness, AddressSize, InvalidELFFormatError};
 
@@ -31,6 +33,27 @@ impl ElfBinary {
         for _ in 0..header.section_header_num_entries {
             section_headers.push(SectionHeader::read(r, header.addr_size)?);
         }
+
+        // Lets dump out the names section
+        let names_section_header = &section_headers[header.section_header_name_index]; // Assumes this is valid and we actually have a names section
+
+        r.seek(SeekFrom::Start(names_section_header.offset))?;
+        // Dumb idea. Lets just read the whole section. We can tidy this up later. Probably by making a "StringsSection" struct
+        let names_header_size = names_section_header.size;
+        let mut buffer = vec![0; names_header_size];
+        r.read_exact(&mut buffer);
+
+        for header in section_headers.iter_mut() {
+            let mut name_offset = header.name_offset;
+            let mut build = String::new();
+            while buffer[name_offset] != 0 && name_offset < names_header_size {
+                build.push(char::from_u32(buffer[name_offset] as u32).unwrap());
+                name_offset += 1;
+            }
+
+            header.name = build;
+        }
+
 
         return Ok(ElfBinary {
             header: header,
@@ -93,7 +116,7 @@ pub struct ElfHeader {
     pub section_header_num_entries: u16,
 
     /// The index of the entry in the section header that contains the section names
-    pub section_header_name_index: u16,
+    pub section_header_name_index: usize,
 }
 
 impl ElfHeader {
@@ -167,7 +190,7 @@ impl ElfHeader {
                 program_header_num_entries: prog_header_num,
                 section_header_entry_size: section_header_size,
                 section_header_num_entries: section_header_num,
-                section_header_name_index: names_section_index
+                section_header_name_index: names_section_index as usize
             }
         )
     }
@@ -176,7 +199,7 @@ impl ElfHeader {
 #[derive(Debug)]
 pub struct ProgramHeader {
     /// Identifies the type of the segment. 
-    pub entry_type: ProgramHeaderEntryType,
+    pub section_type: ProgramHeaderEntryType,
 
     /// Segment dependant flags
     pub flags: u32,
@@ -205,7 +228,7 @@ impl ProgramHeader {
         // NOTE: Not sure whether the compiler can reorder these statements?
         // So this may be stochastic. Maybe.
 
-        let entry_type = ProgramHeaderEntryType::try_from(read_u32(r)?)?;
+        let section_type = ProgramHeaderEntryType::try_from(read_u32(r)?)?;
 
         // A bit hacky here - flags absolutely does only get initialized once, but the compiler can't reason that
         // so we have to give is a default value of 0 and make it mut
@@ -254,7 +277,7 @@ impl ProgramHeader {
         };
 
         return Ok(ProgramHeader {
-            entry_type: entry_type,
+            section_type: section_type,
             flags: flags,
             offset: segment_offset,
             virtual_address: virtual_address,
@@ -268,12 +291,13 @@ impl ProgramHeader {
 
 #[derive(Debug)]
 pub struct SectionHeader {
-    pub name_offset: u32,
+    pub name: String,
+    pub name_offset: usize,
     pub section_type: SectionHeaderEntryType,
     pub attrs: SectionHeaderEntryFlags,
     pub virtual_address: u64,
     pub offset: u64,
-    pub size: u64,
+    pub size: usize,
     pub link_index: u32,
     pub extra_info: u32,
     pub align: u64,
@@ -318,12 +342,13 @@ impl SectionHeader {
         };
 
         return Ok(SectionHeader {
-            name_offset: name_offset,
+            name: String::new(),
+            name_offset: name_offset as usize,
             section_type: section_type,
             attrs: flags,
             virtual_address: virtual_address,
             offset: offset,
-            size: size,
+            size: size as usize,
             link_index: link_index,
             extra_info: extra_info,
             align: align,
