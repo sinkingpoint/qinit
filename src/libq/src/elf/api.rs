@@ -2,8 +2,8 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::convert::TryFrom;
 use std::char;
 
-use io::{read_u8, read_u16, read_u32, read_u64};
-use super::enums::{ProgramHeaderEntryType, SectionHeaderEntryType, SectionHeaderEntryFlags, ElfTargetArch, ElfObjectType, ElfABI, Endianness, AddressSize, InvalidELFFormatError};
+use io::{Endianness, read_u8, read_u16, read_u32, read_u64};
+use super::enums::{ProgramHeaderEntryType, SectionHeaderEntryType, SectionHeaderEntryFlags, ElfTargetArch, ElfObjectType, ElfABI, ElfEndianness, AddressSize, InvalidELFFormatError};
 
 #[derive(Debug)]
 pub struct ElfBinary {
@@ -34,18 +34,20 @@ impl ElfBinary {
             return Err(InvalidELFFormatError::InvalidMagic);
         }
 
+        let read_endian = header.endianness.to_portable();
+
         r.seek(SeekFrom::Start(header.program_header_offset))?;
 
         let mut program_headers = Vec::new();
         for _ in 0..header.program_header_num_entries {
-            program_headers.push(ProgramHeader::read(r, header.addr_size)?);
+            program_headers.push(ProgramHeader::read(r, header.addr_size, &read_endian)?);
         }
 
         r.seek(SeekFrom::Start(header.section_header_table_offset))?;
 
         let mut section_headers = Vec::new();
         for _ in 0..header.section_header_num_entries {
-            section_headers.push(SectionHeader::read(r, header.addr_size)?);
+            section_headers.push(SectionHeader::read(r, header.addr_size, &read_endian)?);
         }
 
         // Lets dump out the names section
@@ -55,7 +57,7 @@ impl ElfBinary {
         // TODO: We can tidy this up later. Probably by making a "StringsSection" struct
         let names_header_size = names_section_header.size;
         let mut buffer = vec![0; names_header_size];
-        r.read_exact(&mut buffer);
+        r.read_exact(&mut buffer)?;
 
         for header in section_headers.iter_mut() {
             let mut name_offset = header.name_offset;
@@ -85,7 +87,7 @@ pub struct ElfHeader {
     pub addr_size: AddressSize,
 
     /// The Endianness of multibyte values in the rest of the file
-    pub endianness: Endianness,
+    pub endianness: ElfEndianness,
 
     /// Target Platform ABI
     pub abi: ElfABI,
@@ -143,7 +145,9 @@ impl ElfHeader {
         r.read_exact(&mut magic)?;
 
         let addr_size = AddressSize::try_from(read_u8(&mut r)?)?;
-        let endianness = Endianness::try_from(read_u8(&mut r)?)?;
+        let endianness = ElfEndianness::try_from(read_u8(&mut r)?)?;
+
+        let read_endian = endianness.to_portable();
 
         let version = read_u8(&mut r)?;
         if version != 1 {
@@ -156,34 +160,34 @@ impl ElfHeader {
         let mut pad_buffer = [0; 7];
         r.read_exact(&mut pad_buffer)?;
 
-        let elf_type = ElfObjectType::try_from(read_u16(&mut r)?)?;
-        let target_arch = ElfTargetArch::try_from(read_u16(&mut r)?)?;
+        let elf_type = ElfObjectType::try_from(read_u16(&mut r, &read_endian)?)?;
+        let target_arch = ElfTargetArch::try_from(read_u16(&mut r, &read_endian)?)?;
 
         // Two versions for some reason??
-        let e_version = read_u32(&mut r)?;
+        let e_version = read_u32(&mut r, &read_endian)?;
 
         let entrypoint = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, &read_endian)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, &read_endian)?
         };
 
         let program_header_offset = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, &read_endian)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, &read_endian)?
         };
 
         let section_header_offset = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, &read_endian)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, &read_endian)?
         };
 
-        let flags = read_u32(&mut r)?;
-        let header_size = read_u16(&mut r)?;
-        let prog_header_size = read_u16(&mut r)?;
-        let prog_header_num = read_u16(&mut r)?;
-        let section_header_size = read_u16(&mut r)?;
-        let section_header_num = read_u16(&mut r)?;
-        let names_section_index = read_u16(&mut r)?;
+        let flags = read_u32(&mut r, &read_endian)?;
+        let header_size = read_u16(&mut r, &read_endian)?;
+        let prog_header_size = read_u16(&mut r, &read_endian)?;
+        let prog_header_num = read_u16(&mut r, &read_endian)?;
+        let section_header_size = read_u16(&mut r, &read_endian)?;
+        let section_header_num = read_u16(&mut r, &read_endian)?;
+        let names_section_index = read_u16(&mut r, &read_endian)?;
 
         return Ok(
             ElfHeader{
@@ -238,11 +242,11 @@ pub struct ProgramHeader {
 }
 
 impl ProgramHeader {
-    fn read<T: Read>(mut r: &mut T, addr_size: AddressSize) -> Result<ProgramHeader, InvalidELFFormatError> {
+    fn read<T: Read>(mut r: &mut T, addr_size: AddressSize, endianness: &Endianness) -> Result<ProgramHeader, InvalidELFFormatError> {
         // NOTE: Not sure whether the compiler can reorder these statements?
         // So this may be stochastic. Maybe.
 
-        let section_type = ProgramHeaderEntryType::try_from(read_u32(r)?)?;
+        let section_type = ProgramHeaderEntryType::try_from(read_u32(r, endianness)?)?;
 
         // A bit hacky here - flags absolutely does only get initialized once, but the compiler can't reason that
         // so we have to give is a default value of 0 and make it mut
@@ -251,43 +255,43 @@ impl ProgramHeader {
         if addr_size == AddressSize::SixtyFourBit {
             // The flags are in a different position depending on the address size, for alignment reasons
             // For 64 bit addresses they're here, for 32 bit addresses, they're down
-            flags = read_u32(r)?;
+            flags = read_u32(r, endianness)?;
         }
 
         let segment_offset = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         let virtual_address = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         let physical_address = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         let fs_size = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         let mem_size = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         if addr_size == AddressSize::ThirtyTwoBit {
             // The flags are in a different position depending on the address size, for alignment reasons
             // For 32 bit addresses they're here, for 64 bit addresses, they're above
-            flags = read_u32(r)?;
+            flags = read_u32(r, endianness)?;
         }
 
         let align = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         return Ok(ProgramHeader {
@@ -319,40 +323,40 @@ pub struct SectionHeader {
 }
 
 impl SectionHeader {
-    pub fn read<T: Read>(mut r: &mut T, addr_size: AddressSize) -> Result<SectionHeader, InvalidELFFormatError> {
-        let name_offset = read_u32(&mut r)?;
-        let section_type = SectionHeaderEntryType::try_from(read_u32(&mut r)?)?;
+    pub fn read<T: Read>(mut r: &mut T, addr_size: AddressSize, endianness: &Endianness) -> Result<SectionHeader, InvalidELFFormatError> {
+        let name_offset = read_u32(&mut r, endianness)?;
+        let section_type = SectionHeaderEntryType::try_from(read_u32(&mut r, endianness)?)?;
         let flags = match addr_size {
-            AddressSize::ThirtyTwoBit => SectionHeaderEntryFlags::try_from(read_u32(&mut r)? as u64)?,
-            AddressSize::SixtyFourBit => SectionHeaderEntryFlags::try_from(read_u64(&mut r)?)?,
+            AddressSize::ThirtyTwoBit => SectionHeaderEntryFlags::try_from(read_u32(&mut r, endianness)? as u64)?,
+            AddressSize::SixtyFourBit => SectionHeaderEntryFlags::try_from(read_u64(&mut r, endianness)?)?,
         };
 
         let virtual_address = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         let offset = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         let size = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
-        let link_index = read_u32(&mut r)?;
-        let extra_info = read_u32(&mut r)?;
+        let link_index = read_u32(&mut r, endianness)?;
+        let extra_info = read_u32(&mut r, endianness)?;
 
         let align = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         let entry_size = match addr_size {
-            AddressSize::ThirtyTwoBit => read_u32(&mut r)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r)?
+            AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
         };
 
         return Ok(SectionHeader {

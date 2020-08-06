@@ -195,26 +195,40 @@ impl FileType {
     }
 }
 
+pub enum Endianness {
+    Little,
+    Big
+}
+
 pub fn read_u8<T: Read>(r: &mut T) -> io::Result<u8> {
     let mut buffer = [0; 1];
     r.read_exact(&mut buffer)?;
     return Ok(buffer[0]);
 }
 
-pub fn read_u16<T: Read>(r: &mut T) -> io::Result<u16> {
+pub fn read_u16<T: Read>(r: &mut T, endian: &Endianness) -> io::Result<u16> {
     let mut buffer = [0; 2];
     r.read_exact(&mut buffer)?;
-    return Ok(short_from_bytes_little_endian(buffer[0], buffer[1]));
+    return Ok(match endian {
+        Endianness::Little => short_from_bytes_little_endian(buffer[0], buffer[1]),
+        Endianness::Big => short_from_bytes_little_endian(buffer[1], buffer[0])
+    });
 }
 
-pub fn read_u32<T: Read>(r: &mut T) -> io::Result<u32> {
+pub fn read_u32<T: Read>(r: &mut T, endian: &Endianness) -> io::Result<u32> {
     let mut buffer = [0; 4];
     r.read_exact(&mut buffer)?;
-    return Ok(int_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3]));
+    return Ok(match endian {
+        Endianness::Little => int_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3]),
+        Endianness::Big => int_from_bytes_little_endian(buffer[3], buffer[2], buffer[1], buffer[0])
+    });
 }
 
-pub fn read_u64<T: Read>(r: &mut T) -> io::Result<u64> {
+pub fn read_u64<T: Read>(r: &mut T, endian: &Endianness) -> io::Result<u64> {
     let mut buffer = [0; 8];
     r.read_exact(&mut buffer)?;
-    return Ok(long_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7]));
+    return Ok(match endian {
+        Endianness::Little => long_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7]),
+        Endianness::Big => long_from_bytes_little_endian(buffer[7], buffer[6], buffer[5], buffer[4], buffer[3], buffer[2], buffer[1], buffer[0])
+    });
 }

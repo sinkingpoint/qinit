@@ -1,6 +1,7 @@
 use std::fmt;
 use std::io;
 use std::convert::TryFrom;
+use io::Endianness;
 
 #[derive(Debug)]
 pub enum InvalidELFFormatError {
@@ -69,28 +70,37 @@ impl fmt::Display for AddressSize {
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
-pub enum Endianness{
+pub enum ElfEndianness{
     LittleEndian,
     BigEndian
 }
 
-impl TryFrom<u8> for Endianness {
+impl TryFrom<u8> for ElfEndianness {
     type Error = InvalidELFFormatError;
 
     fn try_from(u: u8) -> Result<Self, Self::Error> {
         return match u {
-            1 => Ok(Endianness::LittleEndian),
-            2 => Ok(Endianness::BigEndian),
+            1 => Ok(ElfEndianness::LittleEndian),
+            2 => Ok(ElfEndianness::BigEndian),
             _ => Err(InvalidELFFormatError::InvalidEndianness(u))
         }
     }
 }
 
-impl fmt::Display for Endianness {
+impl ElfEndianness {
+    pub fn to_portable(&self) -> Endianness {
+        return match self {
+            ElfEndianness::LittleEndian => Endianness::Little,
+            ElfEndianness::BigEndian => Endianness::Big
+        }
+    }
+}
+
+impl fmt::Display for ElfEndianness {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         return match self {
-            Endianness::LittleEndian => write!(f, "2's complement, little endian"),
-            Endianness::BigEndian => write!(f, "2's complement, big endian")
+            ElfEndianness::LittleEndian => write!(f, "2's complement, little endian"),
+            ElfEndianness::BigEndian => write!(f, "2's complement, big endian")
         }
     }
 }
