@@ -30,7 +30,7 @@ rust_library(
     deps = [
         "//src/cargo/vendor/proc-macro2-1.0.19:proc_macro2",
         "//src/cargo/vendor/quote-1.0.7:quote",
-        "//src/cargo/vendor/syn-1.0.37:syn",
+        "//src/cargo/vendor/syn-1.0.38:syn",
         "//src/cargo/vendor/wasm-bindgen-backend-0.2.67:wasm_bindgen_backend",
         "//src/cargo/vendor/wasm-bindgen-shared-0.2.67:wasm_bindgen_shared",
     ],

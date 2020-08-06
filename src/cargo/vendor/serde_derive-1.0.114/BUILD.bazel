@@ -31,7 +31,7 @@ rust_library(
     deps = [
         "//src/cargo/vendor/proc-macro2-1.0.19:proc_macro2",
         "//src/cargo/vendor/quote-1.0.7:quote",
-        "//src/cargo/vendor/syn-1.0.37:syn",
+        "//src/cargo/vendor/syn-1.0.38:syn",
     ],
     srcs = glob(["**/*.rs"]),
     crate_root = "src/lib.rs",
