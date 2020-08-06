@@ -1,15 +1,18 @@
 extern crate libq;
 extern crate clap;
+extern crate lzma_rs;
 
 use std::path::Path;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{Read, BufReader};
 use std::process::exit;
 use std::char;
 
 use clap::{App, Arg};
 use libq::elf::ElfBinary;
 use libq::logger;
+use libq::io::BufferReader;
+use lzma_rs::xz_decompress;
 
 fn main() {
     let args = App::new("modinfo")
@@ -37,20 +40,63 @@ fn main() {
         exit(1);
     }
 
-    let file = match File::open(path) {
-        Ok(f) => f,
+    let mut file = match File::open(path) {
+        Ok(f) => BufReader::new(f),
         Err(e) => {
             logger.info().with_str("path", args.value_of("file").unwrap()).with_string("error", e.to_string()).smsg("Failed to open file");
             exit(1);
         }
     };
 
-    let mut reader = BufReader::new(file);
+    let mut buffer: Vec<u8> = Vec::new();
+    match path.extension() {
+        Some(ext) => {
+            match ext.to_str() {
+                Some("o") | Some("ko") => {
+                    match file.read_to_end(&mut buffer) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            logger.info().with_str("path", args.value_of("file").unwrap()).with_string("error", format!("{}", e)).smsg("Failed to read file");
+                            exit(1);
+                        }
+                    }
+                },
+                Some("xz") => {
+                    match xz_decompress(&mut file, &mut buffer) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            logger.info().with_str("path", args.value_of("file").unwrap()).with_string("error", format!("{:?}", e)).smsg("Failed to open file as xz");
+                            exit(1);
+                        }
+                    }
+                },
+                Some(ext) => {
+                    logger.info().with_str("path", args.value_of("file").unwrap()).msg(format!("Unrecognised file extension: {}", ext));
+                    exit(1);
+                },
+                None => {
+                    logger.info().with_str("path", args.value_of("file").unwrap()).smsg("Filename isn't valid Unicode?");
+                    exit(1);
+                }
+            }
+        },
+        None => {
+            match file.read_to_end(&mut buffer) {
+                Ok(_) => {},
+                Err(e) => {
+                    logger.info().with_str("path", args.value_of("file").unwrap()).with_string("error", format!("{}", e)).smsg("Failed to read file");
+                    exit(1);
+                }
+            }
+        }
+    };
+
+    let mut reader = BufferReader::new(&buffer);
 
     let binary = match ElfBinary::read(&mut reader) {
         Ok(bin) => bin,
         Err(e) => {
-            logger.info().with_str("path", args.value_of("file").unwrap()).with_string("error", e.to_string()).smsg("Failed to read file");
+            logger.info().with_str("path", args.value_of("file").unwrap()).with_string("error", e.to_string()).smsg("Failed to read file as an ELF binary");
             exit(1);
         }
     };

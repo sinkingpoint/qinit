@@ -1,6 +1,6 @@
 use nix::sys::stat::FileStat;
 use nix::unistd::{read, write};
-use std::io::{self, Error, ErrorKind, Read};
+use std::io::{self, Error, ErrorKind, Read, Seek, SeekFrom};
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
 
@@ -58,6 +58,35 @@ impl<'a> BufferReader<'a> {
         };
     }
 }
+
+impl<'a> Seek for BufferReader<'a> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        let mut new_offset: i64 = self.offset as i64;
+        match pos {
+            SeekFrom::Start(i) => {
+                new_offset = i as i64;
+            },
+            SeekFrom::Current(i) => {
+                if -i > new_offset {
+                    return Err(io::Error::from(io::ErrorKind::Other));
+                }
+                new_offset += i;
+            },
+            SeekFrom::End(i) => {
+                if -i > self.buffer.len() as i64 {
+                    return Err(io::Error::from(io::ErrorKind::Other));
+                }
+
+                new_offset += i;
+            }
+        }
+    
+        self.offset = new_offset as usize;
+
+        return Ok(new_offset as u64);
+    }
+}
+
 
 impl<'a> Read for BufferReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {

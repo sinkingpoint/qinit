@@ -145,6 +145,7 @@ rust_binary(
     visibility = ["//visibility:public",],
     deps = [
         "//src/cargo:clap",
+        "//src/cargo:lzma_rs",
         "//src/cargo:nix",
         "//src/libq"
     ]
