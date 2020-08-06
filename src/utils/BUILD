@@ -136,3 +136,16 @@ rust_binary(
         "//src/libq"
     ]
 )
+
+rust_binary(
+    name = "modinfo",
+    srcs = [
+        "modinfo/src/main.rs"
+    ],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:clap",
+        "//src/cargo:nix",
+        "//src/libq"
+    ]
+)
