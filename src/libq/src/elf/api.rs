@@ -1,4 +1,4 @@
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{self, Read, Seek, SeekFrom};
 use std::convert::TryFrom;
 use std::char;
 
@@ -13,6 +13,20 @@ pub struct ElfBinary {
 }
 
 impl ElfBinary {
+    pub fn read_section<T: Read + Seek>(&self, r: &mut T, name: &str) -> Result<Option<Vec<u8>>, io::Error> {
+        for section in self.section_headers.iter() {
+            if section.name == name {
+                r.seek(SeekFrom::Start(section.offset))?;
+                let mut buffer = vec![0; section.size];
+                r.read_exact(&mut buffer)?;
+
+                return Ok(Some(buffer));
+            }
+        }
+
+        return Ok(None);
+    }
+
     pub fn read<T: Read + Seek>(r: &mut T) -> Result<ElfBinary, InvalidELFFormatError> {
         let header = ElfHeader::read(r)?;
 
@@ -38,7 +52,7 @@ impl ElfBinary {
         let names_section_header = &section_headers[header.section_header_name_index]; // Assumes this is valid and we actually have a names section
 
         r.seek(SeekFrom::Start(names_section_header.offset))?;
-        // Dumb idea. Lets just read the whole section. We can tidy this up later. Probably by making a "StringsSection" struct
+        // TODO: We can tidy this up later. Probably by making a "StringsSection" struct
         let names_header_size = names_section_header.size;
         let mut buffer = vec![0; names_header_size];
         r.read_exact(&mut buffer);
