@@ -1,123 +1,41 @@
 extern crate clap;
-extern crate libfreudian;
 extern crate libq;
-
-mod functions;
+extern crate breuer;
 
 use clap::{App, Arg};
+use std::path::Path;
 
-use libfreudian::api::{self, MessageType, ResponseType};
-use libfreudian::Bus;
-
-use functions::{handle_add_message, handle_get_message_request, handle_topic_request};
-
-use std::fs;
-use std::io::{self, Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::thread;
-
-use libq::daemon::write_pid_file;
-
-fn handle_client(bus: &mut Arc<Mutex<Bus>>, mut stream: UnixStream) -> Result<(), io::Error> {
-    loop {
-        let mut header_buffer = [0, 0, 0];
-        stream.read_exact(&mut header_buffer)?;
-        let message_class = MessageType::from(header_buffer[0]);
-        let message_length = ((header_buffer[1] as u16) << 8 | header_buffer[2] as u16) as usize;
-        let mut message_buffer: Vec<u8> = Vec::with_capacity(message_length);
-        message_buffer.resize(message_length, 0 as u8);
-        match stream.read_exact(&mut message_buffer) {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("{}", e);
-                stream.write_all(&vec![ResponseType::MalformedRequest.into()])?;
-                return Err(e);
-            }
-        }
-
-        let response = match message_class {
-            MessageType::CreateTopic => handle_topic_request(bus, api::parse_as_create_topic_request(&message_buffer)),
-            MessageType::DeleteTopic => handle_topic_request(bus, api::parse_as_delete_topic_request(&message_buffer)),
-            MessageType::Subscribe => handle_topic_request(bus, api::parse_as_subscribe_request(&message_buffer)),
-            MessageType::ProduceMessage => handle_add_message(bus, api::parse_as_put_message_request(&message_buffer)),
-            MessageType::GetMessage => handle_get_message_request(bus, api::parse_as_get_message_request(&message_buffer)),
-            _ => Ok(vec![ResponseType::Ok.into()]),
-        };
-
-        let response = match response {
-            Ok(resp) => resp,
-            Err(()) => {
-                stream.write_all(&vec![ResponseType::ServerError.into()])?;
-                return Err(io::Error::new(io::ErrorKind::Other, "Bailing out of thread - bus function died"));
-            }
-        };
-
-        stream.write_all(&response)?;
-    }
-}
+use libq::logger;
+use breuer::{FreudianSocket, FreudianSocketError};
 
 fn main() {
     let args = App::new("freudian")
         .version("0.1")
         .author("Colin D. <colin@quirl.co.nz>")
-        .about("message bus daemon")
-        .arg(
-            Arg::with_name("pidfile")
-                .takes_value(true)
-                .long("pidfile")
-                .help("Sets the PID file to use"),
-        )
-        .arg(
-            Arg::with_name("socketfile")
-                .takes_value(true)
-                .long("socket")
-                .help("Sets the socket file to use"),
-        )
+        .arg(Arg::with_name("pidfile").long("pidfile").help("Sets the PID file to use"))
+        .arg(Arg::with_name("socketfile").long("socket").help("Sets the socket file to use"))
+        .about("A message bus daemon, loosely based on Kafka")
         .get_matches();
 
-    let pidfile = PathBuf::from(args.value_of("pidfile").unwrap_or("/run/freudian/active.pid"));
-    let socketfile = PathBuf::from(args.value_of("socketfile").unwrap_or("/run/freudian/socket"));
+    let logger = logger::with_name_as_json("freudian");
+    let socketfile_str = args.value_of("socketfile").unwrap_or("/run/freudian/socket");
+    let socketfile = Path::new(socketfile_str);
 
-    match write_pid_file(pidfile) {
-        Ok(_) => {}
-        Err(err) => {
-            eprintln!("{}", err);
-            return;
-        }
-    };
-
-    if socketfile.exists() {
-        // Remove the old socket file if we've managed to get a PID lock
-        fs::remove_file(&socketfile).unwrap();
-    }
-
-    let socket = match UnixListener::bind(socketfile) {
+    let socket = match FreudianSocket::new(socketfile) {
         Ok(socket) => socket,
         Err(err) => {
-            eprintln!("Failed to open socket: {}", err);
+            match err {
+                FreudianSocketError::ProcessAlreadyRunning => {
+                    logger.info().with_str("path", socketfile_str).smsg("A Process is already listening on this socket")
+                },
+                FreudianSocketError::IOError(err) => {
+                    logger.info().with_str("path", socketfile_str).with_string("error", err.to_string()).smsg("Failed to open socket file")
+                }
+            }
+
             return;
         }
     };
 
-    let bus: Arc<Mutex<Bus>> = Arc::new(Mutex::new(Bus::new()));
-    let mut children = Vec::new();
-
-    for stream in socket.incoming() {
-        match stream {
-            Ok(stream) => {
-                let mut bus_ptr = Arc::clone(&bus);
-                children.push(thread::spawn(move || handle_client(&mut bus_ptr, stream)));
-            }
-            Err(err) => {
-                println!("Failed to handle connection... {}", err);
-                break;
-            }
-        }
-    }
-
-    for child in children.into_iter() {
-        child.join().unwrap().unwrap();
-    }
+    socket.listen_and_serve();
 }

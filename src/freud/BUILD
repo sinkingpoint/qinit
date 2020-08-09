@@ -1,55 +1,29 @@
-load("@io_bazel_rules_rust//rust:rust.bzl", "rust_library", "rust_binary")
+load("@io_bazel_rules_rust//rust:rust.bzl", "rust_binary", "rust_library", "rust_test")
 
 rust_library(
-    name = "libfreudian",
-    srcs = [
-        "src/lib/freudian/lib.rs",
-        "src/lib/freudian/subscriber.rs",
-        "src/lib/freudian/topic.rs",
-        "src/lib/freudian/api.rs",
-        "src/lib/freudian/util.rs"
-    ],
+    name = "breuer",
+    srcs = glob(["src/lib/server/*.rs"]),
     deps = [
         "//src/libq:libq",
-    ],
-    visibility = ["//visibility:public",],
+        "//src/cargo:nix"
+    ]
 )
 
-rust_library(
-    name = "patient",
-    srcs = [
-        "src/lib/client/lib.rs"
-    ],
+rust_test(
+    name = "breuer_test",
+    srcs = glob(["src/lib/test/server/*.rs"]),
     deps = [
-        "//src/freud:libfreudian",
-    ],
-    visibility = ["//visibility:public",],
+        ":breuer"
+    ]
 )
 
 rust_binary(
     name = "freudian",
-    srcs = [
-        "src/bin/freudian/main.rs",
-        "src/bin/freudian/functions.rs",
-    ],
+    srcs = glob(["src/bin/freudian/*.rs"]),
     deps = [
-        "//src/freud:libfreudian",
         "//src/libq:libq",
         "//src/cargo:clap",
+        ":breuer"
     ],
     visibility = ["//visibility:public",],
 )
-
-rust_binary(
-    name = "freudctl",
-    srcs = [
-        "src/bin/freudctl/main.rs",
-    ],
-    deps = [
-        "//src/freud:patient",
-        "//src/libq:libq",
-        "//src/cargo:clap",
-    ],
-    visibility = ["//visibility:public",],
-)
-
