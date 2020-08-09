@@ -1,5 +1,7 @@
 use nix::sys::stat::FileStat;
 use nix::unistd::{read, write};
+use nix::sys::socket::{MsgFlags, recv};
+
 use std::io::{self, Error, ErrorKind, Read, Seek, SeekFrom};
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
@@ -44,6 +46,54 @@ impl FromRawFd for RawFdReader {
         Self { fd }
     }
 }
+
+impl Read for RawFdReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        assert!(buf.len() <= isize::max_value() as usize);
+        return match read(self.fd, buf) {
+            Ok(amt) => Ok(amt),
+            Err(e) => {
+                if let Some(errno) = e.as_errno() {
+                    return Err(Error::from_raw_os_error(errno as i32));
+                }
+                return Err(Error::new(ErrorKind::Other, e));
+            }
+        };
+    }
+}
+
+pub struct RawFdReceiver {
+    /// RawFdReader provides a Read interface on a RawFd, using recv instead of . Unlike a std::io::File, doesn't claim
+    /// ownership of the underlying fd so `close`ing must be handled external to this
+    fd: RawFd,
+
+    flags: MsgFlags,
+}
+
+impl RawFdReceiver {
+    pub fn new(fd: RawFd, flags: MsgFlags) -> RawFdReceiver {
+        return RawFdReceiver {
+            fd: fd,
+            flags: flags
+        }
+    }
+}
+
+impl Read for RawFdReceiver {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        assert!(buf.len() <= isize::max_value() as usize);
+        return match recv(self.fd, buf, self.flags) {
+            Ok(amt) => Ok(amt),
+            Err(e) => {
+                if let Some(errno) = e.as_errno() {
+                    return Err(Error::from_raw_os_error(errno as i32));
+                }
+                return Err(Error::new(ErrorKind::Other, e));
+            }
+        };
+    }
+}
+
 
 pub struct BufferReader<'a> {
     buffer: &'a [u8],
@@ -98,21 +148,6 @@ impl<'a> Read for BufferReader<'a> {
         }
 
         return Ok(dst_offset);
-    }
-}
-
-impl Read for RawFdReader {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        assert!(buf.len() <= isize::max_value() as usize);
-        return match read(self.fd, buf) {
-            Ok(amt) => Ok(amt),
-            Err(e) => {
-                if let Some(errno) = e.as_errno() {
-                    return Err(Error::from_raw_os_error(errno as i32));
-                }
-                return Err(Error::new(ErrorKind::Other, e));
-            }
-        };
     }
 }
 

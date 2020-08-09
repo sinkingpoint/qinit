@@ -1,6 +1,7 @@
 name = "MultiUserMode"
 description = "Multi User Mode + Networking. Basically init 3"
 steps = [
-    { name = "SingleUserMode" }
-    { name = "getty", args = {"tty" = "tty1"}}
+    { name = "SingleUserMode" },
+    { name = "getty", args = {"tty" = "tty1"}},
+    { name = "qdevd" }
 ]

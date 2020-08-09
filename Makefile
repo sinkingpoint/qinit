@@ -15,7 +15,7 @@ rootfs:
 
 .PHONY: run
 run: initramfs rootfs
-	sudo qemu-system-x86_64 -netdev tap,ifname=qemutap0,script=no,downscript=no,id=mynet0 -device e1000,netdev=mynet0,mac=00:12:35:56:78:9a -m 1G -kernel bin/vmlinux -initrd bazel-bin/src/initramfs/initramfs.igz -drive format=raw,file=bazel-bin/src/rootfs/rootfs.ext4 -serial stdio -append "console=ttyAMA0 console=ttyS0 root=/dev/sda 1" --enable-kvm
+	sudo qemu-system-x86_64 -netdev tap,ifname=qemutap0,script=no,downscript=no,id=mynet0 -device e1000,netdev=mynet0,mac=00:12:35:56:78:9a -m 1G -kernel bin/vmlinux -initrd bazel-bin/src/initramfs/initramfs.igz -drive format=raw,file=bazel-bin/src/rootfs/rootfs.ext4 -serial stdio -append "console=ttyAMA0 console=ttyS0 root=/dev/sda 3" --enable-kvm -usb
 
 .PHONY: debug
 debug:

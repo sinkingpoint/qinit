@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 enum RunLevel {
     ShutdownMode,
     SingleUserMode,
+    MultiUserMode
 }
 
 impl RunLevel {
@@ -25,6 +26,7 @@ impl RunLevel {
         return match i {
             "0" | "shutdownmode" => Some(RunLevel::ShutdownMode),
             "1" | "singleusermode" => Some(RunLevel::SingleUserMode),
+            "3" | "multiusermode" => Some(RunLevel::MultiUserMode),
             _ => None,
         };
     }
@@ -33,6 +35,7 @@ impl RunLevel {
         return match self {
             RunLevel::ShutdownMode => "shutdownmode",
             RunLevel::SingleUserMode => "singleusermode",
+            RunLevel::MultiUserMode => "multiusermode",
         };
     }
 }

@@ -1,5 +1,5 @@
 mod api;
-mod commands;
 mod socket;
+mod error;
 
-pub use self::socket::NLSocket;
+pub use self::socket::NetLinkSocket;
