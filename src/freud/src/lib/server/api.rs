@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 use std::io::{self, Read, Write};
-use libq::io::{read_u32, write_u32, Endianness};
+use libq::io::{read_u32, write_u32, Endianness, Writable};
 
 use super::types::UUID;
 
@@ -29,6 +29,19 @@ impl TryFrom<u32> for MessageType {
     }
 }
 
+impl MessageType {
+    fn as_u32(&self) -> u32 {
+        return match self {
+            MessageType::CreateTopic => 0,
+            MessageType::DeleteTopic => 1,
+            MessageType::Subscribe => 2,
+            MessageType::Unsubscribe => 3,
+            MessageType::ProduceMessage => 4,
+            MessageType::ConsumeMessage => 5
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FreudianAPIResponseType {
     Ok,
@@ -37,6 +50,21 @@ pub enum FreudianAPIResponseType {
     DoesntExist,
     MalformedRequest,
     ServerError
+}
+
+impl TryFrom<u32> for FreudianAPIResponseType {
+    type Error = FreudianAPIError;
+    fn try_from(u: u32) -> Result<Self, Self::Error> {
+        return match u {
+            0 => Ok(FreudianAPIResponseType::Ok),
+            1 => Ok(FreudianAPIResponseType::NothingHappened),
+            2 => Ok(FreudianAPIResponseType::No),
+            3 => Ok(FreudianAPIResponseType::DoesntExist),
+            4 => Ok(FreudianAPIResponseType::MalformedRequest),
+            5 => Ok(FreudianAPIResponseType::ServerError),
+            _ => Err(FreudianAPIError::MalformedRequest)
+        }
+    }
 }
 
 impl Into<u32> for FreudianAPIResponseType {
@@ -64,8 +92,8 @@ impl From<io::Error> for FreudianAPIError {
 }
 
 pub struct FreudianAPIResponse {
-    response_type: FreudianAPIResponseType,
-    message: Vec<u8>
+    pub response_type: FreudianAPIResponseType,
+    pub message: Vec<u8>
 }
 
 impl FreudianAPIResponse {
@@ -83,7 +111,26 @@ impl FreudianAPIResponse {
         }
     }
 
-    pub fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
+    pub fn read<T: Read>(reader: &mut T) -> Result<FreudianAPIResponse, io::Error> {
+        let endianness = &Endianness::Little;
+        let response_type = match FreudianAPIResponseType::try_from(read_u32(reader, endianness)?) {
+            Ok(resp) => resp,
+            Err(_) => FreudianAPIResponseType::MalformedRequest
+        };
+
+        let message_length = read_u32(reader, endianness)? as usize;
+        let mut message_buffer = vec![0; message_length];
+        reader.read_exact(&mut message_buffer)?;
+
+        return Ok(FreudianAPIResponse {
+            response_type: response_type,
+            message: message_buffer
+        })
+    }
+}
+
+impl Writable for FreudianAPIResponse {
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
         let endianness = &Endianness::Little;
         write_u32(writer, self.response_type.into(), endianness)?;
         write_u32(writer, self.message.len() as u32, endianness)?;
@@ -106,12 +153,31 @@ pub struct FreudianRequestHeader {
 }
 
 impl FreudianRequestHeader {
+    pub fn new(message_type: MessageType, body_length: u32) -> FreudianRequestHeader {
+        return FreudianRequestHeader {
+            message_type: message_type,
+            message_length: body_length + 8 // 8 bytes is the size of this header
+        }
+    }
+
+    pub fn size(&self) -> u32 {
+        return 8;
+    }
+    
     pub fn read<T: Read>(reader: &mut T) -> Result<FreudianRequestHeader, FreudianAPIError> {
         let endian = &Endianness::Little;
         return Ok(FreudianRequestHeader {
             message_type: MessageType::try_from(read_u32(reader, endian)?)?,
             message_length: read_u32(reader, endian)?
         });
+    }
+}
+
+impl Writable for FreudianRequestHeader {
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
+        let endianness = &Endianness::Little;
+        write_u32(writer, self.message_type.as_u32(), endianness)?;
+        return write_u32(writer, self.message_length, endianness);
     }
 }
 
@@ -129,6 +195,10 @@ impl FreudianTopicRequest {
         }
     }
 
+    pub fn size(&self) -> u32 {
+        return self.topic_name.len() as u32 + 4;
+    }
+
     pub fn read<T: Read>(reader: &mut T) -> Result<FreudianTopicRequest, FreudianAPIError> {
         let endian = &Endianness::Little;
 
@@ -140,6 +210,16 @@ impl FreudianTopicRequest {
             topic_name_length: length,
             topic_name: name_buffer
         });
+    }
+}
+
+impl Writable for FreudianTopicRequest {
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
+        let endian = &Endianness::Little;
+
+        write_u32(writer, self.topic_name_length, endian)?;
+        let mut data = self.topic_name.clone();
+        return writer.write_all(&mut data);
     }
 }
 
@@ -156,6 +236,10 @@ impl FreudianProduceMessageRequest {
         }
     }
 
+    pub fn size(&self) -> u32 {
+        return (4 + self.topic_request.topic_name.len() + self.message.len()) as u32;
+    }
+
     pub fn read<T: Read>(reader: &mut T, body_length: u32) -> Result<FreudianProduceMessageRequest, FreudianAPIError> {
         let topic_request = FreudianTopicRequest::read(reader)?;
         if topic_request.topic_name_length >= body_length {
@@ -163,7 +247,7 @@ impl FreudianProduceMessageRequest {
             return Err(FreudianAPIError::MalformedRequest);
         }
 
-        let mut message_buffer = vec![0;(body_length - topic_request.topic_name_length) as usize];
+        let mut message_buffer = vec![0;(body_length - topic_request.size()) as usize];
         reader.read_exact(&mut message_buffer)?;
 
         return Ok(FreudianProduceMessageRequest {
@@ -172,6 +256,15 @@ impl FreudianProduceMessageRequest {
         });
     }
 }
+
+impl Writable for FreudianProduceMessageRequest {
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
+        self.topic_request.write(writer)?;
+        let mut buffer = self.message.clone();
+        return writer.write_all(&mut buffer);
+    }
+}
+
 
 #[derive(Clone)]
 pub struct FreudianSubscriptionRequest {
@@ -192,10 +285,21 @@ impl FreudianSubscriptionRequest {
             subscription_id: sub_buffer
         });
     }
+
+    pub fn size(&self) -> u32 {
+        return 16;
+    }
 }
 
 impl From<UUID> for FreudianSubscriptionRequest {
     fn from(uuid: UUID) -> FreudianSubscriptionRequest {
         return FreudianSubscriptionRequest::new(uuid.uuid);
+    }
+}
+
+impl Writable for FreudianSubscriptionRequest {
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
+        let mut data = self.subscription_id.clone();
+        return writer.write_all(&mut data);
     }
 }

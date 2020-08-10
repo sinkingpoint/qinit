@@ -1,6 +1,7 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::string::FromUtf8Error;
 use std::thread::{self, Thread};
+use std::fmt;
 
 use super::api::{FreudianTopicRequest, FreudianSubscriptionRequest};
 
@@ -42,6 +43,83 @@ impl UUID {
         return UUID{
             uuid: bytes
         }
+    }
+
+    pub fn to_string(&self) -> String {
+        let parts = [4, 2, 2, 2, 6];
+        let mut build = String::new();
+
+        let mut i = 0;
+        for part_index in 0..parts.len() {
+            for j in 0..parts[part_index] {
+                build.push_str(&mut format!("{:02x}", self.uuid[(i + j) as usize]));
+            }
+
+            if part_index < parts.len() - 1 {
+                build.push('-');
+            }
+
+            i += parts[part_index];
+        }
+
+        return build;
+    }
+
+    pub fn try_from_string(s: &str) -> Option<UUID> {
+        if s.len() != 36 {
+            return None;
+        }
+
+        let parts = vec![8, 13, 18, 23, 36];
+        let mut parts_index = 0;
+        let mut current_byte_nibble = 0;
+        let mut current_byte = 0;
+        let mut bytes = Vec::new();
+        for (i, chr) in s.char_indices() {
+            if i == parts[parts_index] {
+                if chr == '-' {
+                    parts_index += 1;
+                    continue;
+                }
+                else {
+                    return None; // Malformed, missing dashes
+                }
+            }
+
+            let nibble = match u8::from_str_radix(&chr.to_string(), 16) {
+                Ok(nib) => nib,
+                Err(_) => {
+                    return None;
+                }
+            };
+
+            if current_byte_nibble == 0 {
+                // We're in the first nibble of a byte. Each char represents 4 bits
+                current_byte = nibble << 4;
+                current_byte_nibble = 1;
+            }
+            else {
+                bytes.push(current_byte | nibble);
+                current_byte =  0;
+                current_byte_nibble = 0;
+            }
+        }
+
+        if bytes.len() != 16 {
+            return None;
+        }
+
+        return Some(
+            UUID {
+                uuid: bytes[..].try_into().unwrap()
+            }
+        );
+    }
+}
+
+impl fmt::Display for UUID {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        return write!(f, "{}", self.to_string());
     }
 }
 

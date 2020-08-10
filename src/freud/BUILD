@@ -9,6 +9,17 @@ rust_library(
     ]
 )
 
+rust_library(
+    name = "patient",
+    srcs = glob(["src/lib/client/*.rs"]),
+    deps = [
+        "//src/libq:libq",
+        "//src/cargo:nix",
+        ":breuer"
+    ],
+    visibility = ["//visibility:public",],
+)
+
 rust_test(
     name = "breuer_test",
     srcs = glob(["src/lib/test/server/*.rs"]),
@@ -24,6 +35,17 @@ rust_binary(
         "//src/libq:libq",
         "//src/cargo:clap",
         ":breuer"
+    ],
+    visibility = ["//visibility:public",],
+)
+
+rust_binary(
+    name = "freudctl",
+    srcs = glob(["src/bin/freudctl/*.rs"]),
+    deps = [
+        "//src/libq:libq",
+        "//src/cargo:clap",
+        ":patient"
     ],
     visibility = ["//visibility:public",],
 )

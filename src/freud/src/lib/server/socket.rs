@@ -12,7 +12,7 @@ use nix::sys::socket::sockopt::PeerCredentials;
 use nix::sys::socket::getsockopt;
 
 use libq::logger;
-use libq::io::{read_u32, Endianness};
+use libq::io::{read_u32, Endianness, Writable};
 
 use super::api::{FreudianRequestHeader, MessageType, FreudianTopicRequest, FreudianSubscriptionRequest, FreudianProduceMessageRequest, FreudianAPIResponseType, FreudianAPIResponse, FreudianAPIError};
 use super::types::{FreudianResponse, FreudianError};
@@ -40,7 +40,7 @@ fn process_request(socket: &mut UnixStream, bus_lock: &mut Arc<Mutex<FreudianBus
         MessageType::DeleteTopic => bus.delete_topic(FreudianTopicRequest::read(socket)?),
         MessageType::Subscribe => bus.subscribe(FreudianTopicRequest::read(socket)?),
         MessageType::Unsubscribe => bus.unsubscribe(FreudianSubscriptionRequest::read(socket)?),
-        MessageType::ProduceMessage => bus.produce_message(FreudianProduceMessageRequest::read(socket, header.message_length)?),
+        MessageType::ProduceMessage => bus.produce_message(FreudianProduceMessageRequest::read(socket, header.message_length - header.size())?),
         MessageType::ConsumeMessage => {
             let sub_request = FreudianSubscriptionRequest::read(socket)?;
             let max_wait_time = read_u32(socket, &Endianness::Little)?;

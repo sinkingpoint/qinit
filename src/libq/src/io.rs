@@ -2,7 +2,7 @@ use nix::sys::stat::FileStat;
 use nix::unistd::{read, write};
 use nix::sys::socket::{MsgFlags, recv};
 
-use std::io::{self, Error, ErrorKind, Read, Seek, SeekFrom};
+use std::io::{self, Error, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
 
@@ -11,6 +11,11 @@ use mem::{short_from_bytes_little_endian, long_from_bytes_little_endian, int_fro
 pub const STDIN_FD: RawFd = 0;
 pub const STDOUT_FD: RawFd = 1;
 pub const STDERR_FD: RawFd = 2;
+
+pub trait Writable {
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error>;
+}
+
 pub fn full_write_bytes(fd: RawFd, buf: &[u8]) -> nix::Result<usize> {
     let mut count: usize = 0;
     while count < buf.len() {
@@ -257,6 +262,15 @@ pub fn read_u32<T: Read>(r: &mut T, endian: &Endianness) -> io::Result<u32> {
         Endianness::Little => int_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3]),
         Endianness::Big => int_from_bytes_little_endian(buffer[3], buffer[2], buffer[1], buffer[0])
     });
+}
+
+pub fn write_u32<T: Write>(w: &mut T, data: u32, endian: &Endianness) -> io::Result<()> {
+    let mut buf = match endian {
+        Endianness::Little => [(data & 0xFF) as u8, ((data >> 8) & 0xFF) as u8, ((data >> 16) & 0xFF) as u8, ((data >> 24) & 0xFF) as u8],
+        Endianness::Big => [((data >> 24) & 0xFF) as u8, ((data >> 16) & 0xFF) as u8, ((data >> 8) & 0xFF) as u8, (data & 0xFF) as u8]
+    };
+
+    return w.write_all(&mut buf);
 }
 
 pub fn read_u64<T: Read>(r: &mut T, endian: &Endianness) -> io::Result<u64> {
