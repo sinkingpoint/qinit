@@ -13,7 +13,7 @@ fn main() {
         .version("0.1")
         .author("Colin D. <colin@quirl.co.nz>")
         .arg(Arg::with_name("pidfile").long("pidfile").help("Sets the PID file to use"))
-        .arg(Arg::with_name("socketfile").long("socket").help("Sets the socket file to use"))
+        .arg(Arg::with_name("socketfile").long("socket").takes_value(true).help("Sets the socket file to use"))
         .about("A message bus daemon, loosely based on Kafka")
         .get_matches();
 

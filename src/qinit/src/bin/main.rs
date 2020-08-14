@@ -70,7 +70,6 @@ fn main() -> Result<(), ()> {
         .get_matches();
 
     let logger = logger::with_name_as_json("qinit");
-    let pidfile = PathBuf::from(args.value_of("pidfile").unwrap_or("/run/qinit/active.pid"));
     let socketfile = PathBuf::from(args.value_of("socketfile").unwrap_or("/run/qinit/socket"));
     let run_level_name = args.value_of("level").unwrap_or("singleusermode");
     let run_level = match RunLevel::from(run_level_name) {
@@ -80,13 +79,6 @@ fn main() -> Result<(), ()> {
             return Err(());
         }
     };
-
-    match write_pid_file(pidfile) {
-        Ok(()) => {}
-        Err(err) => {
-            logger.info().with_string("error", err.to_string()).smsg("Failed to start qinit");
-        }
-    }
 
     let task_dirs = match args.values_of("taskdir") {
         Some(values) => values.map(|p| PathBuf::from(p)).collect(),

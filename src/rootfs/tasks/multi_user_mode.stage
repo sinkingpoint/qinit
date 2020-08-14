@@ -3,5 +3,8 @@ description = "Multi User Mode + Networking. Basically init 3"
 steps = [
     { name = "SingleUserMode" },
     { name = "getty", args = {"tty" = "tty1"}},
-    { name = "qdevd" }
+    { name = "freudian", args = {"socketpath" = "/run/freudian/socket"}},
+    { name = "qdevd", requirements = [
+        { name = "freudian" }
+    ]}
 ]

@@ -8,7 +8,9 @@ rust_binary(
     deps = [
         "//src/cargo:clap",
         "//src/cargo:nix",
-        "//src/libq"
+        "//src/cargo:serde_json",
+        "//src/libq",
+        "//src/freud:patient"
     ],
     visibility = ["//visibility:public",],
 )

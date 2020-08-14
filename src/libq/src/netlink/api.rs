@@ -210,20 +210,3 @@ impl NetLinkMessageHeader {
         });
     }
 }
-
-#[derive(Debug)]
-pub struct NetLinkRawMessage {
-    pub body: Vec<u8>
-}
-
-impl NetLinkRawMessage {
-    pub fn read<T: Read>(mut reader: &mut T) -> Result<NetLinkRawMessage, NetLinkError> {
-        let new_length = 512;
-        let mut body_buffer = vec![0; new_length as usize];
-        reader.read_exact(&mut body_buffer)?;
-
-        return Ok(NetLinkRawMessage{
-            body: body_buffer
-        });
-    }
-}

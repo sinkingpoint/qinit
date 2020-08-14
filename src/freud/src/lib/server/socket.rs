@@ -2,7 +2,7 @@ use std::path::{Path};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::io::AsRawFd;
 use std::io::{self, Write};
-use std::fs::remove_file;
+use std::fs::{create_dir_all, remove_file};
 use std::sync::{Arc, Mutex};
 use std::thread::park_timeout;
 use std::time::Duration;
@@ -133,6 +133,14 @@ impl FreudianSocket {
                 Err(_) => {
                     remove_file(socketfile)?;
                 }
+            }
+        }
+        else {
+            match socketfile.parent() {
+                Some(par) => {
+                    create_dir_all(par)?
+                },
+                None => {}
             }
         }
 

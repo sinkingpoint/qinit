@@ -4,6 +4,7 @@ extra_files = {
     "//src/utils:qgetty": "/sbin/qgetty",
     "//src/utils:login": "/sbin/login",
     "//src/qdevd:qdevd": "/sbin/qdevd",
+    "//src/freud:freudian": "/sbin/freudian",
     "vendor/e1000.ko": "/lib/modules/5.7.10-201.fc32.x86_64/kernel/drivers/net/ethernet/intel/e1000/e1000.ko"
 }
 extra_files.update({local: "/etc/qinit/{}".format(local) for local in glob(["tasks/*"])})
@@ -21,7 +22,7 @@ initramfs(
         "//src/utils:clear",
         "//src/utils:shutdown",
         "//src/utils:id",
-        "//src/freud:freudian",
+        "//src/freud:freudctl",
         "//src/qinit:qinit",
         "//src/sh",
         "//src/utils:insmod"

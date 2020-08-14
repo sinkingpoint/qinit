@@ -133,6 +133,7 @@ impl TaskRegistry {
             if let Some(TaskStatus::Running(_)) = self.statuses.get(&instance) {
                 continue;
             }
+            
             let result = task.execute(args);
             new_states.push((instance, result));
         }
