@@ -32,7 +32,7 @@ rust_library(
 rust_test (
     name = "test_qinit_serde_common",
     srcs = [
-        "src/tests/tasks/serde/test_identifier.rs"
+        "src/tests/tasks/test_serde.rs"
     ],
     deps = [
         ":accountant",

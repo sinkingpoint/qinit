@@ -1,0 +1,64 @@
+extern crate accountant;
+extern crate toml;
+extern crate serde_derive;
+
+use serde_derive::Deserialize;
+use accountant::tasks::serde::{TaskDef, Identifier};
+
+#[test]
+fn test_identifier_deserializes() {
+    #[derive(Deserialize)]
+    struct Test {
+        id: Identifier
+    };
+
+    let test = toml::from_str::<Test>("id = 42");
+    assert!(test.is_ok());
+    assert_eq!(test.unwrap().id, Identifier::NumericID(42));
+
+    let test = toml::from_str::<Test>("id = \"colin\"");
+    assert!(test.is_ok());
+    assert_eq!(test.unwrap().id, Identifier::Name("colin".to_owned()));
+}
+
+#[test]
+fn test_task_deserializes() {
+    let test = toml::from_str::<TaskDef>("name = \"TestTask\"
+    description = \"A Test Service\"
+    user = 1000
+    init_command = \"echo 'cats'\"
+    start_command = \"echo 'more cats'\"
+    args = [
+        \"test_arg\"
+    ]
+    
+    [[ requires ]]
+    name = \"test_task\"
+    [ requires.args ]
+    test_arg = \"test\"
+
+    [[ requires ]]
+    name = \"test_task2\"
+    [ requires.args ]
+    test_arg2 = \"test2\"
+    test_arg3 = \"test3\"
+    ");
+    assert!(test.is_ok(), test.unwrap_err().to_string());
+    let test = test.unwrap();
+
+    assert_eq!(test.name, "TestTask");
+    assert_eq!(test.description, "A Test Service");
+    assert_eq!(test.user, Some(Identifier::NumericID(1000)));
+    assert_eq!(test.init_command, Some("echo 'cats'".to_owned()));
+    assert_eq!(test.start_command, "echo 'more cats'");
+    assert_eq!(test.args, Some(vec!["test_arg".to_owned()]));
+    assert!(test.requires.is_some());
+    assert_eq!(test.requires.as_ref().unwrap()[0].name, "test_task");
+    assert_eq!(test.requires.as_ref().unwrap()[0].args.len(), 1);
+    assert_eq!(test.requires.as_ref().unwrap()[0].args.get("test_arg").unwrap(), "test");
+
+    assert_eq!(test.requires.as_ref().unwrap()[1].name, "test_task2");
+    assert_eq!(test.requires.as_ref().unwrap()[1].args.len(), 2);
+    assert_eq!(test.requires.as_ref().unwrap()[1].args.get("test_arg2").unwrap(), "test2");
+    assert_eq!(test.requires.as_ref().unwrap()[1].args.get("test_arg3").unwrap(), "test3");
+}
