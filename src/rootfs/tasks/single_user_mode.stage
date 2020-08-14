@@ -1,5 +1,8 @@
 name = "SingleUserMode"
 description = "Single User mode. Basically init 1"
-steps = [
-    { name = "Getty", args = { tty = "console"}}
-]
+
+[[tasks]]
+name = "Getty"
+
+[tasks.args]
+tty = "console"

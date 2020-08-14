@@ -1,4 +1,7 @@
 name = "QDevD"
 description = "A Service which translates Kernel UDev Events into freudian messages"
-command = "/sbin/qdevd"
+start_command = "/sbin/qdevd"
 restart = "Always"
+
+[[requirements]]
+name = "freudian"

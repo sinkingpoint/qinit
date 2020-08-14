@@ -1,10 +1,20 @@
 name = "MultiUserMode"
 description = "Multi User Mode + Networking. Basically init 3"
-steps = [
-    { name = "SingleUserMode" },
-    { name = "getty", args = {"tty" = "tty1"}},
-    { name = "freudian", args = {"socketpath" = "/run/freudian/socket"}},
-    { name = "qdevd", requirements = [
-        { name = "freudian" }
-    ]}
-]
+
+[[tasks]]
+name = "SingleUserMode"
+
+[[tasks]]
+name = "getty"
+
+[tasks.args]
+tty = "tty1"
+
+[[tasks]]
+name = "freudian"
+
+[tasks.args]
+socketpath = "/run/freudian/socket"
+
+[[tasks]]
+name = "qdevd"

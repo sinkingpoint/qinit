@@ -1,5 +1,5 @@
 name = "ShutdownMode"
 description = "Shutdown the system. Basically init 0"
-steps = [
-    { name = "Shutdown" }
-]
+
+[[tasks]]
+name = "Shutdown"

@@ -3,5 +3,5 @@ description = "Controls a Getty Service on a terminal"
 args = [
     "tty"
 ]
-command = "/sbin/qgetty ${tty}"
+start_command = "/sbin/qgetty ${tty}"
 restart = "Always"
