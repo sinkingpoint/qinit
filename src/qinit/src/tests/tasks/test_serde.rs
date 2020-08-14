@@ -4,6 +4,7 @@ extern crate serde_derive;
 
 use serde_derive::Deserialize;
 use accountant::tasks::serde::{TaskDef, Identifier};
+use std::path::Path;
 
 #[test]
 fn test_identifier_deserializes() {
@@ -42,6 +43,10 @@ fn test_task_deserializes() {
     [ requires.args ]
     test_arg2 = \"test2\"
     test_arg3 = \"test3\"
+
+    [conditions]
+    [[conditions.unix_sockets]]
+    path = \"/var/run/socket\"
     ");
     assert!(test.is_ok(), test.unwrap_err().to_string());
     let test = test.unwrap();
@@ -54,11 +59,14 @@ fn test_task_deserializes() {
     assert_eq!(test.args, Some(vec!["test_arg".to_owned()]));
     assert!(test.requires.is_some());
     assert_eq!(test.requires.as_ref().unwrap()[0].name, "test_task");
-    assert_eq!(test.requires.as_ref().unwrap()[0].args.len(), 1);
-    assert_eq!(test.requires.as_ref().unwrap()[0].args.get("test_arg").unwrap(), "test");
+    assert_eq!(test.requires.as_ref().unwrap()[0].args.as_ref().unwrap().len(), 1);
+    assert_eq!(test.requires.as_ref().unwrap()[0].args.as_ref().unwrap().get("test_arg").unwrap(), "test");
 
     assert_eq!(test.requires.as_ref().unwrap()[1].name, "test_task2");
-    assert_eq!(test.requires.as_ref().unwrap()[1].args.len(), 2);
-    assert_eq!(test.requires.as_ref().unwrap()[1].args.get("test_arg2").unwrap(), "test2");
-    assert_eq!(test.requires.as_ref().unwrap()[1].args.get("test_arg3").unwrap(), "test3");
+    assert_eq!(test.requires.as_ref().unwrap()[1].args.as_ref().unwrap().len(), 2);
+    assert_eq!(test.requires.as_ref().unwrap()[1].args.as_ref().unwrap().get("test_arg2").unwrap(), "test2");
+    assert_eq!(test.requires.as_ref().unwrap()[1].args.as_ref().unwrap().get("test_arg3").unwrap(), "test3");
+    
+    assert_eq!(test.conditions.as_ref().unwrap().unix_sockets.as_ref().unwrap().len(), 1);
+    assert_eq!(test.conditions.as_ref().unwrap().unix_sockets.as_ref().unwrap()[0].path, Path::new("/var/run/socket"));
 }

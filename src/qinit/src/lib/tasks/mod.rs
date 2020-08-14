@@ -1,2 +1,4 @@
 pub mod serde;
-pub mod tasks;
+pub mod registry;
+
+pub use self::registry::SphereRegistry;

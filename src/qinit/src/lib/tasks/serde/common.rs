@@ -3,6 +3,7 @@ use std::fmt;
 use serde_derive::Deserialize;
 use serde::de::{self, Deserialize, Visitor, Deserializer};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Represents a User/Group Identifier in a config file
 /// Can either be the numeric (user/group) ID, or the name
@@ -95,5 +96,20 @@ pub struct DependencyDef {
 
     /// The args of the Sphere. This has different effects, depending on whether the sphere
     /// is exclusive (Tasks) or Inclusive (Stages)
-    pub args: HashMap<String, String>
+    pub args: Option<HashMap<String, String>>
+}
+
+/// A UnixSocketStartCondition represents a StartCondition that waits until the given Unix domain socket is opened
+/// As a convienience, QInit will create the parent directory of this path before starting the process
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct UnixSocketStartCondition {
+    /// The Path of the Unix Socket
+    pub path: PathBuf
+}
+
+/// Represents all the StartConditions of a given task
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct StartConditions {
+    /// The Unix Sockets the task is known to open
+    pub unix_sockets: Option<Vec<UnixSocketStartCondition>>
 }

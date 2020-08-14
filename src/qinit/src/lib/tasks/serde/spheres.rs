@@ -1,4 +1,4 @@
-use super::common::{Identifier, RestartMode, DependencyDef};
+use super::common::{Identifier, RestartMode, DependencyDef, StartConditions};
 use serde_derive::Deserialize;
 
 /// A Task Represents a Service that can be started, stopped, restarted and reloaded
@@ -33,5 +33,22 @@ pub struct TaskDef {
 
     /// The dependencies of this task. Tasks are inclusive Spheres - any non specified arguments
     /// default to allowing any value
-    pub requires: Option<Vec<DependencyDef>>
+    pub requires: Option<Vec<DependencyDef>>,
+
+    /// The Conditions that must be met, after this Task is `exec`d, before it is considered "Started" 
+    pub conditions: Option<StartConditions>
+}
+
+/// A Stage represents a collection of tasks that can be stopped, started, or restarted as a bundle
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct Stage {
+    /// The name of the Task. This is what will be used when creating dependencies, or generally referring to this Task
+    pub name: String,
+
+    /// The description of this Task. Used to provide context in status information
+    pub description: String,
+    
+    /// The dependencies of this stage. Stages are exclusive spheres - if any arguments are not specified
+    /// on any of the tasks then loading this Stage fails
+    pub tasks: Vec<DependencyDef>
 }

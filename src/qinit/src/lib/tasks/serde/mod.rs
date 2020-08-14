@@ -1,5 +1,5 @@
 mod common;
-mod task;
+mod spheres;
 
 pub use self::common::{Identifier, RestartMode, DependencyDef};
-pub use self::task::TaskDef;
+pub use self::spheres::{TaskDef, Stage};
