@@ -43,3 +43,13 @@ rust_test (
         "//src/cargo:serde_derive"
     ]
 )
+
+rust_test (
+    name = "test_qinit_dtr",
+    srcs = [
+        "src/tests/tasks/test_graph.rs"
+    ],
+    deps = [
+        ":accountant",
+    ]
+)
