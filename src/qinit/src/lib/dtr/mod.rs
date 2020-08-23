@@ -111,9 +111,9 @@ impl<N: Eq, E> Graph<N, E> {
 
     /// add_edge_by_index adds an index to the graph, between the two nodes identified by the given 
     /// indices. Exits silenty if either of the given indices are invalid
-    pub fn add_edge_by_index(&mut self, from_index: IndexType, to_index: IndexType, edge: E) {
+    pub fn add_edge_by_index(&mut self, from_index: IndexType, to_index: IndexType, edge: E) -> Option<IndexType> {
         if from_index >= self.nodes.len() || to_index >= self.nodes.len() {
-            return;
+            return None;
         }
 
         let edge_index = self.edges.len();
@@ -125,26 +125,27 @@ impl<N: Eq, E> Graph<N, E> {
 
         self.nodes[from_index].edges.push(edge_index);
         self.nodes[to_index].edges.push(edge_index);
+        return Some(self.edges.len() - 1);
     }
 
     /// add_edge adds the given edge value as an edge between the given two node values. If two nodes
     /// exist with the same value, which one will be linked to the edge is undefined
-    pub fn add_edge(&mut self, from: &N, to: &N, edge: E) {
+    pub fn add_edge(&mut self, from: &N, to: &N, edge: E) -> Option<IndexType> {
         let from_index = match self.get_index_for_node(from) {
             Some(idx) => idx,
             None => {
-                return;
+                return None;
             }
         };
 
         let to_index = match self.get_index_for_node(to) {
             Some(idx) => idx,
             None => {
-                return;
+                return None;
             }
         };
 
-        self.add_edge_by_index(from_index, to_index, edge);
+        return self.add_edge_by_index(from_index, to_index, edge);
     }
 
     /// remove_edge_by_index removes the edge identified by the given index from this graph
@@ -163,6 +164,11 @@ impl<N: Eq, E> Graph<N, E> {
         // swap_remove this edge, so the last edge takes its place
         self.edges.swap_remove(edge_index);
         let old_index = self.edges.len();
+
+        if old_index == 0 {
+            // We just removed the last edge, so nothing to update
+            return;
+        }
 
         // edges[edge_index] now contains the value that was at old_index
         // so we need to update the nodes at <to> and <from> with the new index
@@ -206,6 +212,12 @@ impl<N: Eq, E> Graph<N, E> {
         // Swap remove - move the last element into the hole, so we only have to update the edges that point to one node
         self.nodes.swap_remove(index);
         let old_index = self.nodes.len();
+
+        if old_index == 0 {
+            // We just removed the only node, so no need to update edges (There shouldn't be any)
+            debug_assert!(self.edges.len() == 0);
+            return;
+        }
         
         // For every edge that points to the last node (that we just moved), update their to and/or from pointers
         for edge_index in self.nodes[index].edges.iter() {
