@@ -1,4 +1,6 @@
 use std::cmp::Eq;
+use std::fmt;
+use std::string::ToString;
 
 type IndexType = usize;
 
@@ -102,10 +104,22 @@ impl<N: Eq, E> Graph<N, E> {
         return self.nodes.len() - 1;
     }
 
+    pub fn find_node_index<P>(&self, pred: P) -> Option<IndexType> where P: FnMut(&N) -> bool {
+        return self.nodes.iter().map(|node| &node.data).position(pred);
+    }
+
+    pub fn get_node_by_index(&self, idx: IndexType) -> Option<&N> {
+        if idx >= self.nodes.len() {
+            return None;
+        }
+
+        return Some(&self.nodes[idx].data);
+    }
+
     /// get_index_for_node returns the first index in the node vec that has
     /// the given data value
     #[inline(always)]
-    fn get_index_for_node(&self, data: &N) -> Option<usize> {
+    pub fn get_index_for_node(&self, data: &N) -> Option<IndexType> {
         return self.nodes.iter().position(|n| n == data);
     }
 
@@ -245,5 +259,19 @@ impl<N: Eq, E> Graph<N, E> {
         };
 
         self.remove_node_by_index(index);
+    }
+}
+
+impl<N: Eq + ToString, E> fmt::Display for Graph<N, E> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str("digraph {\n")?;
+        for node in self.nodes.iter() {
+            writeln!(f, "\t\"{}\";", node.data.to_string());
+        }
+
+        for edge in self.edges.iter() {
+            writeln!(f, "\t\"{}\" -> \"{}\";", self.nodes[edge.from].data.to_string(), self.nodes[edge.to].data.to_string())?;
+        }
+        return f.write_str("}");
     }
 }

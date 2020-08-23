@@ -89,7 +89,7 @@ impl Default for RestartMode {
 }
 
 /// A DependencyDef represents a dependency link between one sphere and another
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, Clone, Eq)]
 pub struct DependencyDef {
     /// The name of the Sphere that this dependency references
     pub name: String,
@@ -97,6 +97,81 @@ pub struct DependencyDef {
     /// The args of the Sphere. This has different effects, depending on whether the sphere
     /// is exclusive (Tasks) or Inclusive (Stages)
     pub args: Option<HashMap<String, String>>
+}
+
+impl DependencyDef {
+    pub fn new(name: String, args: Option<HashMap<String, String>>) -> DependencyDef {
+        return DependencyDef {
+            name: name,
+            args: args
+        }
+    }
+
+    pub fn partial_match(&self, dep: &DependencyDef) -> bool {
+        if self.name.to_lowercase() != dep.name.to_lowercase() {
+            return false;
+        }
+
+        match (&self.args, &dep.args) {
+            (Some(args), Some(dep_args)) => {
+                for (k, v) in args.iter() {
+                    if dep_args.get(k) != Some(v) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
+            (None, None) | (None, Some(_)) => {
+                return true;
+            },
+            (Some(_), None) => {
+                return false;
+            }
+        }
+    }
+}
+
+impl PartialEq<DependencyDef> for DependencyDef {
+    fn eq(&self, dep: &DependencyDef) -> bool {
+        if self.name.to_lowercase() != dep.name.to_lowercase() {
+            return false;
+        }
+
+        match (&self.args, &dep.args) {
+            (Some(args), Some(dep_args)) => {
+                for (k, v) in args.iter() {
+                    if dep_args.get(k) != Some(v) {
+                        return false;
+                    }
+                }
+
+                return args.len() == dep_args.len();
+            },
+            (Some(_), None) | (None, Some(_)) => {
+                return false;
+            },
+            (None, None) => {
+                return true;
+            }
+        }
+    }
+}
+
+impl fmt::Display for DependencyDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", &self.name)?;
+        if self.args.is_some() {
+            write!(f, " (")?;
+            let args = self.args.as_ref().unwrap();
+            for (k, v) in args {
+                write!(f, "{}={}", k, v)?;
+            }
+            write!(f, ")")?;
+        }
+
+        return Ok(());
+    }
 }
 
 /// A UnixSocketStartCondition represents a StartCondition that waits until the given Unix domain socket is opened

@@ -3,5 +3,5 @@ description = "A Service which translates Kernel UDev Events into freudian messa
 start_command = "/sbin/qdevd"
 restart = "Always"
 
-[[requirements]]
+[[requires]]
 name = "freudian"

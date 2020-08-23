@@ -39,6 +39,29 @@ pub struct TaskDef {
     pub conditions: Option<StartConditions>
 }
 
+impl TaskDef {
+    pub fn dependency_matches_exclusive(&self, dep: &DependencyDef) -> bool {
+        if dep.args.is_some() != self.args.is_some() {
+            // Either we've been given args we didn't expect, or the dep didn't have args we did. Either way, it's not correct
+            return false;
+        }
+
+        if dep.args.is_none() && self.args.is_none() {
+            // There's no args, so it's valid
+            return true;
+        }
+
+        let dep_args = dep.args.as_ref().unwrap();
+        for name in self.args.as_ref().unwrap().iter() {
+            if !dep_args.contains_key(name) {
+                return false;
+            }
+        }
+
+        return dep_args.keys().len() == self.args.as_ref().unwrap().len();
+    }
+}
+
 /// A Stage represents a collection of tasks that can be stopped, started, or restarted as a bundle
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Stage {

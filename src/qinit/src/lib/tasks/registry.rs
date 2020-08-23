@@ -1,12 +1,15 @@
-use super::serde::{TaskDef, Stage};
+use super::serde::{TaskDef, Stage, DependencyDef};
+use super::sphere::{RunningSphere, SphereType};
+use super::super::dtr::Graph;
+use std::collections::HashMap;
 use std::fs::{File, read_dir};
 use std::io::{self, Read};
 use std::path::Path;
 use libq::logger;
 
 pub struct SphereRegistry {
-    tasks: Vec<TaskDef>,
-    stages: Vec<Stage>
+    sphere_templates: HashMap<String, SphereType>,
+    running_spheres: Vec<RunningSphere>,
 }
 
 fn read_from_file(path: &Path) -> Result<String, io::Error> {
@@ -16,11 +19,119 @@ fn read_from_file(path: &Path) -> Result<String, io::Error> {
     return Ok(buffer);
 }
 
+fn hashmap_to_string(map: &Option<HashMap<String, String>>) -> String {
+    return match map {
+        None => String::new(),
+        Some(map) => map.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>().join(",")
+    }
+}
+
 impl SphereRegistry {
+    pub fn start(&mut self, sphere: DependencyDef) {
+        let plan = self.plan(sphere);
+        println!("{}", plan.unwrap());
+    }
+
+    pub fn plan(&self, sphere: DependencyDef) -> Option<Graph<DependencyDef, u32>> {
+        let logger = logger::with_name_as_json("sphere_registry;plan");
+        let mut graph = Graph::new();
+        let mut to_process = Vec::new();
+        graph.add_node(sphere.clone());
+        to_process.push(sphere);
+
+        // ambiguities will store all the dependencies we encounter that don't describe a "hard" sphere
+        // i.e. a dependency that doesn't specify all the arguments required by a sphere
+        // We store these for later to avoid races where the hard sphere this "soft" sphere matches hasn't been encountered yet
+        let mut ambiguities = Vec::new();
+
+        while to_process.len() > 0 {
+            let parent = to_process.pop().unwrap();
+            logger.debug().with_str("name", &parent.name).smsg("Processing Dep");
+
+            // Attempt to find the sphere that matches the given name
+            let sphere = match self.sphere_templates.get(&parent.name.to_lowercase()) {
+                Some(sphere) => sphere,
+                None => {
+                    logger.info().with_str("name", &parent.name).with_string("args", hashmap_to_string(&parent.args)).smsg("Failed to find matching sphere");
+                    return None;
+                }
+            };
+
+            // If the dependency definition does not completely describe the sphere at this point,
+            // then we're at an error - we have a node with no parent (and thus no "hard" spheres in this tree)
+            // but is ambiguous. Thus we need to just bail because we have an unresolved ambiguity
+            if !sphere.completely_describes(&parent) {
+                return None;
+            }
+
+            let children = sphere.get_deps();
+
+            if children.is_none() {
+                // We've reached a leaf node, continue
+                continue;
+            }
+
+            let children = children.unwrap();
+
+            for child in children.iter() {
+                // Merge the parents arguments and the childs arguments (This means that arguments can propagate down the dependency chain)
+                let args = match (&parent.args, &child.args) {
+                    (Some(parent_args), Some(child_args)) => Some(parent_args.iter().chain(child_args.iter()).map(|(k, v)| (k.clone(), v.clone())).collect()),
+                    (Some(args), None) | (None, Some(args)) => Some(args.clone()),
+                    (None, None) => None
+                };
+
+                // Resolve the child name to a child sphere
+                let child_sphere = match self.sphere_templates.get(&child.name.to_lowercase()) {
+                    Some(sphere) => sphere,
+                    None => {
+                        logger.info().with_str("name", &parent.name).with_string("args", hashmap_to_string(&parent.args)).smsg("Failed to find matching sphere");
+                        return None;
+                    }
+                };
+
+                if !child_sphere.completely_describes(child) {
+                    // There's ambiguity here that we need to resolve later - add it to the ambiguous list for now
+                    ambiguities.push((parent.clone(), child));
+                    continue;
+                }
+
+                let new_dep = DependencyDef::new(child.name.clone(), args);
+                graph.add_node(new_dep.clone());
+                match graph.add_edge(&parent, &new_dep, 1) {
+                    Some(_) => {},
+                    None => {
+                        logger.debug().with_str("parent", &parent.name).with_str("child", &new_dep.name).smsg("Failed to add dependency");
+                        return None;
+                    }
+                }
+                logger.debug().with_str("parent", &parent.name).with_str("child", &new_dep.name).smsg("Adding Dependency");
+                to_process.push(new_dep);
+            }
+        }
+
+        // For all the ambiguities, we need to resolve them to hard spheres that have already been
+        // created as dependencies of other hard spheres. Note that because these soft spheres are ambiguous by nature,
+        // if multiple hard spheres match this soft sphere then we add the dependency as if it resolves to the first encountered
+        // hard sphere
+        for (parent, child) in ambiguities.iter() {
+            let parent_index = graph.get_index_for_node(&parent)?;
+            let child_index = match graph.find_node_index(|dep| child.partial_match(dep)) {
+                Some(idx) => idx,
+                None => {
+                    logger.debug().with_str("name", &child.name).with_string("args", hashmap_to_string(&child.args)).smsg("Failed to find matching sphere for ambiguous dependency");
+                    return None;
+                }
+            };
+            graph.add_edge_by_index(parent_index, child_index, 1);
+        }
+
+        return Some(graph);
+    }
+
     /// Reads Sphere Definitions from all the directories in the given Vec
     pub fn read_from_disk(file_paths: Vec<&Path>) -> Result<SphereRegistry, io::Error>{
-        let mut tasks = Vec::new();
-        let mut stages = Vec::new();
+        let mut sphere_templates = HashMap::new();
         let logger = logger::with_name_as_json("sphere_registry");
         
         for dir in file_paths.iter() {
@@ -43,10 +154,11 @@ impl SphereRegistry {
                 match path.extension() {
                     Some(ext) => {
                         match ext.to_str() {
-                            Some("service") => {
+                            Some("task") => {
                                 match toml::from_str::<TaskDef>(&read_from_file(&path)?) {
                                     Ok(task) => {
-                                        tasks.push(task);
+                                        logger.debug().with_str("name", &task.name).smsg("Loaded Task");
+                                        sphere_templates.insert(task.name.clone().to_lowercase(), SphereType::Task(task));
                                     },
                                     Err(e) => {
                                         logger.info().with_string("error", e.to_string()).with_string("path", path.to_string_lossy().to_string()).smsg("Failed to read Task definition");
@@ -56,7 +168,8 @@ impl SphereRegistry {
                             Some("stage") => {
                                 match toml::from_str::<Stage>(&read_from_file(&path)?) {
                                     Ok(stage) => {
-                                        stages.push(stage);
+                                        logger.debug().with_str("name", &stage.name).smsg("Loaded Stage");
+                                        sphere_templates.insert(stage.name.clone().to_lowercase(), SphereType::Stage(stage));
                                     },
                                     Err(e) => {
                                         logger.info().with_string("error", e.to_string()).with_string("path", path.to_string_lossy().to_string()).smsg("Failed to read Stage definition");
@@ -76,8 +189,8 @@ impl SphereRegistry {
         }
 
         return Ok(SphereRegistry {
-            tasks: tasks,
-            stages: stages
+            sphere_templates: sphere_templates,
+            running_spheres: Vec::new()
         });
     }
 }
