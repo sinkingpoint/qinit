@@ -1,6 +1,7 @@
 use std::cmp::Eq;
 use std::fmt;
 use std::string::ToString;
+use std::collections::HashMap;
 
 type IndexType = usize;
 
@@ -36,34 +37,6 @@ struct Edge<T> {
     to: IndexType
 }
 
-pub struct ChildIterator<'a, N: Eq, E> {
-    base_graph: &'a Graph<N, E>,
-    node_index: IndexType,
-    edge_index: usize
-}
-
-impl<'a, N: Eq, E> Iterator for ChildIterator<'a, N, E> {
-    type Item = (&'a E, &'a N);
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.edge_index >= self.base_graph.nodes[self.node_index].edges.len() {
-            return None;
-        }
-
-        while self.base_graph.edges[self.base_graph.nodes[self.node_index].edges[self.edge_index]].to == self.node_index {
-            self.edge_index += 1;
-            if self.edge_index >= self.base_graph.nodes[self.node_index].edges.len() {
-                return None;
-            }
-            continue;
-        }
-
-        let ret_edge = &self.base_graph.edges[self.base_graph.nodes[self.node_index].edges[self.edge_index]].data;
-        let ret_node = &self.base_graph.nodes[self.base_graph.edges[self.base_graph.nodes[self.node_index].edges[self.edge_index]].to].data;
-        self.edge_index += 1;
-        return Some((ret_edge, ret_node));
-    }
-}
-
 /// Graph represents a directed graph with nodes and edges both carrying arbitrary data
 /// Internally we use the adjancency list pattern to handle these relationships
 pub struct Graph<N: Eq, E> { 
@@ -82,7 +55,7 @@ impl<N: Eq, E> Graph<N, E> {
         }
     }
 
-    pub fn iter_decendents(&self, node: &N) -> Option<ChildIterator<'_, N, E>> {
+    pub fn iter_decendents(&self, node: &N) -> Option<impl Iterator<Item = &N> + '_> {
         let node_index = match self.get_index_for_node(node) {
             Some(idx) => idx,
             None => {
@@ -90,11 +63,23 @@ impl<N: Eq, E> Graph<N, E> {
             }
         };
 
-        return Some(ChildIterator {
-            base_graph: self,
-            node_index: node_index,
-            edge_index: 0,
-        });
+        return Some(self.nodes[node_index].edges.iter().filter(move |&&edge| self.edges[edge].from == node_index).map(move |&edge| &self.nodes[self.edges[edge].to].data));
+    }
+
+    pub fn iter_leaves(&self) -> impl Iterator<Item = &N> + '_ {
+        return self.nodes.iter().enumerate().filter(move |(node_index, node)| node.edges.iter().filter(|&edge_index| self.edges[*edge_index].from == *node_index).collect::<Vec<&IndexType>>().len() == 0).map(|(_, node)| &node.data);
+    }
+
+    pub fn extend(&mut self, other: Graph<N, E>) {
+        let mut node_index_translator = HashMap::new();
+        for (i, node) in other.nodes.into_iter().enumerate() {
+            let new_index = self.add_node(node.data);
+            node_index_translator.insert(i, new_index);
+        }
+
+        for edge in other.edges.into_iter() {
+            self.add_edge_by_index(*node_index_translator.get(&edge.from).unwrap(), *node_index_translator.get(&edge.to).unwrap(), edge.data);
+        }
     }
 
     /// add_node adds the given data value as an unconnected node in the graph
@@ -266,7 +251,7 @@ impl<N: Eq + ToString, E> fmt::Display for Graph<N, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.write_str("digraph {\n")?;
         for node in self.nodes.iter() {
-            writeln!(f, "\t\"{}\";", node.data.to_string());
+            writeln!(f, "\t\"{}\";", node.data.to_string())?;
         }
 
         for edge in self.edges.iter() {

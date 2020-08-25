@@ -1,5 +1,5 @@
 use super::serde::{TaskDef, Stage, DependencyDef};
-use super::sphere::{RunningSphere, SphereType};
+use super::sphere::{SphereStatus, SphereType, SphereState, Startable};
 use super::super::dtr::Graph;
 use std::collections::HashMap;
 use std::fs::{File, read_dir};
@@ -8,8 +8,14 @@ use std::path::Path;
 use libq::logger;
 
 pub struct SphereRegistry {
+    /// The templates that can be used to create new spheres using `start`
     sphere_templates: HashMap<String, SphereType>,
-    running_spheres: Vec<RunningSphere>,
+
+    /// All the hard spheres that have been started at some point in the past
+    running_spheres: HashMap<DependencyDef, SphereStatus>,
+
+    /// All the hard spheres pending starting, based on some RunningSphere which has not yet `Started`
+    pending_graph: Graph<DependencyDef, u32>
 }
 
 fn read_from_file(path: &Path) -> Result<String, io::Error> {
@@ -28,8 +34,39 @@ fn hashmap_to_string(map: &Option<HashMap<String, String>>) -> String {
 
 impl SphereRegistry {
     pub fn start(&mut self, sphere: DependencyDef) {
-        let plan = self.plan(sphere);
-        println!("{}", plan.unwrap());
+        match self.plan(sphere) {
+            Some(plan) => {
+                self.pending_graph.extend(plan);
+                self.leaf_sweep();
+            },
+            None => {
+                // We hit an error during planning. Bail
+            }
+        }
+    }
+
+    /// leaf_sweep is responsible for going through all the leaf nodes of the pending tree
+    /// and starting them (If they're not already being started)
+    fn leaf_sweep(&mut self) {
+        let logger = logger::with_name_as_json("sphere_registry;leaf_sweep");
+        for leaf in self.pending_graph.iter_leaves() {
+            // If the leaf hasn't been marked as starting, then we need to start it
+            if !self.running_spheres.contains_key(leaf) || self.running_spheres.get(leaf).unwrap().state != SphereState::Starting {
+                // Start the leaf sphere!
+                let sphere = match self.sphere_templates.get(&leaf.name.to_lowercase()) {
+                    Some(sphere) => sphere,
+                    None => {
+                        logger.info().with_str("name", &leaf.name).with_string("args", hashmap_to_string(&leaf.args)).smsg("Failed to find matching sphere");
+                        continue;
+                    }
+                };
+
+                if let Some(state) = sphere.start(self.running_spheres.get(leaf).and_then(|s| Some(&s.state))) {
+                    logger.info().msg(format!("Moved {} into state {:?}", leaf.name, state));
+                    self.running_spheres.insert(leaf.clone(), state);
+                }
+            }
+        }
     }
 
     pub fn plan(&self, sphere: DependencyDef) -> Option<Graph<DependencyDef, u32>> {
@@ -190,7 +227,8 @@ impl SphereRegistry {
 
         return Ok(SphereRegistry {
             sphere_templates: sphere_templates,
-            running_spheres: Vec::new()
+            pending_graph: Graph::new(),
+            running_spheres: HashMap::new()
         });
     }
 }

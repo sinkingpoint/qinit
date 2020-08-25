@@ -4,6 +4,7 @@ use serde_derive::Deserialize;
 use serde::de::{self, Deserialize, Visitor, Deserializer};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::hash::{Hash, Hasher};
 
 /// Represents a User/Group Identifier in a config file
 /// Can either be the numeric (user/group) ID, or the name
@@ -134,25 +135,16 @@ impl DependencyDef {
 
 impl PartialEq<DependencyDef> for DependencyDef {
     fn eq(&self, dep: &DependencyDef) -> bool {
-        if self.name.to_lowercase() != dep.name.to_lowercase() {
-            return false;
-        }
+        return self.partial_match(dep) && dep.partial_match(self);
+    }
+}
 
-        match (&self.args, &dep.args) {
-            (Some(args), Some(dep_args)) => {
-                for (k, v) in args.iter() {
-                    if dep_args.get(k) != Some(v) {
-                        return false;
-                    }
-                }
-
-                return args.len() == dep_args.len();
-            },
-            (Some(_), None) | (None, Some(_)) => {
-                return false;
-            },
-            (None, None) => {
-                return true;
+impl Hash for DependencyDef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.to_lowercase().hash(state);
+        if self.args.is_some() {
+            for (k, v) in self.args.as_ref().unwrap().iter() {
+                format!("{}={}", k, v).hash(state);
             }
         }
     }
