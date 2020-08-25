@@ -54,7 +54,7 @@ impl SphereRegistry {
                     }
                 };
 
-                if let Some(state) = sphere.start(self.running_spheres.get(leaf).and_then(|s| Some(&s.state))) {
+                if let Some(state) = sphere.start(&leaf.args.as_ref(), self.running_spheres.get(leaf).and_then(|s| Some(&s.state))) {
                     logger.info().msg(format!("Moved {} into state {:?}", leaf.name, state));
                     self.running_spheres.insert(leaf.clone(), state);
                 }

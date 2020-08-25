@@ -24,7 +24,7 @@ pub fn listen_for_children(registry: Arc<Mutex<SphereRegistry>>) {
 
 /// fork_process forks this process, and execs the child using the given
 /// argv, returning the child pid to the calling process (in the parent). argv[0] must be fully qualified
-pub fn fork_process(argv: &Vec<&str>) -> Option<u32> {
+pub fn fork_process(argv: &Vec<String>) -> Option<u32> {
     let logger = logger::with_name_as_json("process;fork_process");
 
     match fork() {
@@ -39,7 +39,7 @@ pub fn fork_process(argv: &Vec<&str>) -> Option<u32> {
     }
 
     // If we get here, we're the child so lets exec
-    let path = CString::new(argv[0]).unwrap();
+    let path = CString::new(argv[0].bytes().collect::<Vec<u8>>()).unwrap();
 
     let argv: Vec<Vec<u8>> = argv.iter()
             .map(|arg| CString::new(arg.bytes().collect::<Vec<u8>>()).unwrap().into_bytes_with_nul())
