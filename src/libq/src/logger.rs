@@ -1,6 +1,7 @@
 use super::terminal::{set_foreground_color, set_foreground_color_raw, TerminalColor};
 use std::collections::HashMap;
 use std::io::{self, Write};
+use std::fmt;
 
 /// An enum representing the level of a log.
 /// Very opinionatedly we only offer two levels here, where a Debug log is a message to a developer
@@ -152,6 +153,10 @@ where
     pub fn with_string(&'a mut self, key: &'a str, value: String) -> &'a mut Record<T> {
         self.kvs.insert(key, value);
         return self;
+    }
+
+    pub fn with_map<K: fmt::Display, V: fmt::Display>(&'a mut self, key: &'a str, value: &HashMap<K, V>) -> &'a mut Record<T> {
+        return self.with_string(key, value.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>().join(","));
     }
 
     pub fn with_i8(&'a mut self, key: &'a str, value: i8) -> &'a mut Record<T> {

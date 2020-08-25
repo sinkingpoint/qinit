@@ -26,7 +26,6 @@ fn print_prompt(shell: &shell::Shell, process_name: &String, continue_prompt: bo
 }
 
 fn main() {
-    env::set_var("RUST_BACKTRACE", "full");
     let mut argv: Vec<String> = env::args().collect();
     argv.reverse();
     let is_repl = argv.len() == 1;
@@ -84,7 +83,7 @@ fn main() {
                         if err.continuable {
                             current_buffer.push('\n');
                         } else {
-                            eprintln!("Error: {}", err.error);
+                            eprintln!("Shell Error: {}", err.error);
                             current_buffer.clear();
                         }
                     }

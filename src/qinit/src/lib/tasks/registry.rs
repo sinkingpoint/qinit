@@ -25,13 +25,6 @@ fn read_from_file(path: &Path) -> Result<String, io::Error> {
     return Ok(buffer);
 }
 
-fn hashmap_to_string(map: &Option<HashMap<String, String>>) -> String {
-    return match map {
-        None => String::new(),
-        Some(map) => map.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>().join(",")
-    }
-}
-
 impl SphereRegistry {
     pub fn start(&mut self, sphere: DependencyDef) {
         match self.plan(sphere) {
@@ -56,7 +49,7 @@ impl SphereRegistry {
                 let sphere = match self.sphere_templates.get(&leaf.name.to_lowercase()) {
                     Some(sphere) => sphere,
                     None => {
-                        logger.info().with_str("name", &leaf.name).with_string("args", hashmap_to_string(&leaf.args)).smsg("Failed to find matching sphere");
+                        logger.info().with_str("name", &leaf.name).with_map("args", &leaf.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to find matching sphere");
                         continue;
                     }
                 };
@@ -89,7 +82,7 @@ impl SphereRegistry {
             let sphere = match self.sphere_templates.get(&parent.name.to_lowercase()) {
                 Some(sphere) => sphere,
                 None => {
-                    logger.info().with_str("name", &parent.name).with_string("args", hashmap_to_string(&parent.args)).smsg("Failed to find matching sphere");
+                    logger.info().with_str("name", &parent.name).with_map("args", &parent.args.unwrap_or(HashMap::new())).smsg("Failed to find matching sphere");
                     return None;
                 }
             };
@@ -122,7 +115,7 @@ impl SphereRegistry {
                 let child_sphere = match self.sphere_templates.get(&child.name.to_lowercase()) {
                     Some(sphere) => sphere,
                     None => {
-                        logger.info().with_str("name", &parent.name).with_string("args", hashmap_to_string(&parent.args)).smsg("Failed to find matching sphere");
+                        logger.info().with_str("name", &parent.name).with_map("args", &parent.args.unwrap_or(HashMap::new())).smsg("Failed to find matching sphere");
                         return None;
                     }
                 };
@@ -156,7 +149,7 @@ impl SphereRegistry {
             let child_index = match graph.find_node_index(|dep| child.partial_match(dep)) {
                 Some(idx) => idx,
                 None => {
-                    logger.debug().with_str("name", &child.name).with_string("args", hashmap_to_string(&child.args)).smsg("Failed to find matching sphere for ambiguous dependency");
+                    logger.debug().with_str("name", &child.name).with_map("args", &child.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to find matching sphere for ambiguous dependency");
                     return None;
                 }
             };

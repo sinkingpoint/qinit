@@ -1,8 +1,29 @@
 use std::ffi::{CStr, CString};
-use nix::unistd::{fork, ForkResult, execv};
+use std::sync::{Arc, Mutex};
 use libq::logger;
+use super::registry::SphereRegistry;
 use nix::errno::Errno::ENOENT;
+use nix::unistd::{fork, ForkResult, execv};
+use nix::sys::wait::{wait, WaitStatus};
 
+/// listen_for_children is responsible for waiting for signals (In particular, SIGCHLD) and telling the registry about it
+pub fn listen_for_children(registry: Arc<Mutex<SphereRegistry>>) {
+    let logger = logger::with_name_as_json("process;listen_for_children");
+    loop {
+        match wait() {
+            Ok(WaitStatus::Exited(pid, exit_code)) => {
+                logger.info().with_i32("pid", pid.as_raw()).with_i32("exit_code", exit_code).smsg("Process exitted");
+            },
+            Ok(_) => {},
+            Err(err) => {
+                logger.info().with_string("error", err.to_string()).smsg("Failed to wait");
+            }
+        }
+    }
+}
+
+/// fork_process forks this process, and execs the child using the given
+/// argv, returning the child pid to the calling process (in the parent). argv[0] must be fully qualified
 pub fn fork_process(argv: &Vec<&str>) -> Option<u32> {
     let logger = logger::with_name_as_json("process;fork_process");
 
