@@ -1,4 +1,4 @@
-use super::serde::{TaskDef, Stage, DependencyDef};
+use super::serde::{TaskDef, Stage, DependencyDef, RestartMode};
 use super::sphere::{SphereStatus, SphereType, SphereState, Startable};
 use super::super::dtr::Graph;
 use std::collections::HashMap;
@@ -38,26 +38,96 @@ impl SphereRegistry {
         }
     }
 
+    pub fn handle_child_exit(&mut self, pid: u32, exit_code: u32) {
+        let mut logger = logger::with_name_as_json("sphere_registry;handle_child_exit");
+        logger.set_debug_mode(true);
+        // Handle the state change
+        let child_def;
+        let child_state;
+        let mut new_state = None;
+        let mut needs_restart = false;
+        if let Some((def, state)) = self.running_spheres.iter().find(|(_, v)| v.pid == Some(pid)) {
+            child_def = def.clone();
+            child_state = state.clone();
+        }
+        else {
+            // Unknown PID, maybe something reparented to us because of a naughty process. Our job is done just by `wait`ing it
+            logger.debug().with_u32("pid", pid).with_u32("exit_code", exit_code).smsg("Failed to find a record for exitted child");
+            return;
+        }
+
+        let sphere = match self.sphere_templates.get(&child_def.name.to_lowercase()) {
+            Some(sphere) => sphere,
+            None => {
+                logger.info().with_str("name", &child_def.name).with_map("args", &child_def.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to find matching sphere");
+                return;
+            }
+        };
+
+        match child_state.state {
+            SphereState::Stopping | SphereState::Started | SphereState::Starting => {
+                // If we're stopping or starting, then the child has exitted and we're now stopped or failed. We might need to restart
+                let state = if child_state.state == SphereState::Stopping { SphereState::Stopped } else { SphereState::Exited(exit_code) };
+                new_state = Some(SphereStatus {
+                    state: state,
+                    pid: None
+                });
+
+                match sphere.get_restart_mode() {
+                    RestartMode::Always => {
+                        needs_restart = true;
+                    },
+                    RestartMode::OnError if exit_code != 0 => {
+                        needs_restart = true;
+                    },
+                    RestartMode::UnlessStopped if child_state.state != SphereState::Stopping => {
+                        needs_restart = true;
+                    },
+                    _ => {}
+                }
+            },
+            SphereState::PreStarting => {
+                self.leaf_sweep();
+            },
+            SphereState::Stopped | SphereState::NotStarted | SphereState::Exited(_) | SphereState::FailedToStart => {}
+        }
+
+        if new_state.is_some() {
+            self.running_spheres.insert(child_def.clone(), new_state.unwrap());
+        }
+
+        if needs_restart {
+            self.start(child_def.clone());
+        }
+    }
+
     /// leaf_sweep is responsible for going through all the leaf nodes of the pending tree
     /// and starting them (If they're not already being started)
     fn leaf_sweep(&mut self) {
-        let logger = logger::with_name_as_json("sphere_registry;leaf_sweep");
-        for leaf in self.pending_graph.iter_leaves() {
-            // If the leaf hasn't been marked as starting, then we need to start it
-            if !self.running_spheres.contains_key(leaf) || self.running_spheres.get(leaf).unwrap().state != SphereState::Starting {
-                // Start the leaf sphere!
-                let sphere = match self.sphere_templates.get(&leaf.name.to_lowercase()) {
-                    Some(sphere) => sphere,
-                    None => {
-                        logger.info().with_str("name", &leaf.name).with_map("args", &leaf.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to find matching sphere");
-                        continue;
-                    }
-                };
+        let mut logger = logger::with_name_as_json("sphere_registry;leaf_sweep");
+        logger.set_debug_mode(true);
 
-                if let Some(state) = sphere.start(&leaf.args.as_ref(), self.running_spheres.get(leaf).and_then(|s| Some(&s.state))) {
-                    logger.info().msg(format!("Moved {} into state {:?}", leaf.name, state));
-                    self.running_spheres.insert(leaf.clone(), state);
-                }
+        for leaf in self.pending_graph.iter_leaves() {
+            let state = self.running_spheres.get(leaf).and_then(|state| Some(&state.state));
+            logger.debug().with_string("sphere_name", leaf.name.clone()).with_string("state", format!("{:?}", state)).smsg("Checking leaf");
+            // If the leaf hasn't been marked as starting, then we need to start it
+            match self.running_spheres.get(leaf).and_then(|state| Some(&state.state)) {
+                None | Some(SphereState::Exited(_)) | Some(SphereState::FailedToStart) | Some(SphereState::Stopped) | Some(SphereState::NotStarted) => {
+                    logger.debug().with_string("sphere_name", leaf.name.clone()).with_string("state", format!("{:?}", state)).smsg("Starting leaf");
+                    let sphere = match self.sphere_templates.get(&leaf.name.to_lowercase()) {
+                        Some(sphere) => sphere,
+                        None => {
+                            logger.info().with_str("name", &leaf.name).with_map("args", &leaf.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to find matching sphere");
+                            continue;
+                        }
+                    };
+
+                    if let Some(state) = sphere.start(&leaf.args.as_ref(), self.running_spheres.get(leaf).and_then(|s| Some(&s.state))) {
+                        logger.info().msg(format!("Moved {} into state {:?}", leaf.name, state));
+                        self.running_spheres.insert(leaf.clone(), state);
+                    }
+                },
+                Some(SphereState::Stopping) | Some(SphereState::PreStarting) | Some(SphereState::Starting) | Some(SphereState::Started) => {}
             }
         }
     }

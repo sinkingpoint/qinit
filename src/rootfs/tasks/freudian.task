@@ -4,7 +4,7 @@ args = [
 ]
 description = "A Message Bus Daemon"
 start_command = "/sbin/freudian --socket ${socketpath}"
-restart = "Always"
+restart_mode = "Always"
 
 [[unixsocket]]
 path = "${socketpath}"

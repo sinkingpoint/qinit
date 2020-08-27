@@ -1,4 +1,4 @@
-use tasks::serde::{TaskDef, DependencyDef, Stage};
+use tasks::serde::{TaskDef, DependencyDef, Stage, RestartMode};
 use super::process::fork_process;
 use std::collections::HashMap;
 
@@ -28,6 +28,13 @@ impl SphereType {
         match self {
             SphereType::Task(def) => def.requires.as_ref(),
             SphereType::Stage(def) => Some(def.tasks.as_ref())
+        }
+    }
+
+    pub fn get_restart_mode(&self) -> RestartMode {
+        match self {
+            SphereType::Task(def) => def.restart_mode.unwrap_or(RestartMode::OnError),
+            SphereType::Stage(_def) => RestartMode::OnError
         }
     }
 
@@ -82,7 +89,7 @@ pub enum SphereState {
 }
 
 impl Startable for Stage {
-    fn start(&self, args: &Option<&HashMap<String, String>>, _current_state: Option<&SphereState>) -> Option<SphereStatus> {
+    fn start(&self, _args: &Option<&HashMap<String, String>>, _current_state: Option<&SphereState>) -> Option<SphereStatus> {
         return Some(SphereStatus {
             state: SphereState::Started,
             pid: None

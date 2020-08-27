@@ -85,6 +85,10 @@ impl<N: Eq, E> Graph<N, E> {
     /// add_node adds the given data value as an unconnected node in the graph
     /// returning the new index of this data which can then be used to add/remove edges
     pub fn add_node(&mut self, node: N) -> IndexType{
+        if let Some(index) = self.nodes.iter().position(|n| n.data == node) {
+            return index;
+        }
+
         self.nodes.push(Node::new(node));
         return self.nodes.len() - 1;
     }

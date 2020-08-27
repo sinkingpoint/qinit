@@ -68,7 +68,7 @@ impl<'de> Deserialize<'de> for Identifier {
 }
 
 /// The RestartMode of a Task or State defines what happens when a Task exits
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Copy, Clone)]
 pub enum RestartMode {
     /// The Task should always restart, even if manually stopped. Should be used for services
     /// that should never exit (Critical daemons etc)

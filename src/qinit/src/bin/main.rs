@@ -11,8 +11,10 @@ fn main() {
     let send = registry_lock.clone();
     let handle = std::thread::spawn(move || listen_for_children(send));
 
-    let mut registry = registry_lock.lock().unwrap();
-    registry.start(DependencyDef::new("multiusermode".to_owned(), None));
+    {
+        let mut registry = registry_lock.lock().unwrap();
+        registry.start(DependencyDef::new("multiusermode".to_owned(), None));
+    }
 
-    handle.join();
+    handle.join().expect("Expected children reaper to never exit");
 }

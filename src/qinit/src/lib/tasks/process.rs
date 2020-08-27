@@ -7,12 +7,14 @@ use nix::unistd::{fork, ForkResult, execv};
 use nix::sys::wait::{wait, WaitStatus};
 
 /// listen_for_children is responsible for waiting for signals (In particular, SIGCHLD) and telling the registry about it
-pub fn listen_for_children(registry: Arc<Mutex<SphereRegistry>>) {
+pub fn listen_for_children(registry_lock: Arc<Mutex<SphereRegistry>>) {
     let logger = logger::with_name_as_json("process;listen_for_children");
     loop {
         match wait() {
             Ok(WaitStatus::Exited(pid, exit_code)) => {
                 logger.info().with_i32("pid", pid.as_raw()).with_i32("exit_code", exit_code).smsg("Process exitted");
+                let mut registry = registry_lock.lock().unwrap();
+                registry.handle_child_exit(pid.as_raw() as u32, exit_code as u32);
             },
             Ok(_) => {},
             Err(err) => {
