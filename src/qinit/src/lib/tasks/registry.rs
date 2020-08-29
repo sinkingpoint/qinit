@@ -1,5 +1,6 @@
 use super::serde::{TaskDef, Stage, DependencyDef, RestartMode};
 use super::sphere::{SphereStatus, SphereType, SphereState, Startable};
+use super::court::CourthouseBuilder;
 use super::super::dtr::Graph;
 use std::collections::HashMap;
 use std::fs::{File, read_dir};
@@ -15,7 +16,10 @@ pub struct SphereRegistry {
     running_spheres: HashMap<DependencyDef, SphereStatus>,
 
     /// All the hard spheres pending starting, based on some RunningSphere which has not yet `Started`
-    pending_graph: Graph<DependencyDef, u32>
+    pending_graph: Graph<DependencyDef, u32>,
+
+    /// The builder used to construct Courthouses for Start Conditions
+    courthouse_builder: Option<CourthouseBuilder>
 }
 
 fn read_from_file(path: &Path) -> Result<String, io::Error> {
@@ -26,6 +30,10 @@ fn read_from_file(path: &Path) -> Result<String, io::Error> {
 }
 
 impl SphereRegistry {
+    pub fn set_courthouse_builder(&mut self, builder: CourthouseBuilder) {
+        self.courthouse_builder = Some(builder);
+    }
+    
     pub fn start(&mut self, sphere: DependencyDef) {
         match self.plan(sphere) {
             Some(plan) => {
@@ -89,7 +97,7 @@ impl SphereRegistry {
             SphereState::PreStarting => {
                 self.leaf_sweep();
             },
-            SphereState::Stopped | SphereState::NotStarted | SphereState::Exited(_) | SphereState::FailedToStart => {}
+            SphereState::Stopped | SphereState::Exited(_) | SphereState::FailedToStart => {}
         }
 
         if new_state.is_some() {
@@ -98,6 +106,40 @@ impl SphereRegistry {
 
         if needs_restart {
             self.start(child_def.clone());
+        }
+    }
+
+    /// handle_court_completion sets the given sphere for the dependency def
+    /// as started, and runs a trim_pending_graph to remove it from the pending graph
+    /// and trigger a leaf_sweep to start the next layer of leaves
+    pub fn handle_court_completion(&mut self, dep: DependencyDef) {
+        if let Some(sphere) = self.running_spheres.get_mut(&dep) {
+            debug_assert_eq!(sphere.state, SphereState::Starting);
+            sphere.state = SphereState::Started;
+            self.trim_pending_graph();
+        }
+    }
+
+    /// trim_pending_graph goes through the pending graph and removes all nodes 
+    /// that are no longer pending (i.e. they're started). If any nodes are removed, 
+    /// we do another leaf sweep
+    fn trim_pending_graph(&mut self) {
+        let mut to_remove = Vec::new();
+        for node in self.pending_graph.iter_nodes() {
+            match self.running_spheres.get(node).and_then(|state| Some(&state.state)) {
+                Some(SphereState::Started) => {
+                    to_remove.push(node.clone());
+                }
+                _ => {}
+            }
+        }
+
+        for node in to_remove.iter() {
+            self.pending_graph.remove_node(node);
+        }
+
+        if to_remove.len() > 0 {
+            self.leaf_sweep()
         }
     }
 
@@ -112,7 +154,7 @@ impl SphereRegistry {
             logger.debug().with_string("sphere_name", leaf.name.clone()).with_string("state", format!("{:?}", state)).smsg("Checking leaf");
             // If the leaf hasn't been marked as starting, then we need to start it
             match self.running_spheres.get(leaf).and_then(|state| Some(&state.state)) {
-                None | Some(SphereState::Exited(_)) | Some(SphereState::FailedToStart) | Some(SphereState::Stopped) | Some(SphereState::NotStarted) => {
+                None | Some(SphereState::Exited(_)) | Some(SphereState::FailedToStart) | Some(SphereState::Stopped) => {
                     logger.debug().with_string("sphere_name", leaf.name.clone()).with_string("state", format!("{:?}", state)).smsg("Starting leaf");
                     let sphere = match self.sphere_templates.get(&leaf.name.to_lowercase()) {
                         Some(sphere) => sphere,
@@ -122,14 +164,33 @@ impl SphereRegistry {
                         }
                     };
 
-                    if let Some(state) = sphere.start(&leaf.args.as_ref(), self.running_spheres.get(leaf).and_then(|s| Some(&s.state))) {
-                        logger.info().msg(format!("Moved {} into state {:?}", leaf.name, state));
+                    if let Some(mut state) = sphere.start(&leaf.args.as_ref(), self.running_spheres.get(leaf).and_then(|s| Some(&s.state))) {
+                        logger.debug().msg(format!("Moved {} into state {:?}", leaf.name, state));
+                        let start_conditions = sphere.get_monitor_requests(&leaf.args.as_ref());
+                        match &state.state {
+                            SphereState::Starting if start_conditions.len() > 0 && self.courthouse_builder.is_some() => {
+                                // Start a Courthouse waiting for these conditions
+                                match self.courthouse_builder.as_ref().unwrap().build(leaf.clone(), start_conditions) {
+                                    Ok(court) => court.start(),
+                                    Err(err) => {
+                                        logger.debug().with_str("name", &leaf.name).with_string("error", err.to_string()).with_map("args", &leaf.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to hold court for sphere");
+                                        // TODO: Kill Child
+                                    }
+                                }
+                            },
+                            SphereState::Starting => {
+                                state.state = SphereState::Started;
+                            },
+                            _ => {}
+                        }
                         self.running_spheres.insert(leaf.clone(), state);
                     }
                 },
                 Some(SphereState::Stopping) | Some(SphereState::PreStarting) | Some(SphereState::Starting) | Some(SphereState::Started) => {}
             }
         }
+
+        self.trim_pending_graph();
     }
 
     pub fn plan(&self, sphere: DependencyDef) -> Option<Graph<DependencyDef, u32>> {
@@ -291,7 +352,8 @@ impl SphereRegistry {
         return Ok(SphereRegistry {
             sphere_templates: sphere_templates,
             pending_graph: Graph::new(),
-            running_spheres: HashMap::new()
+            running_spheres: HashMap::new(),
+            courthouse_builder: None
         });
     }
 }

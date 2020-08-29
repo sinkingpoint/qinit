@@ -5,3 +5,4 @@ extern crate nix;
 
 pub mod tasks;
 pub mod dtr;
+pub mod strings;

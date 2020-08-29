@@ -2,7 +2,7 @@ use std::ffi::{CStr, CString};
 use std::sync::{Arc, Mutex};
 use libq::logger;
 use super::registry::SphereRegistry;
-use nix::errno::Errno::ENOENT;
+use nix::errno::Errno::{ENOENT, ECHILD};
 use nix::unistd::{fork, ForkResult, execv};
 use nix::sys::wait::{wait, WaitStatus};
 
@@ -18,6 +18,11 @@ pub fn listen_for_children(registry_lock: Arc<Mutex<SphereRegistry>>) {
             },
             Ok(_) => {},
             Err(err) => {
+                if let Some(errno) = err.as_errno() {
+                    if errno == ECHILD {
+                        continue;
+                    }
+                }
                 logger.info().with_string("error", err.to_string()).smsg("Failed to wait");
             }
         }

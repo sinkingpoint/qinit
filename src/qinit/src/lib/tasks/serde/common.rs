@@ -3,7 +3,6 @@ use std::fmt;
 use serde_derive::Deserialize;
 use serde::de::{self, Deserialize, Visitor, Deserializer};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::hash::{Hash, Hasher};
 
 /// Represents a User/Group Identifier in a config file
@@ -171,12 +170,12 @@ impl fmt::Display for DependencyDef {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct UnixSocketStartCondition {
     /// The Path of the Unix Socket
-    pub path: PathBuf
+    pub path: String
 }
 
 /// Represents all the StartConditions of a given task
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct StartConditions {
     /// The Unix Sockets the task is known to open
-    pub unix_sockets: Option<Vec<UnixSocketStartCondition>>
+    pub unixsocket: Option<Vec<UnixSocketStartCondition>>
 }

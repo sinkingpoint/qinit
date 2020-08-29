@@ -36,7 +36,7 @@ pub struct TaskDef {
     pub requires: Option<Vec<DependencyDef>>,
 
     /// The Conditions that must be met, after this Task is `exec`d, before it is considered "Started" 
-    pub conditions: Option<StartConditions>
+    pub conditions: Option<StartConditions>,
 }
 
 impl TaskDef {

@@ -70,6 +70,10 @@ impl<N: Eq, E> Graph<N, E> {
         return self.nodes.iter().enumerate().filter(move |(node_index, node)| node.edges.iter().filter(|&edge_index| self.edges[*edge_index].from == *node_index).collect::<Vec<&IndexType>>().len() == 0).map(|(_, node)| &node.data);
     }
 
+    pub fn iter_nodes(&self) -> impl Iterator<Item = &N> + '_ {
+        return self.nodes.iter().map(|node| &node.data);
+    }
+
     pub fn extend(&mut self, other: Graph<N, E>) {
         let mut node_index_translator = HashMap::new();
         for (i, node) in other.nodes.into_iter().enumerate() {
@@ -168,8 +172,8 @@ impl<N: Eq, E> Graph<N, E> {
         self.edges.swap_remove(edge_index);
         let old_index = self.edges.len();
 
-        if old_index == 0 {
-            // We just removed the last edge, so nothing to update
+        if old_index == 0 || old_index == edge_index {
+            // We just removed the last edge, or the last added edge, so nothing to update
             return;
         }
 
@@ -216,9 +220,8 @@ impl<N: Eq, E> Graph<N, E> {
         self.nodes.swap_remove(index);
         let old_index = self.nodes.len();
 
-        if old_index == 0 {
+        if old_index == 0 || index == old_index {
             // We just removed the only node, so no need to update edges (There shouldn't be any)
-            debug_assert!(self.edges.len() == 0);
             return;
         }
         
