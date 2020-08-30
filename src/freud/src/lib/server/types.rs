@@ -195,6 +195,10 @@ impl Topic {
         self.subscribers.push(sub);
     }
 
+    pub fn num_subscribers(&self) -> u32 {
+        return self.subscribers.len() as u32;
+    }
+
     pub fn remove_subscriber(&mut self, sub: &Subscription) {
         self.subscribers.retain(|s| s != sub);
     }

@@ -2,6 +2,8 @@ use super::api::{FreudianTopicRequest, FreudianSubscriptionRequest, FreudianProd
 use super::types::{Topic, FreudianError, Subscription, FreudianResponse};
 use std::convert::TryFrom;
 
+use libq::io::{write_u32, Endianness};
+
 pub struct FreudianBus {
     topics: Vec<Topic>
 }
@@ -11,6 +13,33 @@ impl FreudianBus {
         return FreudianBus{
             topics: Vec::new()
         }
+    }
+
+    pub fn get_num_subscribers(&self, topic_req: FreudianTopicRequest) -> Result<FreudianResponse, FreudianError> {
+        let test_topic = Topic::try_from(topic_req)?;
+
+        if let Some(topic) = self.topics.iter().find(|&t| t == &test_topic) {
+            let mut bytes = Vec::new();
+            write_u32(&mut bytes, topic.num_subscribers(), &Endianness::Little).expect("Failed to write into vector");
+            return Ok(FreudianResponse::Message(bytes));
+        }
+        else {
+            return Err(FreudianError::TopicDoesntExist);
+        }
+    }
+
+    pub fn get_topics(&self) -> Result<FreudianResponse, FreudianError> {
+        let mut bytes = Vec::new();
+
+        write_u32(&mut bytes, self.topics.len() as u32, &Endianness::Little).expect("Failed to write into vector");
+
+        for topic in self.topics.iter() {
+            let mut title_bytes = topic.name.bytes().collect::<Vec<u8>>();
+            write_u32(&mut bytes, title_bytes.len() as u32, &Endianness::Little).expect("Failed to write into vector");
+            bytes.append(&mut title_bytes);
+        }
+
+        return Ok(FreudianResponse::Message(bytes));
     }
 
     pub fn create_topic(&mut self, topic_req: FreudianTopicRequest) -> Result<FreudianResponse, FreudianError> {

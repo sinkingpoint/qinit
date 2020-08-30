@@ -4,10 +4,11 @@ extern crate patient;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use std::path::Path;
-use std::io::{self};
+use std::io::{self, Read};
 use std::convert::TryInto;
 use std::char;
 
+use libq::io::{read_u32, Endianness, BufferReader};
 use libq::logger::{self, ConsoleRecordWriter, Logger};
 
 use patient::{FreudianClient, Status, UUID};
@@ -73,6 +74,14 @@ fn main() {
                         .about("Publishes a message onto a given topic")
                         .arg(Arg::with_name("topic_name").takes_value(true).required(true).index(1))
                         .arg(Arg::with_name("message").takes_value(true).required(true).index(2)),
+                )
+                .subcommand(
+                    SubCommand::with_name("ls").about("Lists the names of all the existing topics")
+                )
+                .subcommand(
+                    SubCommand::with_name("subcount")
+                        .about("Creates a topic with the given name")
+                        .arg(Arg::with_name("topic_name").takes_value(true).required(true).index(1)),
                 ),
         )
         .subcommand(
@@ -125,6 +134,46 @@ fn main() {
                     &logger,
                 );
             }
+            ("ls", Some(_)) => {
+                match client.get_topics() {
+                    Ok(resp) => {
+                        if resp.response_type == Status::Ok {
+                            let mut reader = BufferReader::new(&resp.message);
+                            let num = read_u32(&mut reader, &Endianness::Little).unwrap();
+                            for _ in 0..num {
+                                let size = read_u32(&mut reader, &Endianness::Little).unwrap() as usize;
+                                let mut title_buffer = vec![0;size];
+                                reader.read_exact(&mut title_buffer).unwrap();
+                                logger.info().msg(format!("{}", String::from_utf8(title_buffer).unwrap()));
+                            }
+                        }
+                        else {
+                            logger.info().msg(friendly_status(&resp.response_type));
+                        }
+                    },
+                    Err(err) => {
+                        logger.info().msg(err.to_string());
+                    }
+                }
+            }
+            ("subcount", Some(matches)) => {
+                let name = matches.value_of("topic_name").unwrap();
+                match client.get_num_subscibers(name) {
+                    Ok(resp) => {
+                        if resp.response_type == Status::Ok {
+                            let mut reader = BufferReader::new(&resp.message);
+                            let num = read_u32(&mut reader, &Endianness::Little).unwrap();
+                            logger.info().msg(format!("{} has {} subscribers", name, num));
+                        }
+                        else {
+                            logger.info().msg(friendly_status(&resp.response_type));
+                        }
+                    },
+                    Err(err) => {
+                        logger.info().msg(err.to_string());
+                    }
+                }
+            }
             _ => {}
         },
         ("subscription", Some(matches)) => match matches.subcommand() {
@@ -149,7 +198,7 @@ fn main() {
                     }
                 }
             }
-            ("delete", Some(_matches)) => {
+            ("delete", Some(matches)) => {
                 let uuid = match UUID::try_from_string(matches.value_of("sub_id").unwrap()) {
                     Some(uuid) => uuid,
                     None => {

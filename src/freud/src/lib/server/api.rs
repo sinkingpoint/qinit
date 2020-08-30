@@ -11,7 +11,9 @@ pub enum MessageType {
     Subscribe,
     Unsubscribe,
     ProduceMessage,
-    ConsumeMessage
+    ConsumeMessage,
+    GetTopics,
+    GetNumSubscribers,
 }
 
 impl TryFrom<u32> for MessageType {
@@ -24,6 +26,8 @@ impl TryFrom<u32> for MessageType {
             3 => Ok(MessageType::Unsubscribe),
             4 => Ok(MessageType::ProduceMessage),
             5 => Ok(MessageType::ConsumeMessage),
+            6 => Ok(MessageType::GetTopics),
+            7 => Ok(MessageType::GetNumSubscribers),
             _ => Err(FreudianAPIError::MalformedRequest)
         }
     }
@@ -37,7 +41,9 @@ impl MessageType {
             MessageType::Subscribe => 2,
             MessageType::Unsubscribe => 3,
             MessageType::ProduceMessage => 4,
-            MessageType::ConsumeMessage => 5
+            MessageType::ConsumeMessage => 5,
+            MessageType::GetTopics => 6,
+            MessageType::GetNumSubscribers => 7
         }
     }
 }

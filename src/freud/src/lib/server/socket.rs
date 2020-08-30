@@ -11,7 +11,6 @@ use std::mem::drop;
 use nix::sys::socket::sockopt::PeerCredentials;
 use nix::sys::socket::getsockopt;
 
-use libq::logger;
 use libq::io::{read_u32, Endianness, Writable};
 
 use super::api::{FreudianRequestHeader, MessageType, FreudianTopicRequest, FreudianSubscriptionRequest, FreudianProduceMessageRequest, FreudianAPIResponseType, FreudianAPIResponse, FreudianAPIError};
@@ -41,6 +40,8 @@ fn process_request(socket: &mut UnixStream, bus_lock: &mut Arc<Mutex<FreudianBus
         MessageType::Subscribe => bus.subscribe(FreudianTopicRequest::read(socket)?),
         MessageType::Unsubscribe => bus.unsubscribe(FreudianSubscriptionRequest::read(socket)?),
         MessageType::ProduceMessage => bus.produce_message(FreudianProduceMessageRequest::read(socket, header.message_length - header.size())?),
+        MessageType::GetTopics => bus.get_topics(),
+        MessageType::GetNumSubscribers => bus.get_num_subscribers(FreudianTopicRequest::read(socket)?),
         MessageType::ConsumeMessage => {
             let sub_request = FreudianSubscriptionRequest::read(socket)?;
             let max_wait_time = read_u32(socket, &Endianness::Little)?;
@@ -150,7 +151,6 @@ impl FreudianSocket {
     }
 
     pub fn listen_and_serve(&self) {
-        let logger = logger::with_name_as_json("freudian;socket");
         let bus = Arc::new(Mutex::new(FreudianBus::new()));
 
         for stream in self.socket.incoming() {

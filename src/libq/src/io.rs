@@ -16,6 +16,13 @@ pub trait Writable {
     fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error>;
 }
 
+impl Writable for Vec<u8> {
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
+        writer.write_all(self)?;
+        return Ok(());
+    }
+}
+
 pub fn full_write_bytes(fd: RawFd, buf: &[u8]) -> nix::Result<usize> {
     let mut count: usize = 0;
     while count < buf.len() {
