@@ -10,6 +10,7 @@ use std::io::{self};
 use std::path::Path;
 use std::thread;
 use std::time;
+use std::convert::TryInto;
 
 /// FreudianClient represents a client interface to Freudian, the message bus daemon of qinit
 pub struct FreudianClient {
@@ -71,12 +72,21 @@ impl FreudianClient {
         };
     }
 
-    /// Creates a subscription to the given topic, returning the raw API response from Freudian
-    /// If the response status is "Ok", the body should contain a 16 byte subscription ID which 
-    /// can be used in subsequent message requests
-    pub fn subscribe(&mut self, topic_name: &str) -> Result<FreudianAPIResponse, io::Error> {
+    /// Creates a subscription to the given topic, returning the UUID if the status is Ok
+    pub fn subscribe(&mut self, topic_name: &str) -> Result<(Option<UUID>, Status), io::Error> {
         self.send_topic_request(MessageType::Subscribe, topic_name)?;
-        return self.read_response_from_socket();
+        let resp = self.read_response_from_socket()?;
+
+        if resp.response_type != Status::Ok {
+            return Ok((None, resp.response_type));
+        }
+
+        if resp.message.len() != 16 {
+            return Ok((None, Status::ServerError));
+        }
+
+        let uuid = UUID { uuid: resp.message[..].try_into().unwrap() };
+        return Ok((Some(uuid), Status::Ok));
     }
 
     /// Deletes the subscription with the given subscription ID

@@ -5,7 +5,6 @@ extern crate patient;
 use clap::{App, AppSettings, Arg, SubCommand};
 use std::path::Path;
 use std::io::{self, Read};
-use std::convert::TryInto;
 use std::char;
 
 use libq::io::{read_u32, Endianness, BufferReader};
@@ -179,19 +178,11 @@ fn main() {
         ("subscription", Some(matches)) => match matches.subcommand() {
             ("create", Some(matches)) => {
                 match client.subscribe(matches.value_of("topic_name").unwrap()) {
-                    Ok(resp) => {
-                        if resp.response_type != Status::Ok {
-                            logger.info().msg(friendly_status(&resp.response_type));
-                            return;
-                        }
-
-                        if resp.message.len() != 16 {
-                            logger.info().smsg("Invalid Subscription ID returned");
-                            return;
-                        }
-
-                        let uuid = UUID { uuid: resp.message[..].try_into().unwrap() };
+                    Ok((Some(uuid), _)) => {
                         logger.info().msg(format!("Subscription ID: {}", uuid));
+                    },
+                    Ok((_, err)) => {
+                        logger.info().msg(friendly_status(&err));
                     },
                     Err(err) => {
                         logger.info().msg(err.to_string());
