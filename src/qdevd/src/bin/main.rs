@@ -13,13 +13,14 @@ use std::fs::{read_dir, read_link, File};
 
 use patient::FreudianClient;
 
-use clap::{App};
+use clap::{App, Arg};
 
+const FREUDIAN_SOCKET: &str = "/run/freudian/socket";
 const FREUDIAN_TOPIC_NAME: &str = "uevents";
 const ADD_COMMAND: &str = "add\n";
 
-fn init_freudian() -> Result<FreudianClient, io::Error> {
-    let mut freud_socket = FreudianClient::new(Path::new("/run/freudian/socket"))?;
+fn init_freudian(freudian_socket_file: &str) -> Result<FreudianClient, io::Error> {
+    let mut freud_socket = FreudianClient::new(Path::new(freudian_socket_file))?;
     freud_socket.create_topic(FREUDIAN_TOPIC_NAME)?;
 
     // Wait until we have at least one subscriber (qdev)
@@ -129,17 +130,25 @@ fn event_loop<T: BufRead>(mut freud_socket: FreudianClient, event_reader: T) {
 }
 
 fn main() {
-    App::new("qdevd")
+    let args = App::new("qdevd")
         .version("0.1")
         .author("Colin D. <colin@quirl.co.nz>")
         .about("A UDev Daemon which pipes events into Freudian")
+        .arg(
+            Arg::with_name("socket")
+                .short("s")
+                .takes_value(true)
+                .help("Don't clear envronment variables after authentication"),
+        )
         .get_matches();
+
+    let socket_file = args.value_of("socket").unwrap_or(FREUDIAN_SOCKET);
 
     let logger = logger::with_name_as_json("qdevd");
     logger.info().smsg("Starting QDevD");
     let socket = NetLinkSocket::new().unwrap();
     let reader = BufReader::new(socket);
-    let freud_socket = match init_freudian() {
+    let freud_socket = match init_freudian(socket_file) {
         Ok(socket) => socket,
         Err(e) => {
             logger.info().with_string("error", e.to_string()).smsg("Failed to open Freudian connection");
