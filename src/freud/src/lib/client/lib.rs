@@ -3,11 +3,13 @@ extern crate libq;
 
 pub use {breuer::FreudianAPIResponseType as Status, breuer::FreudianAPIResponse as MessageResponse, breuer::UUID};
 
-use libq::io::{Writable, write_u32, Endianness};
+use libq::io::{Writable, write_u32, Endianness, read_u32, BufferReader};
 use breuer::{FreudianRequestHeader, FreudianTopicRequest, FreudianSubscriptionRequest, FreudianProduceMessageRequest, MessageType, FreudianAPIResponse};
 use std::os::unix::net::UnixStream;
 use std::io::{self};
 use std::path::Path;
+use std::thread;
+use std::time;
 
 /// FreudianClient represents a client interface to Freudian, the message bus daemon of qinit
 pub struct FreudianClient {
@@ -116,5 +118,20 @@ impl FreudianClient {
     pub fn get_num_subscibers(&mut self, topic_name: &str) -> Result<FreudianAPIResponse, io::Error> {
         self.send_topic_request(MessageType::GetNumSubscribers, topic_name)?;
         return self.read_response_from_socket();
+    }
+
+    /// Blocks until the given topic has the given number of subscribers, or we get an error talking to Freudian
+    pub fn block_until_subscription(&mut self, topic_name: &str, min_subscribers: u32) -> Result<(), io::Error> {
+        while {
+            let resp = self.get_num_subscibers(topic_name)?;
+            let mut reader = BufferReader::new(&resp.message);
+            let num = read_u32(&mut reader, &Endianness::Little)?;
+            num < min_subscribers
+        } {
+            // Sleep the thread for a bit. 2 seconds is arbitrary
+            thread::sleep(time::Duration::from_secs(2));
+        }
+
+        return Ok(());
     }
 }
