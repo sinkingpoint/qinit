@@ -1,0 +1,7 @@
+name = "QDev"
+description = "A Service which translates Kernel UDev Events into freudian messages"
+start_command = "/sbin/qdev"
+restart_mode = "Always"
+
+[[requires]]
+name = "qdevd"

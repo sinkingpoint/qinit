@@ -42,7 +42,7 @@ impl FreudianClient {
         return self.send_to_socket(header, topic_request);
     }
 
-    fn send_subscription_request(&mut self, request: MessageType, uuid: UUID) -> Result<(), io::Error> {
+    fn send_subscription_request(&mut self, request: MessageType, uuid: &UUID) -> Result<(), io::Error> {
         let sub_request = FreudianSubscriptionRequest::new(uuid.uuid);
         let header = FreudianRequestHeader::new(request, sub_request.size());
         return self.send_to_socket(header, sub_request);
@@ -90,7 +90,7 @@ impl FreudianClient {
     }
 
     /// Deletes the subscription with the given subscription ID
-    pub fn unsubscribe(&mut self, sub_id: UUID) -> Result<Status, io::Error> {
+    pub fn unsubscribe(&mut self, sub_id: &UUID) -> Result<Status, io::Error> {
         self.send_subscription_request(MessageType::Unsubscribe, sub_id)?;
         return match self.read_response_from_socket() {
             Ok(resp) => Ok(resp.response_type),
@@ -109,7 +109,7 @@ impl FreudianClient {
 
     /// Consumes a message with the given sub_id, blocking for a maximum of max_wait_secs
     /// (which may be 0, for no blocking)
-    pub fn consume_message(&mut self, sub_id: UUID, max_wait_secs: u32) -> Result<FreudianAPIResponse, io::Error> {
+    pub fn consume_message(&mut self, sub_id: &UUID, max_wait_secs: u32) -> Result<FreudianAPIResponse, io::Error> {
         self.send_subscription_request(MessageType::ConsumeMessage, sub_id)?;
         write_u32(&mut self.socket, max_wait_secs, &Endianness::Little)?;
         return self.read_response_from_socket();

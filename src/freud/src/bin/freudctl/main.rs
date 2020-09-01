@@ -198,7 +198,7 @@ fn main() {
                     }
                 };
                 handle_status_message(
-                    &client.unsubscribe(uuid),
+                    &client.unsubscribe(&uuid),
                     &logger,
                 );
             }
@@ -219,7 +219,7 @@ fn main() {
                     }
                 };
 
-                match client.consume_message(uuid, wait) {
+                match client.consume_message(&uuid, wait) {
                     Ok(resp) => {
                         if resp.response_type != Status::Ok {
                             logger.info().msg(friendly_status(&resp.response_type));

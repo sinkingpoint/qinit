@@ -18,3 +18,7 @@ socketpath = "/run/freudian/socket"
 
 [[tasks]]
 name = "qdevd"
+
+
+[[tasks]]
+name = "qdev"
