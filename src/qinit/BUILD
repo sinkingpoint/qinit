@@ -21,6 +21,7 @@ rust_library(
         "//src/cargo:serde",
         "//src/cargo:toml",
         "//src/cargo:nix",
+        "//src/freud:patient",
         "//src/libq"
     ],
     proc_macro_deps = [

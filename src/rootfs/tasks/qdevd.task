@@ -5,3 +5,7 @@ restart_mode = "Always"
 
 [[requires]]
 name = "freudian"
+
+[conditions]
+[[conditions.freudian_topic]]
+name = "uevents"

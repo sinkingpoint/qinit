@@ -166,15 +166,15 @@ impl SphereRegistry {
 
                     if let Some(mut state) = sphere.start(&leaf.args.as_ref(), self.running_spheres.get(leaf).and_then(|s| Some(&s.state))) {
                         logger.debug().msg(format!("Moved {} into state {:?}", leaf.name, state));
-                        let start_conditions = sphere.get_monitor_requests(&leaf.args.as_ref());
+                        let (files, freud_topics) = sphere.get_monitor_requests(&leaf.args.as_ref());
                         match &state.state {
-                            SphereState::Starting if start_conditions.len() > 0 && self.courthouse_builder.is_some() => {
+                            SphereState::Starting if (files.len() > 0 || freud_topics.len() > 0) && self.courthouse_builder.is_some() => {
                                 // Start a Courthouse waiting for these conditions
-                                match self.courthouse_builder.as_ref().unwrap().build(leaf.clone(), start_conditions) {
+                                match self.courthouse_builder.as_ref().unwrap().build(leaf.clone(), files, freud_topics) {
                                     Ok(court) => court.start(),
                                     Err(err) => {
                                         logger.debug().with_str("name", &leaf.name).with_string("error", err.to_string()).with_map("args", &leaf.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to hold court for sphere");
-                                        // TODO: Kill Child
+                                        // TODO: Kill Child if we can't start a courthouse to monitor it for whatever reason
                                     }
                                 }
                             },

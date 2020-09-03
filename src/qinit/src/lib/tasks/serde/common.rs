@@ -173,9 +173,20 @@ pub struct UnixSocketStartCondition {
     pub path: String
 }
 
+/// A FreudianTopicStartCondition represents a StartCondition that waits until the freudian topic with the given name
+/// has been created
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct FreudianTopicStartCondition {
+    /// The Name of the Freudian Topic
+    pub name: String
+}
+
 /// Represents all the StartConditions of a given task
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct StartConditions {
     /// The Unix Sockets the task is known to open
-    pub unixsocket: Option<Vec<UnixSocketStartCondition>>
+    pub unixsocket: Option<Vec<UnixSocketStartCondition>>,
+
+    /// The Freudian Topics we expect the task to create
+    pub freudian_topic: Option<Vec<FreudianTopicStartCondition>>
 }

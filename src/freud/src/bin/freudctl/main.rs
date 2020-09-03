@@ -4,7 +4,7 @@ extern crate patient;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use std::path::Path;
-use std::io::{self, Read};
+use std::io::{self};
 use std::char;
 
 use libq::io::{read_u32, Endianness, BufferReader};
@@ -135,19 +135,14 @@ fn main() {
             }
             ("ls", Some(_)) => {
                 match client.get_topics() {
-                    Ok(resp) => {
-                        if resp.response_type == Status::Ok {
-                            let mut reader = BufferReader::new(&resp.message);
-                            let num = read_u32(&mut reader, &Endianness::Little).unwrap();
-                            for _ in 0..num {
-                                let size = read_u32(&mut reader, &Endianness::Little).unwrap() as usize;
-                                let mut title_buffer = vec![0;size];
-                                reader.read_exact(&mut title_buffer).unwrap();
-                                logger.info().msg(format!("{}", String::from_utf8(title_buffer).unwrap()));
+                    Ok((names, status)) => {
+                        if status == Status::Ok {
+                            for name in names.unwrap().into_iter() {
+                                logger.info().msg(name);
                             }
                         }
                         else {
-                            logger.info().msg(friendly_status(&resp.response_type));
+                            logger.info().msg(friendly_status(&status));
                         }
                     },
                     Err(err) => {

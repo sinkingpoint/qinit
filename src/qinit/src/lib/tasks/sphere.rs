@@ -2,7 +2,7 @@ use super::process::fork_process;
 use super::super::strings::do_string_replacement;
 use tasks::serde::{TaskDef, DependencyDef, Stage, RestartMode};
 use tasks::court::MonitorRequest;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::fs::remove_file;
 use nix::sys::inotify::AddWatchFlags;
@@ -46,11 +46,13 @@ impl SphereType {
     }
 
     /// Gets all the required events that need to happen to start this sphere
-    pub fn get_monitor_requests(&self, args: &Option<&HashMap<String, String>>) -> Vec<MonitorRequest> {
+    pub fn get_monitor_requests(&self, args: &Option<&HashMap<String, String>>) -> (Vec<MonitorRequest>, HashSet<String>) {
         match self {
             SphereType::Task(def) => {
                 let mut requests = Vec::new();
+                let mut freudian_topics = HashSet::new();
                 if let Some(conditions) = &def.conditions {
+                    // Get Unix Sockets / Files
                     if let Some(sockets) = &conditions.unixsocket {
                         for socket in sockets.iter() {
                             let path = PathBuf::from(do_string_replacement(args, &socket.path));
@@ -85,11 +87,18 @@ impl SphereType {
                             requests.push(MonitorRequest::new(PathBuf::from(path), AddWatchFlags::IN_CREATE));
                         }
                     }
+
+                    // Get Freudian Topics
+                    if let Some(topics) = &conditions.freudian_topic {
+                        for topic in topics.iter() {
+                            freudian_topics.insert(topic.name.clone());
+                        }
+                    }
                 }
 
-                return requests;
+                return (requests, freudian_topics);
             },
-            SphereType::Stage(_def) => Vec::new()
+            SphereType::Stage(_def) => (Vec::new(), HashSet::new())
         }
     }
 

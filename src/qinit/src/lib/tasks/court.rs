@@ -1,9 +1,15 @@
 use nix::sys::inotify::{Inotify, InitFlags, AddWatchFlags, WatchDescriptor};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use super::registry::SphereRegistry;
 use tasks::serde::DependencyDef;
+use patient::{Status, FreudianClient};
+
+use std::thread;
+use std::time::Duration;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+
+use super::registry::SphereRegistry;
+
 
 /// A Courthouse is responsible for using inotify to listen for a set of events to 
 /// occur on a set of files, and informing a given registry when all the changes have been seen
@@ -16,6 +22,9 @@ pub struct Courthouse {
 
     /// The list of events we're still waiting on for each file
     waiting_list: HashMap<PathBuf, AddWatchFlags>,
+
+    /// The list of freudian topics we expect to be created
+    freudian_topic_list: HashSet<String>,
 
     /// The registry that this courthouse will report its findings to
     registry: Arc<Mutex<SphereRegistry>>,
@@ -41,8 +50,8 @@ impl CourthouseBuilder {
         }
     }
 
-    pub fn build(&self, dep: DependencyDef, requests: Vec<MonitorRequest>) -> Result<Courthouse, nix::Error> {
-        return Courthouse::new(dep, requests, self.registry.clone());
+    pub fn build(&self, dep: DependencyDef, requests: Vec<MonitorRequest>, freudian_topics: HashSet<String>) -> Result<Courthouse, nix::Error> {
+        return Courthouse::new(dep, requests, freudian_topics, self.registry.clone());
     }
 }
 
@@ -56,7 +65,7 @@ impl MonitorRequest {
 }
 
 impl Courthouse {
-    fn new(dep: DependencyDef, requests: Vec<MonitorRequest>, registry: Arc<Mutex<SphereRegistry>>) -> Result<Courthouse, nix::Error> {
+    fn new(dep: DependencyDef, requests: Vec<MonitorRequest>, freudian_topics: HashSet<String>, registry: Arc<Mutex<SphereRegistry>>) -> Result<Courthouse, nix::Error> {
         let mut req_map = HashMap::new();
         let mut watchers = HashMap::new();
 
@@ -72,6 +81,7 @@ impl Courthouse {
             waiting_list: req_map,
             watchers: watchers,
             registry: registry,
+            freudian_topic_list: freudian_topics,
             dependency: dep
         });
     }
@@ -103,6 +113,29 @@ impl Courthouse {
                     }
                 },
                 Err(_e) => {}
+            }
+        }
+
+        if self.freudian_topic_list.len() > 0 {
+            if let Ok(mut client) = FreudianClient::new(&Path::new("/run/freudian/socket")) {
+                while self.freudian_topic_list.len() > 0 {
+                    match client.get_topics() {
+                        Ok((names, status)) => {
+                            if status == Status::Ok {
+                                let names: HashSet<String> = names.unwrap().into_iter().collect();
+                                self.freudian_topic_list = &self.freudian_topic_list - &names;
+                            }
+
+                            // TODO: Handle this error - tell the registry that the courthouse says no
+                        },
+                        Err(_err) => {
+                            // TODO: Handle this error - tell the registry that the courthouse says no
+                        }
+                    }
+
+                    // Sleep for 100ms. This is pretty arbitrary
+                    thread::sleep(Duration::new(0, 1000));
+                }
             }
         }
 

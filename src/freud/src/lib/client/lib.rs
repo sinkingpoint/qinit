@@ -6,7 +6,7 @@ pub use {breuer::FreudianAPIResponseType as Status, breuer::FreudianAPIResponse 
 use libq::io::{Writable, write_u32, Endianness, read_u32, BufferReader};
 use breuer::{FreudianRequestHeader, FreudianTopicRequest, FreudianSubscriptionRequest, FreudianProduceMessageRequest, MessageType, FreudianAPIResponse};
 use std::os::unix::net::UnixStream;
-use std::io::{self};
+use std::io::{self, Read};
 use std::path::Path;
 use std::thread;
 use std::time;
@@ -117,10 +117,34 @@ impl FreudianClient {
 
     /// Sends a GetTopic Request, returning the raw API response from Freudian
     /// The response is of the format [[title_len, title];array_len] if the status is Ok
-    pub fn get_topics(&mut self) -> Result<FreudianAPIResponse, io::Error> {
+    pub fn get_topics(&mut self) -> Result<(Option<Vec<String>>, Status), io::Error> {
         let header = FreudianRequestHeader::new(MessageType::GetTopics, 0);
         self.send_to_socket(header, Vec::new())?;
-        return self.read_response_from_socket();
+        let response = self.read_response_from_socket()?;
+
+        if response.response_type != Status::Ok {
+            return Ok((None, response.response_type));
+        }
+
+        let mut reader = BufferReader::new(&response.message);
+        let num = read_u32(&mut reader, &Endianness::Little)?;
+        let mut names = Vec::new();
+        for _ in 0..num {
+            let length = read_u32(&mut reader, &Endianness::Little)?;
+            let mut buffer = vec![0;length as usize];
+            reader.read_exact(&mut buffer)?;
+            
+            match String::from_utf8(buffer) {
+                Ok(s) => {
+                    names.push(s);
+                }
+                Err(_) => {
+                    return Ok((None, Status::ServerError));
+                }
+            }
+        }
+
+        return Ok((Some(names), Status::Ok));
     }
 
     /// Gets the number of subscribers of the given topic. The response is a single, little endian u32
