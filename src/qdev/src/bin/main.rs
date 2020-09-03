@@ -1,12 +1,14 @@
 extern crate patient;
 extern crate clap;
 extern crate libq;
+extern crate serde_json;
 
 use patient::{FreudianClient, Status};
 
 use clap::{App, Arg};
 
 use std::path::Path;
+use std::collections::HashMap;
 
 use libq::logger;
 
@@ -30,35 +32,50 @@ fn main() {
 
     let mut client = FreudianClient::new(Path::new(freudian_socket_file)).unwrap();
 
-    let mut logger = logger::with_name_as_json("qdev");
+    let logger = logger::with_name_as_json("qdev");
 
     let sub_id = match client.subscribe(FREUDIAN_TOPIC_NAME) {
         Ok((Some(uuid), _)) => uuid,
-        Ok((None, status)) => {
-            // TODO: Error here
+        Ok((None, _)) => {
             logger.info().smsg("Failed to subscribe to Freudian");
             return;
         },
         Err(err) => {
-            logger.info().smsg("Failed to talk to Freudian");
-            return;
+            logger.info().with_string("error", err.to_string()).smsg("Failed to talk to Freudian");
+            std::process::exit(1);
         }
     };
 
     loop {
-        let resp = match client.consume_message(&sub_id, 30) {
+        let message = match client.consume_message(&sub_id, 30) {
             Ok(resp) => {
                 if resp.response_type != Status::Ok {
-                    break;
+                    if resp.response_type != Status::NothingHappened {
+                        break;
+                    }
+
+                    continue;
                 }
 
-                let message = String::from_utf8(resp.message);
-                println!("{:?}", message);
-                message
+                if let Ok(message) = String::from_utf8(resp.message) {
+                    message
+                }
+                else {
+                    logger.info().smsg("Invalid message from qdevd");
+                    std::process::exit(2);
+                }
             },
             Err(err) => {
-                // logger.info().msg(err.to_string());
-                return;
+                logger.info().msg(err.to_string());
+                std::process::exit(3);
+            }
+        };
+
+        let event: HashMap<String, String> = match serde_json::from_str(&message) {
+            Ok(e) => e,
+            Err(err) => {
+                logger.info().with_string("error", err.to_string()).smsg("Invalid message from qdevd");
+                std::process::exit(4);
             }
         };
     }
