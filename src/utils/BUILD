@@ -150,3 +150,17 @@ rust_binary(
         "//src/libq"
     ]
 )
+
+rust_binary(
+    name = "depmod",
+    srcs = [
+        "depmod/src/main.rs"
+    ],
+    visibility = ["//visibility:public",],
+    deps = [
+        "//src/cargo:clap",
+        "//src/cargo:lzma_rs",
+        "//src/cargo:nix",
+        "//src/libq"
+    ]
+)

@@ -19,3 +19,4 @@ pub mod rand;
 pub mod strings;
 pub mod terminal;
 pub mod elf;
+pub mod iter;

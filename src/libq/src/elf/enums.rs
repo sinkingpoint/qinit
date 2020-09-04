@@ -545,6 +545,7 @@ impl TryFrom<u64> for SectionHeaderEntryFlags {
 }
 
 /// A "Type" of symbol from an ELF file
+#[derive(PartialEq, Clone, Debug)]
 pub enum SymType {
     /// Symbol's type is not specified
     NoType,
@@ -615,6 +616,7 @@ impl fmt::Display for SymType {
 }
 
 /// Represents the Binding (Visibility to other Object files loaded) of a given Symbol
+#[derive(PartialEq, Clone, Debug)]
 pub enum SymBinding {
     /// Local symbol, not visible outside obj file containing def
     Local,
@@ -665,6 +667,7 @@ impl fmt::Display for SymBinding {
 
 /// Defines how a given symbol may be accessed once the symbol has become part of an executable or shared object.
 /// See: https://docs.oracle.com/cd/E19683-01/816-1386/6m7qcoblj/index.html#chapter7-27
+#[derive(PartialEq, Clone, Debug)]
 pub enum SymVisibility {
     /// Visibility is specified by binding type
     Default,

@@ -27,6 +27,7 @@ initramfs(
         "//src/utils:sudo",
         "//src/utils:readelf",
         "//src/utils:modinfo",
+        "//src/utils:depmod",
         "//src/freud:freudctl",
         "//src/qinit:qinit",
         "//src/sh",
