@@ -8,6 +8,8 @@ rust_binary(
     deps = [
         "//src/cargo:clap",
         "//src/cargo:serde_json",
+        "//src/cargo:regex",
+        "//src/cargo:nix",
         "//src/libq",
         "//src/freud:patient"
     ],

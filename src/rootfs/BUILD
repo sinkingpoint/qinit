@@ -6,6 +6,7 @@ extra_files = {
     "//src/qdevd:qdevd": "/sbin/qdevd",
     "//src/qdev:qdev": "/sbin/qdev",
     "//src/freud:freudian": "/sbin/freudian",
+    "//src/utils:insmod": "/sbin/insmod",
     "vendor/modules/e1000.ko": "/lib/modules/5.7.10-201.fc32.x86_64/kernel/drivers/net/ethernet/intel/e1000/e1000.ko"
 }
 
@@ -31,7 +32,6 @@ initramfs(
         "//src/freud:freudctl",
         "//src/qinit:qinit",
         "//src/sh",
-        "//src/utils:insmod"
     ],
     libs = glob(["vendor/*.so.*"]),
     extra_files = extra_files,

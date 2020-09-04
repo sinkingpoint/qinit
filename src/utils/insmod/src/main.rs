@@ -7,8 +7,31 @@ use libq::logger;
 use nix::kmod::{finit_module, ModuleInitFlags};
 use std::ffi::CString;
 use std::fs::File;
-use std::path::Path;
+use std::io::{self, BufRead, BufReader};
+use std::path::{PathBuf};
 use std::process::exit;
+use nix::sys::utsname::uname;
+
+fn find_module_path(modname: &str) -> Result<Option<PathBuf>, io::Error> {
+    let uname = uname();
+    let kernel = uname.release();
+    let file = File::open(format!("/lib/modules/{}/modules.names", kernel))?;
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line?;
+        let parts = line.split(":").collect::<Vec<&str>>();
+        if parts.len() != 2 {
+            return Ok(None);
+        }
+
+        if parts[0] == modname {
+            return Ok(Some(PathBuf::from(parts[1].trim())));
+        }
+    }
+
+    return Ok(None);
+}
 
 fn main() {
     let args = App::new("insmod")
@@ -29,14 +52,19 @@ fn main() {
         )
         .get_matches();
 
-    let mod_path = Path::new(args.value_of("file").unwrap());
+    let mut mod_path = PathBuf::from(args.value_of("file").unwrap());
     let logger = logger::with_name_as_console("insmod");
     if !mod_path.exists() {
-        logger
+        if let Ok(Some(path)) = find_module_path(args.value_of("file").unwrap()) {
+            mod_path = path;
+        }
+        else {
+            logger
             .info()
             .with_str("path", args.value_of("file").unwrap())
             .smsg("Path doesn't exist");
-        exit(1);
+            exit(1);
+        }
     }
 
     let mod_args = match args.values_of("arguments") {

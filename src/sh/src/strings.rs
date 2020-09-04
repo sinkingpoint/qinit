@@ -3,6 +3,8 @@ use shell;
 use std::iter::Peekable;
 use std::str::Chars;
 
+use libq::strings::glob_to_regex;
+
 struct VariableBuilder {
     build: String,
     in_braces: bool,
@@ -72,56 +74,6 @@ impl VariableBuilder {
         let ltrim = self.ltrim.as_ref().unwrap();
         return var.trim_start_matches(ltrim.as_str());
     }
-}
-
-fn glob_to_regex(glob: &String) -> String {
-    let mut result = String::new();
-    let mut iter = glob.chars().peekable();
-    while let Some(chr) = iter.next() {
-        match chr {
-            '*' => {
-                result.push_str(".*");
-            }
-            '?' => {
-                result.push('.');
-            }
-            '[' => {
-                let mut build = String::new();
-                if iter.peek().is_some() && iter.peek().unwrap() != &'!' {
-                    build.push(iter.next().unwrap());
-                }
-
-                if iter.peek().is_some() && iter.peek().unwrap() != &']' {
-                    build.push(iter.next().unwrap());
-                }
-
-                while iter.peek().is_some() && iter.peek().unwrap() != &']' {
-                    build.push(iter.next().unwrap());
-                }
-
-                if iter.peek().is_none() {
-                    result.push_str("\\[");
-                } else {
-                    iter.next(); // Skip the ]
-                    build = build.replace("\\", "\\\\");
-                    if build.starts_with("!") {
-                        build = build.replacen("!", "^", 1);
-                    } else if build.starts_with("^") {
-                        build.insert(0, '\\');
-                    }
-                    result.push_str(&format!("[{}]", build));
-                }
-            }
-            '(' | ')' | ']' | '{' | '}' | '+' | '-' | '|' | '^' | '$' | '\\' | '.' | '&' | '~' | '#' | ' ' | '\t' | '\n' | '\r' => {
-                result.push_str(&format!("\\{}", chr));
-            }
-            _ => {
-                result.push(chr);
-            }
-        }
-    }
-
-    return format!("^{}$", result);
 }
 
 pub fn match_glob(glob: &String, value: &String) -> bool {

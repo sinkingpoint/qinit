@@ -222,12 +222,12 @@ fn main() {
 
     let mut aliases_out: Box<dyn Write>;
     let mut symbols_out: Box<dyn Write>;
-    let mut deps_out: Box<dyn Write>;
+    let mut names_out: Box<dyn Write>;
 
     if dryrun {
         aliases_out = Box::new(std::io::stdout());
         symbols_out = Box::new(std::io::stdout());
-        deps_out    = Box::new(std::io::stdout());
+        names_out    = Box::new(std::io::stdout());
     }
     else {
         aliases_out = match File::create(format!("/lib/modules/{}/modules.alias", kernel)) {
@@ -246,10 +246,10 @@ fn main() {
             }
         };
 
-        deps_out    = match File::create(format!("/lib/modules/{}/modules.dep", kernel)) {
+        names_out   = match File::create(format!("/lib/modules/{}/modules.names", kernel)) {
             Ok(f) => Box::new(f),
             Err(e) => {
-                logger.info().with_string("error", e.to_string()).smsg("failed to open dependencies file");
+                logger.info().with_string("error", e.to_string()).smsg("failed to open names file");
                 exit(1);
             }
         };
@@ -328,6 +328,7 @@ fn main() {
 
                 write_aliases(&mod_info, &mut aliases_out);
                 write_symbols(&elf_binary, &mod_info.name, &mut reader, &mut symbols_out);
+                names_out.write_all(&format!("{}: {}", mod_info.name, path_str).bytes().collect::<Vec<u8>>());
             }
         }
     }
