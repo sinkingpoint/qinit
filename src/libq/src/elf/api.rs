@@ -2,7 +2,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::convert::TryFrom;
 
 use io::{Endianness, read_u8, read_u16, read_u32, read_u64};
-use super::enums::{ProgramHeaderEntryType, SectionHeaderEntryType, SectionHeaderEntryFlags, ElfTargetArch, ElfObjectType, ElfABI, ElfEndianness, AddressSize, InvalidELFFormatError};
+use super::enums::{ProgramHeaderEntryType, SectionHeaderEntryType, SectionHeaderEntryFlags, ElfTargetArch, ElfObjectType, ElfABI, ElfEndianness, AddressSize, InvalidELFFormatError, SymType, SymBinding, SymVisibility};
 
 #[derive(Debug)]
 pub struct ElfBinary {
@@ -451,7 +451,7 @@ pub struct ElfSym {
     pub section_index: u16,
     pub value: u64,
     pub size: u64,
-    _other: u8
+    pub other: u8
 }
 
 /// The size of an Elf32_Sym header
@@ -468,6 +468,23 @@ impl ElfSym {
         }
     }
 
+    /// Returns the "binding" value of this symbol (Either "Local", Or "Global")
+    pub fn get_binding(&self) -> Result<SymBinding, InvalidELFFormatError> {
+        return SymBinding::try_from(self.info >> 4);
+    }
+
+    /// Returns the "type" value of this symbol (FUNC, FILE etc)
+    pub fn get_type(&self) -> Result<SymType, InvalidELFFormatError> {
+        return SymType::try_from(self.info & 0x0F);
+    }
+
+    /// Returns the visibility of this symbol
+    pub fn get_visibility(&self) -> Result<SymVisibility, InvalidELFFormatError> {
+        // We ignore everything except the last 2 bits - everything else _should_ be zero
+        // but some naughty compilers store random things there
+        return SymVisibility::try_from(self.other & 0x03);
+    }
+
     pub fn read<T: Read>(r: &mut T, addr_size: AddressSize, endianness: &Endianness) -> Result<ElfSym, InvalidELFFormatError> {
         if addr_size == AddressSize::ThirtyTwoBit {
             return Ok(ElfSym {
@@ -476,7 +493,7 @@ impl ElfSym {
                 value: read_u32(r, endianness)? as u64,
                 size: read_u32(r, endianness)? as u64,
                 info: read_u8(r)?,
-                _other: read_u8(r)?,
+                other: read_u8(r)?,
                 section_index: read_u16(r, endianness)?
             });
         }
@@ -485,7 +502,7 @@ impl ElfSym {
                 name: String::new(),
                 name_index: read_u32(r, endianness)?,
                 info: read_u8(r)?,
-                _other: read_u8(r)?,
+                other: read_u8(r)?,
                 section_index: read_u16(r, endianness)?,
                 value: read_u64(r, endianness)?,
                 size: read_u64(r, endianness)?,

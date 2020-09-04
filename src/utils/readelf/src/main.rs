@@ -4,6 +4,7 @@ extern crate libq;
 use std::path::Path;
 use std::fs::File;
 use std::process::exit;
+use std::io::{Read, Seek};
 use clap::{App, Arg};
 use libq::elf::ElfBinary;
 use libq::logger;
@@ -38,10 +39,56 @@ fn print_section_headers(binary: &ElfBinary) {
 }
 
 fn print_program_headers(binary: &ElfBinary) {
+    if binary.program_headers.len() == 0 {
+        println!("There are no program headers in this file");
+        return;
+    }
+
     println!("Program Headers:");
     println!("  {: <21} {: <10} {: <8} {: <8} {: <8} {: <8} {: <2} {: <2}", "Type", "Offset", "VirtAddr", "PhysAddr", "FileSiz", "MemSiz", "Flags", "Align");
     for section in binary.program_headers.iter() {
         println!("  {: <21} {: <10} {: <8} {: <8} {: <8} {: <8} {: <2} {: <2}", section.section_type, section.offset, section.virtual_address, section.physical_address, section.file_size, section.mem_size, section.flags, section.alignment);
+    }
+}
+
+fn print_symbols<T: Read + Seek>(binary: &ElfBinary, reader: &mut T) {
+    let symbols = match binary.read_symbols(reader, ".symtab") {
+        Ok(Some(symbols)) => symbols,
+        _ => {
+            println!("There are no symbols in this file");
+            return;
+        }
+    };
+
+    println!("Symbol Table .symtab contains {} entries", symbols.len());
+    println!("{: >6} {: ^16} {: >6} {: ^12} {: ^8} {: ^8} {: ^4} {: >}", "Num", "Value", "Size", "Type", "Bind", "Vis", "NIdx", "Name");
+
+    for (i, sym) in symbols.iter().enumerate() {
+        let binding = match sym.get_binding() {
+            Ok(b) => b,
+            Err(e) => {
+                println!("{: >6} {}", i, e);
+                continue;
+            }
+        };
+
+        let sym_type = match sym.get_type() {
+            Ok(b) => b,
+            Err(e) => {
+                println!("{: >6} {}", i, e);
+                continue;
+            }
+        };
+
+        let visibility = match sym.get_visibility() {
+            Ok(b) => b,
+            Err(e) => {
+                println!("{: >6} {}", i, e);
+                continue;
+            }
+        };
+
+        println!("{: >5}: {:0^16} {: >6} {:^12} {: ^8} {: ^8} {: ^4} {: >}", i, sym.value, sym.size, sym_type, binding, visibility, sym.name_index, sym.name);
     }
 }
 
@@ -50,6 +97,11 @@ fn main() {
         .version("0.1")
         .author("Colin D. <colin@quirl.co.nz>")
         .about("Prints information about a given ELF executable")
+        .arg(Arg::with_name("all").short("a").help("Print all information available"))
+        .arg(Arg::with_name("file-header").short("H").help("Print all information available"))
+        .arg(Arg::with_name("program-headers").short("h").help("Print the files segment/program headers"))
+        .arg(Arg::with_name("section-headers").short("S").help("Print the section headers"))
+        .arg(Arg::with_name("symbols").short("s").help("Print the symbols"))
         .arg(
             Arg::with_name("file")
                 .index(1)
@@ -84,7 +136,25 @@ fn main() {
         }
     };
 
-    print_elf_header(&binary);
-    print_section_headers(&binary);
-    print_program_headers(&binary);
+    let all = args.is_present("all");
+    let file_header = args.is_present("file-header") || all;
+    let program_headers = args.is_present("program-headers") || all;
+    let section_headers = args.is_present("section-headers") || all;
+    let symbols = args.is_present("symbols") || all;
+
+    if file_header {
+        print_elf_header(&binary);
+    }
+
+    if program_headers {
+        print_program_headers(&binary);
+    }
+
+    if section_headers {
+        print_section_headers(&binary);
+    }
+
+    if symbols {
+        print_symbols(&binary, &mut file);
+    }
 }

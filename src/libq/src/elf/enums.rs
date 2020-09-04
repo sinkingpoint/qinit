@@ -15,8 +15,17 @@ pub enum InvalidELFFormatError {
     InvalidProgramHeaderEntryType(u32),
     InvalidSectionHeaderEntryType(u32),
     InvalidSectionHeaderEntryFlag(u64),
+    InvalidSymbolType(u8),
+    InvalidSymbolBinding(u8),
+    InvalidSymbolVisibility(u8),
     MalformedSection,
     IOError(io::Error)
+}
+
+impl fmt::Display for InvalidELFFormatError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
 }
 
 impl InvalidELFFormatError {
@@ -32,6 +41,9 @@ impl InvalidELFFormatError {
             InvalidELFFormatError::InvalidProgramHeaderEntryType(e) => format!("Invalid Program Header Entry Type. Got {}", e),
             InvalidELFFormatError::InvalidSectionHeaderEntryType(e) => format!("Invalid Section Header Entry Type. Got {}", e),
             InvalidELFFormatError::InvalidSectionHeaderEntryFlag(e) => format!("Invalid Section Header Flag. Got {}", e),
+            InvalidELFFormatError::InvalidSymbolType(e) => format!("Invalid Symbol Type. Got {}", e),
+            InvalidELFFormatError::InvalidSymbolBinding(e) => format!("Invalid Symbol Binding. Got {}", e),
+            InvalidELFFormatError::InvalidSymbolVisibility(e) => format!("Invalid Symbol Visibility. Got {}", e),
             InvalidELFFormatError::MalformedSection => format!("Section was malformed"),
             InvalidELFFormatError::IOError(err) => err.to_string()
         }
@@ -531,3 +543,164 @@ impl TryFrom<u64> for SectionHeaderEntryFlags {
         }
     }
 }
+
+/// A "Type" of symbol from an ELF file
+pub enum SymType {
+    /// Symbol's type is not specified
+    NoType,
+
+    /// Symbol is a data object (variable, array, etc.)
+    Object,
+
+    /// Symbol is executable code (function, etc.)
+    Function,
+
+    /// Symbol refers to a section
+    Section,
+
+    /// Local, absolute symbol that refers to a file
+    File,
+
+    /// An uninitialized common block
+    CommonBlock,
+
+    /// Thread local data object
+    ThreadLocal,
+
+    /// GNU indirect function
+    GNUIndirectFunction,
+
+    /// Operating System Specific Types
+    OperatingSystemSpecific(u8),
+
+    /// Processor Specific Symbols
+    ProcessorSpecific(u8),
+}
+
+impl TryFrom<u8> for SymType {
+    type Error = InvalidELFFormatError;
+
+    fn try_from(u: u8) -> Result<Self, Self::Error> {
+        match u {
+            0 => Ok(SymType::NoType),
+            1 => Ok(SymType::Object),
+            2 => Ok(SymType::Function),
+            3 => Ok(SymType::Section),
+            4 => Ok(SymType::File),
+            5 => Ok(SymType::CommonBlock),
+            6 => Ok(SymType::ThreadLocal),
+            10 => Ok(SymType::GNUIndirectFunction),
+            11 | 12 => Ok(SymType::OperatingSystemSpecific(u)),
+            13 | 14 | 15 => Ok(SymType::ProcessorSpecific(u)),
+            _ => Err(InvalidELFFormatError::InvalidSymbolType(u))
+        }
+    }
+}
+
+impl fmt::Display for SymType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SymType::NoType =>   write!(f, "NoType"),
+            SymType::Object =>   write!(f, "Object"),
+            SymType::Function => write!(f, "Function"),
+            SymType::Section =>  write!(f, "Section"),
+            SymType::File =>     write!(f, "File"),
+            SymType::CommonBlock => write!(f, "Common"),
+            SymType::ThreadLocal => write!(f, "TLS"),
+            SymType::GNUIndirectFunction => write!(f, "Indirect"),
+            SymType::OperatingSystemSpecific(u) => write!(f, "OS({})", u),
+            SymType::ProcessorSpecific(u) => write!(f, "Proc({})", u),
+        }
+    }
+}
+
+/// Represents the Binding (Visibility to other Object files loaded) of a given Symbol
+pub enum SymBinding {
+    /// Local symbol, not visible outside obj file containing def
+    Local,
+
+    /// Global symbol, visible to all object files being combined
+    Global,
+
+    /// Weak symbol, like global but lower-precedence
+    Weak,
+
+    GNUUnique,
+
+    /// Operating System Specific Bindings
+    OperatingSystemSpecific(u8),
+
+    /// Processor Specific Bindings
+    ProcessorSpecific(u8)
+}
+
+impl TryFrom<u8> for SymBinding {
+    type Error = InvalidELFFormatError;
+
+    fn try_from(u: u8) -> Result<Self, Self::Error> {
+        match u {
+            0 => Ok(SymBinding::Local),
+            1 => Ok(SymBinding::Global),
+            2 => Ok(SymBinding::Weak),
+            10 => Ok(SymBinding::GNUUnique),
+            11 |12 => Ok(SymBinding::OperatingSystemSpecific(u)),
+            13 | 14 | 15 => Ok(SymBinding::ProcessorSpecific(u)),
+            _ => Err(InvalidELFFormatError::InvalidSymbolBinding(u))
+        }
+    }
+}
+
+impl fmt::Display for SymBinding {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SymBinding::Local => write!(f, "Local"),
+            SymBinding::Global => write!(f, "Global"),
+            SymBinding::Weak => write!(f, "Weak"),
+            SymBinding::GNUUnique => write!(f, "Unique"),
+            SymBinding::OperatingSystemSpecific(u) => write!(f, "OS({})", u),
+            SymBinding::ProcessorSpecific(u) => write!(f, "Proc({})", u),
+        }
+    }
+}
+
+/// Defines how a given symbol may be accessed once the symbol has become part of an executable or shared object.
+/// See: https://docs.oracle.com/cd/E19683-01/816-1386/6m7qcoblj/index.html#chapter7-27
+pub enum SymVisibility {
+    /// Visibility is specified by binding type
+    Default,
+
+    /// Defined by processor supplements
+    Internal,
+
+    /// Not visible to other components
+    Hidden,
+
+    /// Visible in other components but not preemptable
+    Protected,
+}
+
+impl TryFrom<u8> for SymVisibility {
+    type Error = InvalidELFFormatError;
+
+    fn try_from(u: u8) -> Result<Self, Self::Error> {
+        return match u {
+            0 => Ok(SymVisibility::Default),
+            1 => Ok(SymVisibility::Internal),
+            2 => Ok(SymVisibility::Hidden),
+            3 => Ok(SymVisibility::Protected),
+            _ => Err(InvalidELFFormatError::InvalidSymbolVisibility(u))
+        }
+    }
+}
+
+impl fmt::Display for SymVisibility {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SymVisibility::Default => write!(f, "Default"),
+            SymVisibility::Internal => write!(f, "Internal"),
+            SymVisibility::Hidden => write!(f, "Hidden"),
+            SymVisibility::Protected => write!(f, "Protected")
+        }
+    }
+}
+  
