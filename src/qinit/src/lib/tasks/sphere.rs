@@ -151,6 +151,9 @@ pub enum SphereState {
     /// Indicates the Sphere's init script is running
     PreStarting,
 
+    /// Indicates the Sphere's init script has finished, but the main process has not been started
+    StartPending,
+
     /// Indicates that the Sphere has been started, but has start conditions that have not been met yet
     Starting,
 
@@ -189,7 +192,7 @@ impl Startable for TaskDef {
                     new_state = SphereState::Starting;
                 }
             },
-            Some(SphereState::PreStarting) => {
+            Some(SphereState::StartPending) => {
                 pid = fork_process(&self.start_command.split_whitespace().map(|x| do_string_replacement(args, x)).collect());
                 new_state = SphereState::Starting;
             },

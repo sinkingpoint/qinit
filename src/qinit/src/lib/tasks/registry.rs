@@ -54,6 +54,7 @@ impl SphereRegistry {
         let child_state;
         let mut new_state = None;
         let mut needs_restart = false;
+        let mut needs_leafsweep = false;
         if let Some((def, state)) = self.running_spheres.iter().find(|(_, v)| v.pid == Some(pid)) {
             child_def = def.clone();
             child_state = state.clone();
@@ -95,9 +96,22 @@ impl SphereRegistry {
                 }
             },
             SphereState::PreStarting => {
-                self.leaf_sweep();
+                if exit_code == 0 {
+                    new_state = Some(SphereStatus {
+                        state: SphereState::StartPending,
+                        pid: None
+                    });
+
+                    needs_leafsweep = true;
+                }
+                else {
+                    new_state = Some(SphereStatus {
+                        state: SphereState::FailedToStart,
+                        pid: None
+                    });
+                }
             },
-            SphereState::Stopped | SphereState::Exited(_) | SphereState::FailedToStart => {}
+            _ => {}
         }
 
         if new_state.is_some() {
@@ -106,6 +120,10 @@ impl SphereRegistry {
 
         if needs_restart {
             self.start(child_def.clone());
+        }
+
+        if needs_leafsweep {
+            self.leaf_sweep();
         }
     }
 
@@ -154,7 +172,7 @@ impl SphereRegistry {
             logger.debug().with_string("sphere_name", leaf.name.clone()).with_string("state", format!("{:?}", state)).smsg("Checking leaf");
             // If the leaf hasn't been marked as starting, then we need to start it
             match self.running_spheres.get(leaf).and_then(|state| Some(&state.state)) {
-                None | Some(SphereState::Exited(_)) | Some(SphereState::FailedToStart) | Some(SphereState::Stopped) => {
+                None | Some(SphereState::Exited(_)) | Some(SphereState::FailedToStart) | Some(SphereState::Stopped) | Some(SphereState::StartPending) => {
                     logger.debug().with_string("sphere_name", leaf.name.clone()).with_string("state", format!("{:?}", state)).smsg("Starting leaf");
                     let sphere = match self.sphere_templates.get(&leaf.name.to_lowercase()) {
                         Some(sphere) => sphere,
