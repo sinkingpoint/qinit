@@ -1,5 +1,6 @@
 name = "QDevD"
 description = "A Service which translates Kernel UDev Events into freudian messages"
+init_command = "/bin/depmod"
 start_command = "/sbin/qdevd"
 restart_mode = "Always"
 
