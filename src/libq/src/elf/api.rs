@@ -1,6 +1,5 @@
 use std::io::{self, Read, Seek, SeekFrom};
 use std::convert::TryFrom;
-use std::char;
 
 use io::{Endianness, read_u8, read_u16, read_u32, read_u64};
 use super::enums::{ProgramHeaderEntryType, SectionHeaderEntryType, SectionHeaderEntryFlags, ElfTargetArch, ElfObjectType, ElfABI, ElfEndianness, AddressSize, InvalidELFFormatError};
@@ -13,6 +12,42 @@ pub struct ElfBinary {
 }
 
 impl ElfBinary {
+    /// Reads a symbol table with the given name, returning Ok(None) if a table with the given name doesn't exist,
+    /// or if it's not a symbol table
+    pub fn read_symbols<T: Read + Seek>(&self, r: &mut T, name: &str) -> Result<Option<Vec<ElfSym>>, InvalidELFFormatError> {
+        if let Some(section) = self.section_headers.iter().find(|section| section.name == name) {
+            if section.section_type != SectionHeaderEntryType::SymbolTable {
+                return Ok(None);
+            }
+
+            let strings = match self.read_section(r, ".strtab") {
+                Ok(Some(bytes)) => StringsSection::new(bytes),
+                _ => {
+                    return Err(InvalidELFFormatError::MalformedSection);
+                }
+            };
+
+            r.seek(SeekFrom::Start(section.offset))?;
+
+            let mut symbols = Vec::new();
+            let sym_size = ElfSym::size_of(self.header.addr_size);
+            for _ in 0..(section.size / sym_size) {
+                let mut symbol = ElfSym::read(r, self.header.addr_size, &self.header.endianness.to_portable())?;
+                symbol.name = match strings.get_string(symbol.name_index as usize) {
+                    Some(s) => s,
+                    None => {
+                        return Err(InvalidELFFormatError::MalformedSection);
+                    }
+                };
+                symbols.push(symbol);
+            }
+
+            return Ok(Some(symbols));
+        }
+
+        return Ok(None);
+    }
+
     pub fn read_section<T: Read + Seek>(&self, r: &mut T, name: &str) -> Result<Option<Vec<u8>>, io::Error> {
         for section in self.section_headers.iter() {
             if section.name == name {
@@ -43,38 +78,71 @@ impl ElfBinary {
             program_headers.push(ProgramHeader::read(r, header.addr_size, &read_endian)?);
         }
 
+        // Jump to the section header table
         r.seek(SeekFrom::Start(header.section_header_table_offset))?;
 
+        // And read all of them
         let mut section_headers = Vec::new();
         for _ in 0..header.section_header_num_entries {
             section_headers.push(SectionHeader::read(r, header.addr_size, &read_endian)?);
         }
 
-        // Lets dump out the names section
+        // Jump to the section names header
         let names_section_header = &section_headers[header.section_header_name_index]; // Assumes this is valid and we actually have a names section
-
         r.seek(SeekFrom::Start(names_section_header.offset))?;
-        // TODO: We can tidy this up later. Probably by making a "StringsSection" struct
-        let names_header_size = names_section_header.size;
-        let mut buffer = vec![0; names_header_size];
-        r.read_exact(&mut buffer)?;
+
+        // Read the names section as a string section
+        let names_section = StringsSection::read(r, names_section_header.size)?;
 
         for header in section_headers.iter_mut() {
-            let mut name_offset = header.name_offset;
-            let mut build = String::new();
-            while buffer[name_offset] != 0 && name_offset < names_header_size {
-                build.push(char::from_u32(buffer[name_offset] as u32).unwrap());
-                name_offset += 1;
+            if let Some(name) = names_section.get_string(header.name_offset) {
+                header.name = name;
             }
-
-            header.name = build;
+            else {
+                return Err(InvalidELFFormatError::MalformedSection);
+            }
         }
-
 
         return Ok(ElfBinary {
             header: header,
             program_headers: program_headers,
             section_headers: section_headers
+        });
+    }
+}
+
+// Represents a STRTAB section in an ELF file
+pub struct StringsSection {
+    bytes: Vec<u8>
+}
+
+impl StringsSection {
+    pub fn new(bytes: Vec<u8>) -> StringsSection {
+        return StringsSection {
+            bytes: bytes
+        };
+    }
+
+    /// get_string retrieves the string starting at the given offset in the section
+    /// or None, if it isn't valid UTF8
+    pub fn get_string(&self, offset: usize) -> Option<String> {
+        let bytes = self.bytes.iter().skip(offset).take_while(|&b| *b != 0).map(|b| *b).collect();
+
+        return match String::from_utf8(bytes) {
+            Ok(s) => Some(s),
+            Err(_) => None,
+        };
+    }
+
+    /// read just reads the section into the buffer. It's tempting to preload all the strings here
+    /// by going through and loading the null terminated strings and their offsets, but I've noticed some compilers
+    /// like to do a sort of "compression"? where strings start in the middle of others
+    pub fn read<T: Read>(r: &mut T, size: usize) -> Result<StringsSection, InvalidELFFormatError> {
+        let mut section_buffer = vec![0; size as usize];
+        r.read_exact(&mut section_buffer)?;
+
+        return Ok(StringsSection {
+            bytes: section_buffer
         });
     }
 }
@@ -372,5 +440,56 @@ impl SectionHeader {
             align: align,
             entry_size: entry_size
         });
+    }
+}
+
+#[derive(Debug)]
+pub struct ElfSym {
+    pub name: String,
+    pub name_index: u32,
+    pub info: u8,
+    pub section_index: u16,
+    pub value: u64,
+    pub size: u64,
+    _other: u8
+}
+
+/// The size of an Elf32_Sym header
+const ELF_SYM_THIRTY_TWO_BIT_SIZE: usize = 16;
+
+/// The size of an Elf64_Sym header
+const ELF_SYM_SIXTY_FOUR_BIT_SIZE: usize = 24;
+
+impl ElfSym {
+    pub fn size_of(addr_size: AddressSize) -> usize {
+        return match addr_size {
+            AddressSize::ThirtyTwoBit => ELF_SYM_THIRTY_TWO_BIT_SIZE,
+            AddressSize::SixtyFourBit => ELF_SYM_SIXTY_FOUR_BIT_SIZE
+        }
+    }
+
+    pub fn read<T: Read>(r: &mut T, addr_size: AddressSize, endianness: &Endianness) -> Result<ElfSym, InvalidELFFormatError> {
+        if addr_size == AddressSize::ThirtyTwoBit {
+            return Ok(ElfSym {
+                name: String::new(),
+                name_index: read_u32(r, endianness)?,
+                value: read_u32(r, endianness)? as u64,
+                size: read_u32(r, endianness)? as u64,
+                info: read_u8(r)?,
+                _other: read_u8(r)?,
+                section_index: read_u16(r, endianness)?
+            });
+        }
+        else {
+            return Ok(ElfSym {
+                name: String::new(),
+                name_index: read_u32(r, endianness)?,
+                info: read_u8(r)?,
+                _other: read_u8(r)?,
+                section_index: read_u16(r, endianness)?,
+                value: read_u64(r, endianness)?,
+                size: read_u64(r, endianness)?,
+            });
+        }
     }
 }

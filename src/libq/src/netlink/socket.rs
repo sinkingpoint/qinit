@@ -1,10 +1,9 @@
-use nix::sys::socket::{socket, bind, SockAddr, AddressFamily, SockFlag, SockType, SockProtocol, NetlinkAddr, MsgFlags, setsockopt, SetSockOpt};
-use nix::sys::socket::sockopt::RcvBuf;
+use nix::sys::socket::{socket, bind, SockAddr, AddressFamily, SockFlag, SockType, SockProtocol, NetlinkAddr, MsgFlags};
 use nix::unistd::{getpid, close};
 use super::error::NetLinkError;
 use io::RawFdReceiver;
 
-use std::os::unix::io::{RawFd, FromRawFd};
+use std::os::unix::io::{RawFd};
 use std::io::{self, Read};
 
 pub struct NetLinkSocket {
@@ -21,7 +20,7 @@ impl NetLinkSocket {
         bind(socket_fd, &SockAddr::Netlink(address))?;
         return Ok(NetLinkSocket {
             socket_fd: socket_fd,
-            reader: unsafe { RawFdReceiver::new(socket_fd, MsgFlags::empty()) },
+            reader: RawFdReceiver::new(socket_fd, MsgFlags::empty()),
             sequence_number: 1,
             address: address
         });
@@ -36,8 +35,9 @@ impl Read for NetLinkSocket {
 
 impl Drop for NetLinkSocket {
     fn drop(&mut self) {
+        // TODO: Store subscription IDs and unsubscribe here
         if self.socket_fd != 0 {
-            close(self.socket_fd);
+            close(self.socket_fd).expect("Failed to close socket");
             self.socket_fd = 0;
         }
     }

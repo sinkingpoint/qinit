@@ -1,6 +1,5 @@
 use num_enum::TryFromPrimitiveError;
 use super::api::MessageType;
-use nix::Error;
 use std::io;
 use std::str::Utf8Error;
 use std::ffi::FromBytesWithNulError;

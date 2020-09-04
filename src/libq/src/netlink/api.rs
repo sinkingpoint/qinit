@@ -1,13 +1,11 @@
-use io::{read_u16, read_u32, read_u64, Endianness, BufferReader};
+use io::{read_u16, read_u32, Endianness};
 use nix::unistd::getpid;
 use num_enum::TryFromPrimitive;
 
 use super::error::NetLinkError;
 
-use std::convert::{TryFrom, TryInto};
-use std::fmt;
-use std::ffi::CStr;
-use std::io::{self, Read};
+use std::convert::{TryFrom};
+use std::io::{Read};
 
 libc_bitflags! {
     #[allow(non_camel_case_types, dead_code)]
@@ -174,9 +172,6 @@ libc_enum! {
         RTM_GETNSID as u16,
     }
 }
-
-/// The size in bytes of a NetLinkMessageHeader
-const NetLinkMessageHeaderSize: u32 = 16;
 
 #[derive(Debug)]
 #[repr(C)]

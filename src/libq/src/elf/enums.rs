@@ -15,6 +15,7 @@ pub enum InvalidELFFormatError {
     InvalidProgramHeaderEntryType(u32),
     InvalidSectionHeaderEntryType(u32),
     InvalidSectionHeaderEntryFlag(u64),
+    MalformedSection,
     IOError(io::Error)
 }
 
@@ -31,6 +32,7 @@ impl InvalidELFFormatError {
             InvalidELFFormatError::InvalidProgramHeaderEntryType(e) => format!("Invalid Program Header Entry Type. Got {}", e),
             InvalidELFFormatError::InvalidSectionHeaderEntryType(e) => format!("Invalid Section Header Entry Type. Got {}", e),
             InvalidELFFormatError::InvalidSectionHeaderEntryFlag(e) => format!("Invalid Section Header Flag. Got {}", e),
+            InvalidELFFormatError::MalformedSection => format!("Section was malformed"),
             InvalidELFFormatError::IOError(err) => err.to_string()
         }
     }
@@ -408,7 +410,7 @@ impl fmt::Display for ProgramHeaderEntryType {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SectionHeaderEntryType {
     None,
     ProgramData,
