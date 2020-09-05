@@ -4,7 +4,7 @@ use accountant::dtr::Graph;
 #[test]
 fn test_graph_adds_nodes() {
     let mut graph = Graph::new();
-    
+
     graph.add_node(1);
     graph.add_node(2);
     graph.add_node(3);

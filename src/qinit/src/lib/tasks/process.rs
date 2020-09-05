@@ -1,10 +1,10 @@
+use super::registry::SphereRegistry;
+use libq::logger;
+use nix::errno::Errno::{ECHILD, ENOENT};
+use nix::sys::wait::{wait, WaitStatus};
+use nix::unistd::{execv, fork, ForkResult};
 use std::ffi::{CStr, CString};
 use std::sync::{Arc, Mutex};
-use libq::logger;
-use super::registry::SphereRegistry;
-use nix::errno::Errno::{ENOENT, ECHILD};
-use nix::unistd::{fork, ForkResult, execv};
-use nix::sys::wait::{wait, WaitStatus};
 
 /// listen_for_children is responsible for waiting for signals (In particular, SIGCHLD) and telling the registry about it
 pub fn listen_for_children(registry_lock: Arc<Mutex<SphereRegistry>>) {
@@ -12,11 +12,15 @@ pub fn listen_for_children(registry_lock: Arc<Mutex<SphereRegistry>>) {
     loop {
         match wait() {
             Ok(WaitStatus::Exited(pid, exit_code)) => {
-                logger.info().with_i32("pid", pid.as_raw()).with_i32("exit_code", exit_code).smsg("Process exitted");
+                logger
+                    .info()
+                    .with_i32("pid", pid.as_raw())
+                    .with_i32("exit_code", exit_code)
+                    .smsg("Process exitted");
                 let mut registry = registry_lock.lock().unwrap();
                 registry.handle_child_exit(pid.as_raw() as u32, exit_code as u32);
-            },
-            Ok(_) => {},
+            }
+            Ok(_) => {}
             Err(err) => {
                 if let Some(errno) = err.as_errno() {
                     if errno == ECHILD {
@@ -48,9 +52,10 @@ pub fn fork_process(argv: &Vec<String>) -> Option<u32> {
     // If we get here, we're the child so lets exec
     let path = CString::new(argv[0].bytes().collect::<Vec<u8>>()).unwrap();
 
-    let argv: Vec<Vec<u8>> = argv.iter()
-            .map(|arg| CString::new(arg.bytes().collect::<Vec<u8>>()).unwrap().into_bytes_with_nul())
-            .collect();
+    let argv: Vec<Vec<u8>> = argv
+        .iter()
+        .map(|arg| CString::new(arg.bytes().collect::<Vec<u8>>()).unwrap().into_bytes_with_nul())
+        .collect();
 
     let argv = &argv
         .iter()

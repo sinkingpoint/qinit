@@ -1,4 +1,3 @@
-
 #[derive(Debug)]
 #[repr(C)]
 pub struct InterfaceInfoMessage {
@@ -213,7 +212,6 @@ pub enum RoutingAttribute {
 
 impl RoutingAttribute {
     pub fn read<T: Read>(mut data: &mut T) -> Result<(RoutingAttribute, u32), NetLinkError> {
-
         let length: u16 = read_u16(&mut data, &Endianness::Little)?;
         let attr_type: u16 = read_u16(&mut data, &Endianness::Little)?;
         const ALIGN_TO: u16 = 4;

@@ -1,15 +1,15 @@
-extern crate libq;
 extern crate clap;
-extern crate serde_json;
+extern crate libq;
 extern crate patient;
+extern crate serde_json;
 
-use libq::netlink::NetLinkSocket;
 use libq::logger;
+use libq::netlink::NetLinkSocket;
 
 use std::collections::{HashMap, VecDeque};
-use std::io::{self, BufReader, BufRead, Write};
-use std::path::{Path, PathBuf};
 use std::fs::{read_dir, read_link, File};
+use std::io::{self, BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
 
 use patient::FreudianClient;
 
@@ -62,16 +62,22 @@ fn do_initial_device_add() -> Result<(), io::Error> {
                     if let Some(name) = name.to_str() {
                         if name == "uevent" {
                             match File::create(&path) {
-                                Ok(mut f) => {
-                                    match f.write(&ADD_COMMAND.bytes().collect::<Vec<u8>>()[..]) {
-                                        Ok(_) => {},
-                                        Err(err) => {
-                                            logger.debug().with_string("error", err.to_string()).with_string("path", format!("{}", path.display())).smsg("Failed to trigger uevent");
-                                        }
+                                Ok(mut f) => match f.write(&ADD_COMMAND.bytes().collect::<Vec<u8>>()[..]) {
+                                    Ok(_) => {}
+                                    Err(err) => {
+                                        logger
+                                            .debug()
+                                            .with_string("error", err.to_string())
+                                            .with_string("path", format!("{}", path.display()))
+                                            .smsg("Failed to trigger uevent");
                                     }
                                 },
                                 Err(err) => {
-                                    logger.debug().with_string("error", err.to_string()).with_string("path", format!("{}", path.display())).smsg("Failed to open uevent trigger");
+                                    logger
+                                        .debug()
+                                        .with_string("error", err.to_string())
+                                        .with_string("path", format!("{}", path.display()))
+                                        .smsg("Failed to open uevent trigger");
                                 }
                             }
                         }
@@ -92,7 +98,10 @@ fn event_loop<T: BufRead>(mut freud_socket: FreudianClient, event_reader: T) {
         let line = match line {
             Ok(line) => String::from_utf8(line).unwrap(),
             Err(err) => {
-                logger.info().with_string("error", err.to_string()).smsg("Got an IO Error reading Netlink socket. Bailing");
+                logger
+                    .info()
+                    .with_string("error", err.to_string())
+                    .smsg("Got an IO Error reading Netlink socket. Bailing");
                 break;
             }
         };
@@ -111,17 +120,19 @@ fn event_loop<T: BufRead>(mut freud_socket: FreudianClient, event_reader: T) {
                 };
 
                 match freud_socket.produce_message(FREUDIAN_TOPIC_NAME, event_str.bytes().collect()) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(err) => {
-                        logger.info().with_string("error", err.to_string()).smsg("Failed to produce to Freudian");
+                        logger
+                            .info()
+                            .with_string("error", err.to_string())
+                            .smsg("Failed to produce to Freudian");
                         break;
                     }
                 }
 
                 current_event.clear();
             }
-        }
-        else {
+        } else {
             // Otherwise, we split the event into a k=v parts and insert into the map
             let parts_iter: Vec<String> = line.splitn(2, "=").map(|s| s.to_owned()).collect();
             current_event.insert(parts_iter[0].clone(), parts_iter[1].clone());
@@ -151,7 +162,10 @@ fn main() {
     let freud_socket = match init_freudian(socket_file) {
         Ok(socket) => socket,
         Err(e) => {
-            logger.info().with_string("error", e.to_string()).smsg("Failed to open Freudian connection");
+            logger
+                .info()
+                .with_string("error", e.to_string())
+                .smsg("Failed to open Freudian connection");
             return;
         }
     };
@@ -159,9 +173,12 @@ fn main() {
     let event_loop_thread = std::thread::spawn(move || event_loop(freud_socket, reader));
 
     match do_initial_device_add() {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
-            logger.info().with_string("error", err.to_string()).smsg("Failed to do initial device discovery");
+            logger
+                .info()
+                .with_string("error", err.to_string())
+                .smsg("Failed to do initial device discovery");
         }
     }
 

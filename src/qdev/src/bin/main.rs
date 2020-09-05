@@ -1,9 +1,9 @@
-extern crate patient;
 extern crate clap;
 extern crate libq;
-extern crate serde_json;
-extern crate regex;
 extern crate nix;
+extern crate patient;
+extern crate regex;
+extern crate serde_json;
 
 use regex::Regex;
 
@@ -11,10 +11,10 @@ use patient::{FreudianClient, Status};
 
 use clap::{App, Arg};
 
-use std::path::Path;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
 use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
 use std::process::exit;
 use std::process::Command;
 
@@ -26,7 +26,7 @@ use nix::sys::utsname::uname;
 const FREUDIAN_SOCKET: &str = "/run/freudian/socket";
 const FREUDIAN_TOPIC_NAME: &str = "uevents";
 struct ModuleLoader {
-    mod_aliases: Vec<(Regex, String)>
+    mod_aliases: Vec<(Regex, String)>,
 }
 
 impl ModuleLoader {
@@ -64,9 +64,7 @@ impl ModuleLoader {
             aliases.push((regex, parts[2].to_owned()));
         }
 
-        return Some(ModuleLoader{
-            mod_aliases: aliases
-        });
+        return Some(ModuleLoader { mod_aliases: aliases });
     }
 
     fn get_module_for(&self, mod_alias: &str) -> Option<&String> {
@@ -82,16 +80,16 @@ impl ModuleLoader {
 
 fn main() {
     let args = App::new("qdev")
-    .version("0.1")
-    .author("Colin D. <colin@quirl.co.nz>")
-    .about("Processes uevents, runs rules, and load modules")
-    .arg(
-        Arg::with_name("socket")
-            .short("s")
-            .takes_value(true)
-            .help("Override the location of the freudian socket to connect to"),
-    )
-    .get_matches();
+        .version("0.1")
+        .author("Colin D. <colin@quirl.co.nz>")
+        .about("Processes uevents, runs rules, and load modules")
+        .arg(
+            Arg::with_name("socket")
+                .short("s")
+                .takes_value(true)
+                .help("Override the location of the freudian socket to connect to"),
+        )
+        .get_matches();
 
     let freudian_socket_file = args.value_of("socket").unwrap_or(FREUDIAN_SOCKET);
 
@@ -102,7 +100,9 @@ fn main() {
     let module_loader = match ModuleLoader::new() {
         Some(m) => m,
         None => {
-            logger.info().smsg("Failed to load modules.aliases file for this kernel release, bailing");
+            logger
+                .info()
+                .smsg("Failed to load modules.aliases file for this kernel release, bailing");
             exit(1);
         }
     };
@@ -112,9 +112,12 @@ fn main() {
         Ok((None, _)) => {
             logger.info().smsg("Failed to subscribe to Freudian");
             return;
-        },
+        }
         Err(err) => {
-            logger.info().with_string("error", err.to_string()).smsg("Failed to talk to Freudian");
+            logger
+                .info()
+                .with_string("error", err.to_string())
+                .smsg("Failed to talk to Freudian");
             std::process::exit(1);
         }
     };
@@ -133,12 +136,11 @@ fn main() {
 
                 if let Ok(message) = String::from_utf8(resp.message) {
                     message
-                }
-                else {
+                } else {
                     logger.info().smsg("Invalid message from qdevd");
                     std::process::exit(2);
                 }
-            },
+            }
             Err(err) => {
                 logger.info().msg(err.to_string());
                 std::process::exit(3);
@@ -148,7 +150,10 @@ fn main() {
         let event: HashMap<String, String> = match serde_json::from_str(&message) {
             Ok(e) => e,
             Err(err) => {
-                logger.info().with_string("error", err.to_string()).smsg("Invalid message from qdevd");
+                logger
+                    .info()
+                    .with_string("error", err.to_string())
+                    .smsg("Invalid message from qdevd");
                 std::process::exit(4);
             }
         };
@@ -170,9 +175,12 @@ fn main() {
                                     if out.status.code() != Some(0) {
                                         logger.info().smsg("Failed to load module with insmod");
                                     }
-                                },
+                                }
                                 Err(e) => {
-                                    logger.info().with_string("error", e.to_string()).smsg("Failed to load module with insmod");
+                                    logger
+                                        .info()
+                                        .with_string("error", e.to_string())
+                                        .smsg("Failed to load module with insmod");
                                 }
                             };
                         });

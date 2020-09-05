@@ -40,10 +40,15 @@ pub fn long_from_bytes_little_endian(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g
 }
 
 pub trait ReadableFromRaw {
-    unsafe fn read_from_raw<R: Read>(read: &mut R) -> io::Result<Self> where Self: Sized;
+    unsafe fn read_from_raw<R: Read>(read: &mut R) -> io::Result<Self>
+    where
+        Self: Sized;
 }
 
-impl<T> ReadableFromRaw for T where Self: Sized {
+impl<T> ReadableFromRaw for T
+where
+    Self: Sized,
+{
     unsafe fn read_from_raw<R: Read>(read: &mut R) -> io::Result<Self> {
         return read_struct(read);
     }

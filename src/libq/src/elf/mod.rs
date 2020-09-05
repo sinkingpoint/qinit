@@ -1,5 +1,5 @@
 mod api;
 mod enums;
 
-pub use self::enums::{ElfEndianness, AddressSize, ElfABI, ElfObjectType, SymType, SymBinding, SymVisibility};
 pub use self::api::{ElfBinary, ElfHeader, ElfSym};
+pub use self::enums::{AddressSize, ElfABI, ElfEndianness, ElfObjectType, SymBinding, SymType, SymVisibility};

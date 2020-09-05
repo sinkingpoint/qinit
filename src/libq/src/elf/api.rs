@@ -1,14 +1,17 @@
-use std::io::{self, Read, Seek, SeekFrom};
 use std::convert::TryFrom;
+use std::io::{self, Read, Seek, SeekFrom};
 
-use io::{Endianness, read_u8, read_u16, read_u32, read_u64};
-use super::enums::{ProgramHeaderEntryType, SectionHeaderEntryType, SectionHeaderEntryFlags, ElfTargetArch, ElfObjectType, ElfABI, ElfEndianness, AddressSize, InvalidELFFormatError, SymType, SymBinding, SymVisibility};
+use super::enums::{
+    AddressSize, ElfABI, ElfEndianness, ElfObjectType, ElfTargetArch, InvalidELFFormatError, ProgramHeaderEntryType,
+    SectionHeaderEntryFlags, SectionHeaderEntryType, SymBinding, SymType, SymVisibility,
+};
+use io::{read_u16, read_u32, read_u64, read_u8, Endianness};
 
 #[derive(Debug)]
 pub struct ElfBinary {
     pub header: ElfHeader,
     pub program_headers: Vec<ProgramHeader>,
-    pub section_headers: Vec<SectionHeader>
+    pub section_headers: Vec<SectionHeader>,
 }
 
 impl ElfBinary {
@@ -97,8 +100,7 @@ impl ElfBinary {
         for header in section_headers.iter_mut() {
             if let Some(name) = names_section.get_string(header.name_offset) {
                 header.name = name;
-            }
-            else {
+            } else {
                 return Err(InvalidELFFormatError::MalformedSection);
             }
         }
@@ -106,21 +108,19 @@ impl ElfBinary {
         return Ok(ElfBinary {
             header: header,
             program_headers: program_headers,
-            section_headers: section_headers
+            section_headers: section_headers,
         });
     }
 }
 
 // Represents a STRTAB section in an ELF file
 pub struct StringsSection {
-    bytes: Vec<u8>
+    bytes: Vec<u8>,
 }
 
 impl StringsSection {
     pub fn new(bytes: Vec<u8>) -> StringsSection {
-        return StringsSection {
-            bytes: bytes
-        };
+        return StringsSection { bytes: bytes };
     }
 
     /// get_string retrieves the string starting at the given offset in the section
@@ -141,9 +141,7 @@ impl StringsSection {
         let mut section_buffer = vec![0; size as usize];
         r.read_exact(&mut section_buffer)?;
 
-        return Ok(StringsSection {
-            bytes: section_buffer
-        });
+        return Ok(StringsSection { bytes: section_buffer });
     }
 }
 
@@ -236,17 +234,17 @@ impl ElfHeader {
 
         let entrypoint = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, &read_endian)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, &read_endian)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, &read_endian)?,
         };
 
         let program_header_offset = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, &read_endian)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, &read_endian)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, &read_endian)?,
         };
 
         let section_header_offset = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, &read_endian)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, &read_endian)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, &read_endian)?,
         };
 
         let flags = read_u32(&mut r, &read_endian)?;
@@ -257,34 +255,32 @@ impl ElfHeader {
         let section_header_num = read_u16(&mut r, &read_endian)?;
         let names_section_index = read_u16(&mut r, &read_endian)?;
 
-        return Ok(
-            ElfHeader{
-                magic: magic,
-                addr_size: addr_size,
-                endianness: endianness,
-                abi: abi,
-                abi_version: abi_version,
-                elf_type: elf_type,
-                target_arch: target_arch,
-                version: e_version,
-                entrypoint: entrypoint,
-                program_header_offset: program_header_offset,
-                section_header_table_offset: section_header_offset,
-                flags: flags,
-                header_size: header_size,
-                program_header_entry_size: prog_header_size,
-                program_header_num_entries: prog_header_num,
-                section_header_entry_size: section_header_size,
-                section_header_num_entries: section_header_num,
-                section_header_name_index: names_section_index as usize
-            }
-        )
+        return Ok(ElfHeader {
+            magic: magic,
+            addr_size: addr_size,
+            endianness: endianness,
+            abi: abi,
+            abi_version: abi_version,
+            elf_type: elf_type,
+            target_arch: target_arch,
+            version: e_version,
+            entrypoint: entrypoint,
+            program_header_offset: program_header_offset,
+            section_header_table_offset: section_header_offset,
+            flags: flags,
+            header_size: header_size,
+            program_header_entry_size: prog_header_size,
+            program_header_num_entries: prog_header_num,
+            section_header_entry_size: section_header_size,
+            section_header_num_entries: section_header_num,
+            section_header_name_index: names_section_index as usize,
+        });
     }
 }
 
 #[derive(Debug)]
 pub struct ProgramHeader {
-    /// Identifies the type of the segment. 
+    /// Identifies the type of the segment.
     pub section_type: ProgramHeaderEntryType,
 
     /// Segment dependant flags
@@ -306,7 +302,7 @@ pub struct ProgramHeader {
     pub mem_size: u64,
 
     /// What power of two this segment should be aligned to
-    pub alignment: u64
+    pub alignment: u64,
 }
 
 impl ProgramHeader {
@@ -328,27 +324,27 @@ impl ProgramHeader {
 
         let segment_offset = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         let virtual_address = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         let physical_address = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         let fs_size = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         let mem_size = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         if addr_size == AddressSize::ThirtyTwoBit {
@@ -359,7 +355,7 @@ impl ProgramHeader {
 
         let align = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         return Ok(ProgramHeader {
@@ -370,7 +366,7 @@ impl ProgramHeader {
             physical_address: physical_address,
             file_size: fs_size,
             mem_size: mem_size,
-            alignment: align
+            alignment: align,
         });
     }
 }
@@ -387,7 +383,7 @@ pub struct SectionHeader {
     pub link_index: u32,
     pub extra_info: u32,
     pub align: u64,
-    pub entry_size: u64
+    pub entry_size: u64,
 }
 
 impl SectionHeader {
@@ -401,17 +397,17 @@ impl SectionHeader {
 
         let virtual_address = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         let offset = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         let size = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         let link_index = read_u32(&mut r, endianness)?;
@@ -419,12 +415,12 @@ impl SectionHeader {
 
         let align = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         let entry_size = match addr_size {
             AddressSize::ThirtyTwoBit => read_u32(&mut r, endianness)? as u64,
-            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?
+            AddressSize::SixtyFourBit => read_u64(&mut r, endianness)?,
         };
 
         return Ok(SectionHeader {
@@ -438,7 +434,7 @@ impl SectionHeader {
             link_index: link_index,
             extra_info: extra_info,
             align: align,
-            entry_size: entry_size
+            entry_size: entry_size,
         });
     }
 }
@@ -451,7 +447,7 @@ pub struct ElfSym {
     pub section_index: u16,
     pub value: u64,
     pub size: u64,
-    pub other: u8
+    pub other: u8,
 }
 
 /// The size of an Elf32_Sym header
@@ -464,8 +460,8 @@ impl ElfSym {
     pub fn size_of(addr_size: AddressSize) -> usize {
         return match addr_size {
             AddressSize::ThirtyTwoBit => ELF_SYM_THIRTY_TWO_BIT_SIZE,
-            AddressSize::SixtyFourBit => ELF_SYM_SIXTY_FOUR_BIT_SIZE
-        }
+            AddressSize::SixtyFourBit => ELF_SYM_SIXTY_FOUR_BIT_SIZE,
+        };
     }
 
     /// Returns the "binding" value of this symbol (Either "Local", Or "Global")
@@ -494,10 +490,9 @@ impl ElfSym {
                 size: read_u32(r, endianness)? as u64,
                 info: read_u8(r)?,
                 other: read_u8(r)?,
-                section_index: read_u16(r, endianness)?
+                section_index: read_u16(r, endianness)?,
             });
-        }
-        else {
+        } else {
             return Ok(ElfSym {
                 name: String::new(),
                 name_index: read_u32(r, endianness)?,

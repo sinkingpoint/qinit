@@ -1,9 +1,9 @@
-use num_enum::TryFromPrimitiveError;
 use super::api::MessageType;
+use num_enum::TryFromPrimitiveError;
+use std::array::TryFromSliceError;
+use std::ffi::FromBytesWithNulError;
 use std::io;
 use std::str::Utf8Error;
-use std::ffi::FromBytesWithNulError;
-use std::array::TryFromSliceError;
 
 #[derive(Debug)]
 pub enum NetLinkError {
@@ -11,7 +11,7 @@ pub enum NetLinkError {
     NixError(nix::Error),
     IncorrectBufferSize,
     InvalidString,
-    InvalidMessageType
+    InvalidMessageType,
 }
 
 impl From<io::Error> for NetLinkError {

@@ -1,6 +1,8 @@
 use std::fmt;
 use std::io::{self, Read, Write};
 
+use super::io::STDIN_FD;
+
 use nix::libc::c_int;
 use nix::pty::Winsize;
 use nix::sys::termios::{ControlFlags, InputFlags, LocalFlags, OutputFlags, SpecialCharacterIndices, Termios};
@@ -274,8 +276,28 @@ ioctl_read! {
     tiocgwinsz, b'T', 0x13, Winsize
 }
 
+pub fn get_window_size() -> Result<Winsize, nix::Error> {
+    let mut winsize = Winsize {
+        ws_row: 0,
+        ws_col: 0,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
+
+    unsafe {
+        match tiocgwinsz(STDIN_FD, &mut winsize) {
+            Ok(_) => {
+                return Ok(winsize);
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+}
+
 ioctl_write_ptr! {
-    /// Get window size
+    /// Set window size
     tiocswinsz, b'T', 0x14, Winsize
 }
 

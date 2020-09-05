@@ -4,8 +4,8 @@ use num_enum::TryFromPrimitive;
 
 use super::error::NetLinkError;
 
-use std::convert::{TryFrom};
-use std::io::{Read};
+use std::convert::TryFrom;
+use std::io::Read;
 
 libc_bitflags! {
     #[allow(non_camel_case_types, dead_code)]
@@ -176,11 +176,11 @@ libc_enum! {
 #[derive(Debug)]
 #[repr(C)]
 pub struct NetLinkMessageHeader {
-    pub length: u32,           /* Length of message including header */
-    pub msg_type: MessageType, /* Type of message content */
-    pub flags: NetLinkMessageFlags,     /* Additional flags */
-    pub sequence_number: u32,  /* Sequence number */
-    pub pid: u32,              /* Sending process PID */
+    pub length: u32,                /* Length of message including header */
+    pub msg_type: MessageType,      /* Type of message content */
+    pub flags: NetLinkMessageFlags, /* Additional flags */
+    pub sequence_number: u32,       /* Sequence number */
+    pub pid: u32,                   /* Sending process PID */
 }
 
 impl NetLinkMessageHeader {

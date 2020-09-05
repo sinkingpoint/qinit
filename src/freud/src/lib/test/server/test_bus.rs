@@ -1,6 +1,8 @@
 extern crate breuer;
 
-use breuer::{FreudianBus, FreudianTopicRequest, FreudianSubscriptionRequest, FreudianError, FreudianResponse, FreudianProduceMessageRequest};
+use breuer::{
+    FreudianBus, FreudianError, FreudianProduceMessageRequest, FreudianResponse, FreudianSubscriptionRequest, FreudianTopicRequest,
+};
 
 #[test]
 fn test_bus_adds_topic() {
@@ -58,7 +60,7 @@ fn test_bus_subscribes() {
 fn test_bus_unsubscribes() {
     let mut bus = FreudianBus::new();
 
-    let try_unsub = bus.unsubscribe(FreudianSubscriptionRequest::new([0;16]));
+    let try_unsub = bus.unsubscribe(FreudianSubscriptionRequest::new([0; 16]));
     assert!(try_unsub.is_err());
     assert_eq!(try_unsub.unwrap_err(), FreudianError::SubscriptionDoesntExist);
 
@@ -71,8 +73,7 @@ fn test_bus_unsubscribes() {
 
         // We can't unsub twice
         assert!(bus.unsubscribe(uuid.clone()).is_err());
-    }
-    else {
+    } else {
         assert!(false, "Invalid response from subscription");
     }
 }
@@ -98,9 +99,15 @@ fn test_bus_message_pipeline() {
     if let Ok(FreudianResponse::Subscription(uuid)) = bus.subscribe(FreudianTopicRequest::new("test".to_owned())) {
         if let Ok(FreudianResponse::Subscription(second_uuid)) = bus.subscribe(FreudianTopicRequest::new("test".to_owned())) {
             // And Producing should now be successful messages
-            assert!(bus.produce_message(FreudianProduceMessageRequest::new("test".to_owned(), vec![0; 16])).is_ok());
-            assert!(bus.produce_message(FreudianProduceMessageRequest::new("test".to_owned(), vec![1; 16])).is_ok());
-            assert!(bus.produce_message(FreudianProduceMessageRequest::new("test".to_owned(), vec![2; 16])).is_ok());
+            assert!(bus
+                .produce_message(FreudianProduceMessageRequest::new("test".to_owned(), vec![0; 16]))
+                .is_ok());
+            assert!(bus
+                .produce_message(FreudianProduceMessageRequest::new("test".to_owned(), vec![1; 16]))
+                .is_ok());
+            assert!(bus
+                .produce_message(FreudianProduceMessageRequest::new("test".to_owned(), vec![2; 16]))
+                .is_ok());
 
             // We should be able to get the three messages back, in three seperate calls
             let sub_request: FreudianSubscriptionRequest = uuid.into();
@@ -140,21 +147,29 @@ fn test_bus_message_pipeline() {
             if let Ok(FreudianResponse::Subscription(third_uuid)) = bus.subscribe(FreudianTopicRequest::new("test".to_owned())) {
                 let sub_request3: FreudianSubscriptionRequest = third_uuid.into();
                 assert!(bus.consume_message(sub_request3.clone()).is_err());
-                assert!(bus.produce_message(FreudianProduceMessageRequest::new("test".to_owned(), vec![3; 16])).is_ok());
+                assert!(bus
+                    .produce_message(FreudianProduceMessageRequest::new("test".to_owned(), vec![3; 16]))
+                    .is_ok());
 
-                assert_eq!(bus.consume_message(sub_request.clone()).unwrap(), FreudianResponse::Message(vec![3; 16]));
-                assert_eq!(bus.consume_message(sub_request2.clone()).unwrap(), FreudianResponse::Message(vec![3; 16]));
-                assert_eq!(bus.consume_message(sub_request3.clone()).unwrap(), FreudianResponse::Message(vec![3; 16]));
-            }
-            else {
+                assert_eq!(
+                    bus.consume_message(sub_request.clone()).unwrap(),
+                    FreudianResponse::Message(vec![3; 16])
+                );
+                assert_eq!(
+                    bus.consume_message(sub_request2.clone()).unwrap(),
+                    FreudianResponse::Message(vec![3; 16])
+                );
+                assert_eq!(
+                    bus.consume_message(sub_request3.clone()).unwrap(),
+                    FreudianResponse::Message(vec![3; 16])
+                );
+            } else {
                 assert!(false, "Invalid response from subscription");
             }
-        }
-        else {
+        } else {
             assert!(false, "Invalid response from subscription");
         }
-    }
-    else {
+    } else {
         assert!(false, "Invalid response from subscription");
     }
 }

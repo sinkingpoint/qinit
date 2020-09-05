@@ -1,5 +1,5 @@
 mod api;
-mod socket;
 mod error;
+mod socket;
 
 pub use self::socket::NetLinkSocket;

@@ -1,18 +1,16 @@
-use super::api::{FreudianTopicRequest, FreudianSubscriptionRequest, FreudianProduceMessageRequest};
-use super::types::{Topic, FreudianError, Subscription, FreudianResponse};
+use super::api::{FreudianProduceMessageRequest, FreudianSubscriptionRequest, FreudianTopicRequest};
+use super::types::{FreudianError, FreudianResponse, Subscription, Topic};
 use std::convert::TryFrom;
 
 use libq::io::{write_u32, Endianness};
 
 pub struct FreudianBus {
-    topics: Vec<Topic>
+    topics: Vec<Topic>,
 }
 
 impl FreudianBus {
     pub fn new() -> FreudianBus {
-        return FreudianBus{
-            topics: Vec::new()
-        }
+        return FreudianBus { topics: Vec::new() };
     }
 
     pub fn get_num_subscribers(&self, topic_req: FreudianTopicRequest) -> Result<FreudianResponse, FreudianError> {
@@ -22,8 +20,7 @@ impl FreudianBus {
             let mut bytes = Vec::new();
             write_u32(&mut bytes, topic.num_subscribers(), &Endianness::Little).expect("Failed to write into vector");
             return Ok(FreudianResponse::Message(bytes));
-        }
-        else {
+        } else {
             return Err(FreudianError::TopicDoesntExist);
         }
     }
@@ -62,7 +59,7 @@ impl FreudianBus {
             let to_be_deleted = val == &to_delete_topic;
             did_delete |= to_be_deleted;
 
-            return !to_be_deleted
+            return !to_be_deleted;
         });
 
         if !did_delete {

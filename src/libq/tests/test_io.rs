@@ -8,9 +8,9 @@ fn test_buffer_reader_reads() {
     let mut dst_buffer = [0; 10];
     match reader.read(&mut dst_buffer) {
         Ok(n) => assert_eq!(n, src_buffer.len()),
-        Err(e) => assert!(false, e.to_string())
+        Err(e) => assert!(false, e.to_string()),
     };
-    
+
     for (pos, e) in dst_buffer.iter().enumerate() {
         assert_eq!(e, &src_buffer[pos]);
     }

@@ -3,11 +3,11 @@ extern crate libq;
 extern crate patient;
 
 use clap::{App, AppSettings, Arg, SubCommand};
-use std::path::Path;
-use std::io::{self};
 use std::char;
+use std::io::{self};
+use std::path::Path;
 
-use libq::io::{read_u32, Endianness, BufferReader};
+use libq::io::{read_u32, BufferReader, Endianness};
 use libq::logger::{self, ConsoleRecordWriter, Logger};
 
 use patient::{FreudianClient, Status, UUID};
@@ -19,17 +19,16 @@ fn friendly_status(s: &Status) -> String {
         Status::No => "Permission Denied",
         Status::DoesntExist => "Doesn't Exist",
         Status::MalformedRequest => "Malformed Request",
-        Status::ServerError => "Internal Server Error"
-    }).to_owned();
+        Status::ServerError => "Internal Server Error",
+    })
+    .to_owned();
 }
 
 fn friendly_message(bytes: Vec<u8>) -> String {
     let mut build = String::new();
     for byte in bytes.into_iter() {
         match char::from_u32(byte as u32) {
-            Some(chr) => {
-                build.push_str(&chr.escape_default().to_string())
-            },
+            Some(chr) => build.push_str(&chr.escape_default().to_string()),
             None => {
                 build.push_str(&format!("\\x{:x}", byte));
             }
@@ -42,7 +41,7 @@ fn friendly_message(bytes: Vec<u8>) -> String {
 fn handle_status_message(result: &Result<Status, io::Error>, logger: &Logger<ConsoleRecordWriter>) {
     let msg = match result {
         Ok(status) => friendly_status(status),
-        Err(e) => e.to_string()
+        Err(e) => e.to_string(),
     };
 
     logger.info().msg(msg);
@@ -74,9 +73,7 @@ fn main() {
                         .arg(Arg::with_name("topic_name").takes_value(true).required(true).index(1))
                         .arg(Arg::with_name("message").takes_value(true).required(true).index(2)),
                 )
-                .subcommand(
-                    SubCommand::with_name("ls").about("Lists the names of all the existing topics")
-                )
+                .subcommand(SubCommand::with_name("ls").about("Lists the names of all the existing topics"))
                 .subcommand(
                     SubCommand::with_name("subcount")
                         .about("Creates a topic with the given name")
@@ -129,27 +126,27 @@ fn main() {
             }
             ("publish", Some(matches)) => {
                 handle_status_message(
-                    &client.produce_message(matches.value_of("topic_name").unwrap(), matches.value_of("message").unwrap().bytes().collect()),
+                    &client.produce_message(
+                        matches.value_of("topic_name").unwrap(),
+                        matches.value_of("message").unwrap().bytes().collect(),
+                    ),
                     &logger,
                 );
             }
-            ("ls", Some(_)) => {
-                match client.get_topics() {
-                    Ok((names, status)) => {
-                        if status == Status::Ok {
-                            for name in names.unwrap().into_iter() {
-                                logger.info().msg(name);
-                            }
+            ("ls", Some(_)) => match client.get_topics() {
+                Ok((names, status)) => {
+                    if status == Status::Ok {
+                        for name in names.unwrap().into_iter() {
+                            logger.info().msg(name);
                         }
-                        else {
-                            logger.info().msg(friendly_status(&status));
-                        }
-                    },
-                    Err(err) => {
-                        logger.info().msg(err.to_string());
+                    } else {
+                        logger.info().msg(friendly_status(&status));
                     }
                 }
-            }
+                Err(err) => {
+                    logger.info().msg(err.to_string());
+                }
+            },
             ("subcount", Some(matches)) => {
                 let name = matches.value_of("topic_name").unwrap();
                 match client.get_num_subscibers(name) {
@@ -158,11 +155,10 @@ fn main() {
                             let mut reader = BufferReader::new(&resp.message);
                             let num = read_u32(&mut reader, &Endianness::Little).unwrap();
                             logger.info().msg(format!("{} has {} subscribers", name, num));
-                        }
-                        else {
+                        } else {
                             logger.info().msg(friendly_status(&resp.response_type));
                         }
-                    },
+                    }
                     Err(err) => {
                         logger.info().msg(err.to_string());
                     }
@@ -171,19 +167,17 @@ fn main() {
             _ => {}
         },
         ("subscription", Some(matches)) => match matches.subcommand() {
-            ("create", Some(matches)) => {
-                match client.subscribe(matches.value_of("topic_name").unwrap()) {
-                    Ok((Some(uuid), _)) => {
-                        logger.info().msg(format!("Subscription ID: {}", uuid));
-                    },
-                    Ok((_, err)) => {
-                        logger.info().msg(friendly_status(&err));
-                    },
-                    Err(err) => {
-                        logger.info().msg(err.to_string());
-                    }
+            ("create", Some(matches)) => match client.subscribe(matches.value_of("topic_name").unwrap()) {
+                Ok((Some(uuid), _)) => {
+                    logger.info().msg(format!("Subscription ID: {}", uuid));
                 }
-            }
+                Ok((_, err)) => {
+                    logger.info().msg(friendly_status(&err));
+                }
+                Err(err) => {
+                    logger.info().msg(err.to_string());
+                }
+            },
             ("delete", Some(matches)) => {
                 let uuid = match UUID::try_from_string(matches.value_of("sub_id").unwrap()) {
                     Some(uuid) => uuid,
@@ -192,10 +186,7 @@ fn main() {
                         return;
                     }
                 };
-                handle_status_message(
-                    &client.unsubscribe(&uuid),
-                    &logger,
-                );
+                handle_status_message(&client.unsubscribe(&uuid), &logger);
             }
             ("read", Some(matches)) => {
                 let uuid = match UUID::try_from_string(matches.value_of("sub_id").unwrap()) {
@@ -222,7 +213,7 @@ fn main() {
                         }
 
                         logger.info().msg(format!("Message: {}", friendly_message(resp.message)));
-                    },
+                    }
                     Err(err) => {
                         logger.info().msg(err.to_string());
                     }

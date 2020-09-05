@@ -1,7 +1,7 @@
+use io::Endianness;
+use std::convert::TryFrom;
 use std::fmt;
 use std::io;
-use std::convert::TryFrom;
-use io::Endianness;
 
 #[derive(Debug)]
 pub enum InvalidELFFormatError {
@@ -19,7 +19,7 @@ pub enum InvalidELFFormatError {
     InvalidSymbolBinding(u8),
     InvalidSymbolVisibility(u8),
     MalformedSection,
-    IOError(io::Error)
+    IOError(io::Error),
 }
 
 impl fmt::Display for InvalidELFFormatError {
@@ -45,7 +45,7 @@ impl InvalidELFFormatError {
             InvalidELFFormatError::InvalidSymbolBinding(e) => format!("Invalid Symbol Binding. Got {}", e),
             InvalidELFFormatError::InvalidSymbolVisibility(e) => format!("Invalid Symbol Visibility. Got {}", e),
             InvalidELFFormatError::MalformedSection => format!("Section was malformed"),
-            InvalidELFFormatError::IOError(err) => err.to_string()
+            InvalidELFFormatError::IOError(err) => err.to_string(),
         }
     }
 }
@@ -69,8 +69,8 @@ impl TryFrom<u8> for AddressSize {
         return match u {
             1 => Ok(AddressSize::ThirtyTwoBit),
             2 => Ok(AddressSize::SixtyFourBit),
-            _ => Err(InvalidELFFormatError::InvalidAddressSize(u))
-        }
+            _ => Err(InvalidELFFormatError::InvalidAddressSize(u)),
+        };
     }
 }
 
@@ -78,15 +78,15 @@ impl fmt::Display for AddressSize {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         return match self {
             AddressSize::ThirtyTwoBit => write!(f, "ELF32"),
-            AddressSize::SixtyFourBit => write!(f, "ELF64")
-        }
+            AddressSize::SixtyFourBit => write!(f, "ELF64"),
+        };
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
-pub enum ElfEndianness{
+pub enum ElfEndianness {
     LittleEndian,
-    BigEndian
+    BigEndian,
 }
 
 impl TryFrom<u8> for ElfEndianness {
@@ -96,8 +96,8 @@ impl TryFrom<u8> for ElfEndianness {
         return match u {
             1 => Ok(ElfEndianness::LittleEndian),
             2 => Ok(ElfEndianness::BigEndian),
-            _ => Err(InvalidELFFormatError::InvalidEndianness(u))
-        }
+            _ => Err(InvalidELFFormatError::InvalidEndianness(u)),
+        };
     }
 }
 
@@ -105,8 +105,8 @@ impl ElfEndianness {
     pub fn to_portable(&self) -> Endianness {
         return match self {
             ElfEndianness::LittleEndian => Endianness::Little,
-            ElfEndianness::BigEndian => Endianness::Big
-        }
+            ElfEndianness::BigEndian => Endianness::Big,
+        };
     }
 }
 
@@ -114,8 +114,8 @@ impl fmt::Display for ElfEndianness {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         return match self {
             ElfEndianness::LittleEndian => write!(f, "2's complement, little endian"),
-            ElfEndianness::BigEndian => write!(f, "2's complement, big endian")
-        }
+            ElfEndianness::BigEndian => write!(f, "2's complement, big endian"),
+        };
     }
 }
 
@@ -165,8 +165,8 @@ impl TryFrom<u8> for ElfABI {
             0x10 => Ok(ElfABI::FenixOS),
             0x11 => Ok(ElfABI::CloudABI),
             0x12 => Ok(ElfABI::OpenVOS),
-            _ => Err(InvalidELFFormatError::InvalidABI(u))
-        }
+            _ => Err(InvalidELFFormatError::InvalidABI(u)),
+        };
     }
 }
 
@@ -190,8 +190,8 @@ impl fmt::Display for ElfABI {
             ElfABI::AROS => write!(f, "AROS"),
             ElfABI::FenixOS => write!(f, "FenixOS"),
             ElfABI::CloudABI => write!(f, "CloudABI"),
-            ElfABI::OpenVOS => write!(f, "OpenVOS")
-        }
+            ElfABI::OpenVOS => write!(f, "OpenVOS"),
+        };
     }
 }
 
@@ -204,7 +204,7 @@ pub enum ElfObjectType {
     SharedObject,
     Core,
     OsSpecific(u16),
-    ProcessSpecific(u16)
+    ProcessSpecific(u16),
 }
 
 const ET_LOOS: u16 = 0xFE00;
@@ -224,7 +224,7 @@ impl TryFrom<u16> for ElfObjectType {
             0x04 => Ok(ElfObjectType::Core),
             a if a >= ET_LOOS && a <= ET_HIOS => Ok(ElfObjectType::OsSpecific(a)),
             a if a >= ET_LOPROC && a <= ET_HIPROC => Ok(ElfObjectType::ProcessSpecific(a)),
-            _ => Err(InvalidELFFormatError::InvalidObjectType(u))
+            _ => Err(InvalidELFFormatError::InvalidObjectType(u)),
         }
     }
 }
@@ -239,7 +239,7 @@ impl fmt::Display for ElfObjectType {
             ElfObjectType::Core => write!(f, "Core"),
             ElfObjectType::OsSpecific(a) => write!(f, "OS Specific - {}", a),
             ElfObjectType::ProcessSpecific(a) => write!(f, "Process Specific - {}", a),
-        }
+        };
     }
 }
 
@@ -267,7 +267,7 @@ pub enum ElfTargetArch {
     IA64,
     AMD64,
     ARM64,
-    RiscV
+    RiscV,
 }
 
 impl TryFrom<u16> for ElfTargetArch {
@@ -297,7 +297,7 @@ impl TryFrom<u16> for ElfTargetArch {
             0x3E => Ok(ElfTargetArch::AMD64),
             0xB7 => Ok(ElfTargetArch::ARM64),
             0xF3 => Ok(ElfTargetArch::RiscV),
-            _ => Err(InvalidELFFormatError::InvalidTargetArch(u))
+            _ => Err(InvalidELFFormatError::InvalidTargetArch(u)),
         }
     }
 }
@@ -327,7 +327,7 @@ impl fmt::Display for ElfTargetArch {
             ElfTargetArch::AMD64 => write!(f, "AMD64"),
             ElfTargetArch::ARM64 => write!(f, "ARM64"),
             ElfTargetArch::RiscV => write!(f, "RiscV"),
-        }
+        };
     }
 }
 
@@ -344,7 +344,7 @@ pub enum ProgramHeaderEntryType {
     /// Indicates this entry contains information for dynamic linking
     DynamicLinkingInfo,
 
-    /// 
+    ///
     InterpreterInfo,
     AuxInfo,
 
@@ -353,7 +353,7 @@ pub enum ProgramHeaderEntryType {
     ThreadLocalStorage,
 
     OsSpecific(u32),
-    ProcessorSpecific(u32)
+    ProcessorSpecific(u32),
 }
 
 /// The minimum value for OS specific Program Segment Types
@@ -382,7 +382,7 @@ impl TryFrom<u32> for ProgramHeaderEntryType {
             0x7 => Ok(ProgramHeaderEntryType::ThreadLocalStorage),
             a if a >= PT_LOOS && a <= PT_HIOS => Ok(ProgramHeaderEntryType::OsSpecific(a)),
             a if a >= PT_LOPROC && a <= PT_HIPROC => Ok(ProgramHeaderEntryType::ProcessorSpecific(a)),
-            _ => Err(InvalidELFFormatError::InvalidProgramHeaderEntryType(u))
+            _ => Err(InvalidELFFormatError::InvalidProgramHeaderEntryType(u)),
         }
     }
 }
@@ -416,8 +416,8 @@ impl fmt::Display for ProgramHeaderEntryType {
             ProgramHeaderEntryType::OsSpecific(PT_GNU_RELRO) => write!(f, "Relocation Read-Only"),
             ProgramHeaderEntryType::OsSpecific(PT_GNU_PROPERTY) => write!(f, "GNU Property"),
             ProgramHeaderEntryType::OsSpecific(a) => write!(f, "OS Specific ({:x})", a),
-            ProgramHeaderEntryType::ProcessorSpecific(a) => write!(f, "Processor Specific ({})", a)
-        }
+            ProgramHeaderEntryType::ProcessorSpecific(a) => write!(f, "Processor Specific ({})", a),
+        };
     }
 }
 
@@ -440,7 +440,7 @@ pub enum SectionHeaderEntryType {
     PreConstructorArray,
     SectionGroup,
     SectionIndices,
-    OsSpecific(u32)
+    OsSpecific(u32),
 }
 
 /// The minimum value for OS specific types
@@ -468,7 +468,7 @@ impl TryFrom<u32> for SectionHeaderEntryType {
             0x11 => Ok(SectionHeaderEntryType::SectionGroup),
             0x12 => Ok(SectionHeaderEntryType::SectionIndices),
             a if a >= SHT_LOOS => Ok(SectionHeaderEntryType::OsSpecific(a)),
-            _ => Err(InvalidELFFormatError::InvalidSectionHeaderEntryType(u))
+            _ => Err(InvalidELFFormatError::InvalidSectionHeaderEntryType(u)),
         }
     }
 }
@@ -513,7 +513,7 @@ impl fmt::Display for SectionHeaderEntryType {
             SectionHeaderEntryType::OsSpecific(SHT_GNU_HASH) => write!(f, "GNU Hash Table"),
             SectionHeaderEntryType::OsSpecific(SHT_GNU_LIBLIST) => write!(f, "GNU Lib List"),
             SectionHeaderEntryType::OsSpecific(a) => write!(f, "OS Specific ({:x})", a),
-        }
+        };
     }
 }
 
@@ -539,8 +539,8 @@ impl TryFrom<u64> for SectionHeaderEntryFlags {
     fn try_from(u: u64) -> Result<Self, Self::Error> {
         return match SectionHeaderEntryFlags::from_bits(u) {
             Some(flags) => Ok(flags),
-            None => Err(InvalidELFFormatError::InvalidSectionHeaderEntryFlag(u))
-        }
+            None => Err(InvalidELFFormatError::InvalidSectionHeaderEntryFlag(u)),
+        };
     }
 }
 
@@ -593,7 +593,7 @@ impl TryFrom<u8> for SymType {
             10 => Ok(SymType::GNUIndirectFunction),
             11 | 12 => Ok(SymType::OperatingSystemSpecific(u)),
             13 | 14 | 15 => Ok(SymType::ProcessorSpecific(u)),
-            _ => Err(InvalidELFFormatError::InvalidSymbolType(u))
+            _ => Err(InvalidELFFormatError::InvalidSymbolType(u)),
         }
     }
 }
@@ -601,11 +601,11 @@ impl TryFrom<u8> for SymType {
 impl fmt::Display for SymType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SymType::NoType =>   write!(f, "NoType"),
-            SymType::Object =>   write!(f, "Object"),
+            SymType::NoType => write!(f, "NoType"),
+            SymType::Object => write!(f, "Object"),
             SymType::Function => write!(f, "Function"),
-            SymType::Section =>  write!(f, "Section"),
-            SymType::File =>     write!(f, "File"),
+            SymType::Section => write!(f, "Section"),
+            SymType::File => write!(f, "File"),
             SymType::CommonBlock => write!(f, "Common"),
             SymType::ThreadLocal => write!(f, "TLS"),
             SymType::GNUIndirectFunction => write!(f, "Indirect"),
@@ -633,7 +633,7 @@ pub enum SymBinding {
     OperatingSystemSpecific(u8),
 
     /// Processor Specific Bindings
-    ProcessorSpecific(u8)
+    ProcessorSpecific(u8),
 }
 
 impl TryFrom<u8> for SymBinding {
@@ -645,9 +645,9 @@ impl TryFrom<u8> for SymBinding {
             1 => Ok(SymBinding::Global),
             2 => Ok(SymBinding::Weak),
             10 => Ok(SymBinding::GNUUnique),
-            11 |12 => Ok(SymBinding::OperatingSystemSpecific(u)),
+            11 | 12 => Ok(SymBinding::OperatingSystemSpecific(u)),
             13 | 14 | 15 => Ok(SymBinding::ProcessorSpecific(u)),
-            _ => Err(InvalidELFFormatError::InvalidSymbolBinding(u))
+            _ => Err(InvalidELFFormatError::InvalidSymbolBinding(u)),
         }
     }
 }
@@ -691,8 +691,8 @@ impl TryFrom<u8> for SymVisibility {
             1 => Ok(SymVisibility::Internal),
             2 => Ok(SymVisibility::Hidden),
             3 => Ok(SymVisibility::Protected),
-            _ => Err(InvalidELFFormatError::InvalidSymbolVisibility(u))
-        }
+            _ => Err(InvalidELFFormatError::InvalidSymbolVisibility(u)),
+        };
     }
 }
 
@@ -702,8 +702,7 @@ impl fmt::Display for SymVisibility {
             SymVisibility::Default => write!(f, "Default"),
             SymVisibility::Internal => write!(f, "Internal"),
             SymVisibility::Hidden => write!(f, "Hidden"),
-            SymVisibility::Protected => write!(f, "Protected")
+            SymVisibility::Protected => write!(f, "Protected"),
         }
     }
 }
-  

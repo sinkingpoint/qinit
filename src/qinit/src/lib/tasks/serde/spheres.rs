@@ -1,4 +1,4 @@
-use super::common::{Identifier, RestartMode, DependencyDef, StartConditions};
+use super::common::{DependencyDef, Identifier, RestartMode, StartConditions};
 use serde_derive::Deserialize;
 
 /// A Task Represents a Service that can be started, stopped, restarted and reloaded
@@ -35,7 +35,7 @@ pub struct TaskDef {
     /// default to allowing any value
     pub requires: Option<Vec<DependencyDef>>,
 
-    /// The Conditions that must be met, after this Task is `exec`d, before it is considered "Started" 
+    /// The Conditions that must be met, after this Task is `exec`d, before it is considered "Started"
     pub conditions: Option<StartConditions>,
 }
 
@@ -70,8 +70,8 @@ pub struct Stage {
 
     /// The description of this Task. Used to provide context in status information
     pub description: String,
-    
+
     /// The dependencies of this stage. Stages are exclusive spheres - if any arguments are not specified
     /// on any of the tasks then loading this Stage fails
-    pub tasks: Vec<DependencyDef>
+    pub tasks: Vec<DependencyDef>,
 }

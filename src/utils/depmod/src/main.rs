@@ -1,19 +1,19 @@
-extern crate libq;
 extern crate clap;
+extern crate libq;
 extern crate lzma_rs;
 extern crate nix;
 
-use std::path::{Path, PathBuf};
-use std::fs::{File, read_link, read_dir};
-use std::io::{self, Read, BufReader, Seek, Write};
 use std::collections::{HashMap, VecDeque};
+use std::fs::{read_dir, read_link, File};
+use std::io::{self, BufReader, Read, Seek, Write};
+use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use clap::{App, Arg};
-use libq::elf::{ElfBinary, SymType, SymBinding};
-use libq::logger;
+use libq::elf::{ElfBinary, SymBinding, SymType};
 use libq::io::BufferReader;
 use libq::iter::SplitOn;
+use libq::logger;
 use lzma_rs::xz_decompress;
 use nix::sys::utsname::uname;
 
@@ -32,7 +32,7 @@ struct ModInfo {
     dependencies: Vec<String>,
     return_trampoline: bool,
     in_tree: bool,
-    version_magic: String
+    version_magic: String,
 }
 
 impl ModInfo {
@@ -43,7 +43,7 @@ impl ModInfo {
             Ok(None) => {
                 logger.info().smsg("File doesn't have a modinfo section. Is it a Kernel Module?");
                 return None;
-            },
+            }
             Err(e) => {
                 logger.info().with_string("error", e.to_string()).smsg("Failed to read file");
                 return None;
@@ -52,7 +52,11 @@ impl ModInfo {
 
         let mut modinfo = ModInfo::default();
 
-        for line in modinfo_section.into_iter().split_on_exclusive(0).map(|line| String::from_utf8(line)) {
+        for line in modinfo_section
+            .into_iter()
+            .split_on_exclusive(0)
+            .map(|line| String::from_utf8(line))
+        {
             let line = match line {
                 Ok(l) => l,
                 Err(e) => {
@@ -63,7 +67,10 @@ impl ModInfo {
 
             let parts: Vec<&str> = line.splitn(2, "=").collect();
             if parts.len() != 2 {
-                logger.info().with_string("line", line).smsg("Line missing =, failed to parse as modinfo line");
+                logger
+                    .info()
+                    .with_string("line", line)
+                    .smsg("Line missing =, failed to parse as modinfo line");
                 return None;
             }
 
@@ -84,26 +91,27 @@ impl ModInfo {
                     if value.trim().len() != 0 {
                         if key == "depends" {
                             modinfo.dependencies.push(value.to_owned())
-                        }
-                        else if key == "alias" {
+                        } else if key == "alias" {
                             modinfo.aliases.push(value.to_owned())
                         }
                     }
-                },
+                }
                 "parm" | "parmtype" => {
                     let parts: Vec<&str> = value.trim().splitn(2, ":").collect();
                     if parts.len() != 2 {
-                        logger.info().with_string("line", line).smsg("Line missing :, failed to parse as parm line");
+                        logger
+                            .info()
+                            .with_string("line", line)
+                            .smsg("Line missing :, failed to parse as parm line");
                         return None;
                     }
 
                     if key == "parm" {
                         modinfo.parameter_descriptions.insert(parts[0].to_owned(), parts[1].to_owned());
-                    }
-                    else if key == "parmtype" {
+                    } else if key == "parmtype" {
                         modinfo.parameter_types.insert(parts[0].to_owned(), parts[1].to_owned());
                     }
-                },
+                }
                 _ => {
                     println!("Unhandled key: {}", key);
                 }
@@ -162,7 +170,7 @@ impl LoadFileError {
         match self {
             LoadFileError::IOError(err) => err.to_string(),
             LoadFileError::UnzipError(_) => "Failed to load file as zipped".to_owned(),
-            LoadFileError::UnknownFileExtention => "Unknown File Extention".to_owned()
+            LoadFileError::UnknownFileExtention => "Unknown File Extention".to_owned(),
         }
     }
 }
@@ -184,17 +192,15 @@ fn load_file(path: &Path) -> Result<Vec<u8>, LoadFileError> {
     let mut file = BufReader::new(File::open(path)?);
     let mut buffer: Vec<u8> = Vec::new();
     match path.extension() {
-        Some(ext) => {
-            match ext.to_str() {
-                Some("o") | Some("ko") => {
-                    file.read_to_end(&mut buffer)?;
-                },
-                Some("xz") => {
-                    xz_decompress(&mut file, &mut buffer)?;
-                },
-                Some(_) | None => {
-                    return Err(LoadFileError::UnknownFileExtention);
-                }
+        Some(ext) => match ext.to_str() {
+            Some("o") | Some("ko") => {
+                file.read_to_end(&mut buffer)?;
+            }
+            Some("xz") => {
+                xz_decompress(&mut file, &mut buffer)?;
+            }
+            Some(_) | None => {
+                return Err(LoadFileError::UnknownFileExtention);
             }
         },
         None => {
@@ -207,12 +213,20 @@ fn load_file(path: &Path) -> Result<Vec<u8>, LoadFileError> {
 
 fn main() {
     let args = App::new("depmod")
-    .version("0.1")
-    .author("Colin D. <colin@quirl.co.nz>")
-    .about("Generates module.dep and module.alias files for consumption by module loading things")
-    .arg(Arg::with_name("dryrun").short("d").help("Only print out the files, rather than writing them"))
-    .arg(Arg::with_name("kernel").short("k").help("The kernel version to generate module values for"))
-    .get_matches();
+        .version("0.1")
+        .author("Colin D. <colin@quirl.co.nz>")
+        .about("Generates module.dep and module.alias files for consumption by module loading things")
+        .arg(
+            Arg::with_name("dryrun")
+                .short("d")
+                .help("Only print out the files, rather than writing them"),
+        )
+        .arg(
+            Arg::with_name("kernel")
+                .short("k")
+                .help("The kernel version to generate module values for"),
+        )
+        .get_matches();
 
     let uname = uname();
     let kernel = args.value_of("kernel").unwrap_or(uname.release());
@@ -227,13 +241,15 @@ fn main() {
     if dryrun {
         aliases_out = Box::new(std::io::stdout());
         symbols_out = Box::new(std::io::stdout());
-        names_out    = Box::new(std::io::stdout());
-    }
-    else {
+        names_out = Box::new(std::io::stdout());
+    } else {
         aliases_out = match File::create(format!("/lib/modules/{}/modules.alias", kernel)) {
             Ok(f) => Box::new(f),
             Err(e) => {
-                logger.info().with_string("error", e.to_string()).smsg("failed to open aliases file");
+                logger
+                    .info()
+                    .with_string("error", e.to_string())
+                    .smsg("failed to open aliases file");
                 exit(1);
             }
         };
@@ -241,12 +257,15 @@ fn main() {
         symbols_out = match File::create(format!("/lib/modules/{}/modules.symbols", kernel)) {
             Ok(f) => Box::new(f),
             Err(e) => {
-                logger.info().with_string("error", e.to_string()).smsg("failed to open symbols file");
+                logger
+                    .info()
+                    .with_string("error", e.to_string())
+                    .smsg("failed to open symbols file");
                 exit(1);
             }
         };
 
-        names_out   = match File::create(format!("/lib/modules/{}/modules.names", kernel)) {
+        names_out = match File::create(format!("/lib/modules/{}/modules.names", kernel)) {
             Ok(f) => Box::new(f),
             Err(e) => {
                 logger.info().with_string("error", e.to_string()).smsg("failed to open names file");
@@ -273,7 +292,11 @@ fn main() {
             let file = match file {
                 Ok(f) => f,
                 Err(e) => {
-                    logger.info().with_str("path", path_str).with_string("error", e.to_string()).smsg("failed to read file");
+                    logger
+                        .info()
+                        .with_str("path", path_str)
+                        .with_string("error", e.to_string())
+                        .smsg("failed to read file");
                     continue;
                 }
             };
@@ -303,7 +326,11 @@ fn main() {
                 let buffer = match load_file(&path) {
                     Ok(buf) => buf,
                     Err(err) => {
-                        logger.info().with_string("error", err.to_string()).with_str("path", path_str).smsg("Failed to load file");
+                        logger
+                            .info()
+                            .with_string("error", err.to_string())
+                            .with_str("path", path_str)
+                            .smsg("Failed to load file");
                         continue;
                     }
                 };
@@ -313,7 +340,11 @@ fn main() {
                 let elf_binary = match ElfBinary::read(&mut reader) {
                     Ok(bin) => bin,
                     Err(err) => {
-                        logger.info().with_string("error", err.to_string()).with_str("path", path_str).smsg("Failed to load file as ELF Binary");
+                        logger
+                            .info()
+                            .with_string("error", err.to_string())
+                            .with_str("path", path_str)
+                            .smsg("Failed to load file as ELF Binary");
                         continue;
                     }
                 };
@@ -321,7 +352,10 @@ fn main() {
                 let mod_info = match ModInfo::read(&elf_binary, &mut reader) {
                     Some(info) => info,
                     None => {
-                        logger.info().with_str("path", path_str).smsg("Failed to load file as Kernel Module");
+                        logger
+                            .info()
+                            .with_str("path", path_str)
+                            .smsg("Failed to load file as Kernel Module");
                         continue;
                     }
                 };

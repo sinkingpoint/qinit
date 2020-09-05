@@ -66,7 +66,8 @@ impl ShStdin {
             terminal::BACKSPACE_BYTE as char,
             AnsiEscapeCode::EraseInLine(0),
             &dest[self.head..]
-        ).expect("Failed to write to stdout");
+        )
+        .expect("Failed to write to stdout");
         if dest.len() > self.head {
             write!(stdout_handle, "{}", AnsiEscapeCode::CursorBack((dest.len() - self.head) as u32)).expect("Failed to write to stdout");
         }

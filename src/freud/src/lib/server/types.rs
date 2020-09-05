@@ -1,9 +1,9 @@
 use std::convert::{TryFrom, TryInto};
+use std::fmt;
 use std::string::FromUtf8Error;
 use std::thread::{self, Thread};
-use std::fmt;
 
-use super::api::{FreudianTopicRequest, FreudianSubscriptionRequest};
+use super::api::{FreudianSubscriptionRequest, FreudianTopicRequest};
 
 use libq::rand;
 
@@ -15,14 +15,14 @@ pub enum FreudianError {
     SubscriptionDoesntExist,
     NoSubscribers,
     NoNewMessages,
-    InvalidResponse
+    InvalidResponse,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum FreudianResponse {
     Empty,
     Subscription(UUID),
-    Message(Vec<u8>)
+    Message(Vec<u8>),
 }
 
 impl From<FromUtf8Error> for FreudianError {
@@ -33,16 +33,14 @@ impl From<FromUtf8Error> for FreudianError {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UUID {
-    pub uuid: [u8;16],
+    pub uuid: [u8; 16],
 }
 
 impl UUID {
     fn random() -> UUID {
         let mut bytes = [0; 16];
         rand::fill_exact(&mut bytes).expect("Failed to read random bytes");
-        return UUID{
-            uuid: bytes
-        }
+        return UUID { uuid: bytes };
     }
 
     pub fn to_string(&self) -> String {
@@ -80,8 +78,7 @@ impl UUID {
                 if chr == '-' {
                     parts_index += 1;
                     continue;
-                }
-                else {
+                } else {
                     return None; // Malformed, missing dashes
                 }
             }
@@ -97,10 +94,9 @@ impl UUID {
                 // We're in the first nibble of a byte. Each char represents 4 bits
                 current_byte = nibble << 4;
                 current_byte_nibble = 1;
-            }
-            else {
+            } else {
                 bytes.push(current_byte | nibble);
-                current_byte =  0;
+                current_byte = 0;
                 current_byte_nibble = 0;
             }
         }
@@ -109,11 +105,9 @@ impl UUID {
             return None;
         }
 
-        return Some(
-            UUID {
-                uuid: bytes[..].try_into().unwrap()
-            }
-        );
+        return Some(UUID {
+            uuid: bytes[..].try_into().unwrap(),
+        });
     }
 }
 
@@ -125,17 +119,15 @@ impl fmt::Display for UUID {
 
 pub struct Subscription {
     pub uuid: UUID,
-    current_offset: u64
+    current_offset: u64,
 }
 
 impl From<FreudianSubscriptionRequest> for Subscription {
     fn from(req: FreudianSubscriptionRequest) -> Subscription {
-        return Subscription{
-            uuid: UUID {
-                uuid: req.subscription_id
-            },
-            current_offset: 0
-        }
+        return Subscription {
+            uuid: UUID { uuid: req.subscription_id },
+            current_offset: 0,
+        };
     }
 }
 
@@ -149,22 +141,22 @@ impl Subscription {
     pub fn new(offset: u64) -> Subscription {
         return Subscription {
             uuid: UUID::random(),
-            current_offset: offset
-        }
+            current_offset: offset,
+        };
     }
 }
 
 pub struct Message {
     offset: u64,
-    contents: Vec<u8>
+    contents: Vec<u8>,
 }
 
 impl Message {
     fn new(contents: Vec<u8>, offset: u64) -> Message {
         return Message {
             offset: offset,
-            contents: contents
-        }
+            contents: contents,
+        };
     }
 }
 
@@ -173,18 +165,18 @@ pub struct Topic {
     pub latest_offset: u64,
     subscribers: Vec<Subscription>,
     messages: Vec<Message>,
-    waiting_threads: Vec<Thread>
+    waiting_threads: Vec<Thread>,
 }
 
 impl Topic {
-    pub fn new(name: String) -> Topic{
+    pub fn new(name: String) -> Topic {
         return Topic {
             name: name,
             latest_offset: 0,
             subscribers: Vec::new(),
             messages: Vec::new(),
-            waiting_threads: Vec::new()
-        }
+            waiting_threads: Vec::new(),
+        };
     }
 
     pub fn set_thread_waiting(&mut self) {

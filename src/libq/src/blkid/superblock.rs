@@ -45,7 +45,7 @@ where
                 }
             }
         }
-        
+
         return None;
     }
 }

@@ -1,12 +1,12 @@
+use nix::sys::socket::{recv, MsgFlags};
 use nix::sys::stat::FileStat;
 use nix::unistd::{read, write};
-use nix::sys::socket::{MsgFlags, recv};
 
 use std::io::{self, Error, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
 
-use mem::{short_from_bytes_little_endian, long_from_bytes_little_endian, int_from_bytes_little_endian};
+use mem::{int_from_bytes_little_endian, long_from_bytes_little_endian, short_from_bytes_little_endian};
 
 pub const STDIN_FD: RawFd = 0;
 pub const STDOUT_FD: RawFd = 1;
@@ -84,10 +84,7 @@ pub struct RawFdReceiver {
 
 impl RawFdReceiver {
     pub fn new(fd: RawFd, flags: MsgFlags) -> RawFdReceiver {
-        return RawFdReceiver {
-            fd: fd,
-            flags: flags
-        }
+        return RawFdReceiver { fd: fd, flags: flags };
     }
 }
 
@@ -106,18 +103,14 @@ impl Read for RawFdReceiver {
     }
 }
 
-
 pub struct BufferReader<'a> {
     buffer: &'a [u8],
-    offset: usize
+    offset: usize,
 }
 
 impl<'a> BufferReader<'a> {
     pub fn new(buffer: &'a [u8]) -> BufferReader<'a> {
-        return BufferReader {
-            buffer: buffer,
-            offset: 0
-        };
+        return BufferReader { buffer: buffer, offset: 0 };
     }
 }
 
@@ -127,13 +120,13 @@ impl<'a> Seek for BufferReader<'a> {
         match pos {
             SeekFrom::Start(i) => {
                 new_offset = i as i64;
-            },
+            }
             SeekFrom::Current(i) => {
                 if -i > new_offset {
                     return Err(io::Error::from(io::ErrorKind::Other));
                 }
                 new_offset += i;
-            },
+            }
             SeekFrom::End(i) => {
                 if -i > self.buffer.len() as i64 {
                     return Err(io::Error::from(io::ErrorKind::Other));
@@ -142,13 +135,12 @@ impl<'a> Seek for BufferReader<'a> {
                 new_offset += i;
             }
         }
-    
+
         self.offset = new_offset as usize;
 
         return Ok(new_offset as u64);
     }
 }
-
 
 impl<'a> Read for BufferReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
@@ -244,7 +236,7 @@ impl FileType {
 
 pub enum Endianness {
     Little,
-    Big
+    Big,
 }
 
 pub fn read_u8<T: Read>(r: &mut T) -> io::Result<u8> {
@@ -258,7 +250,7 @@ pub fn read_u16<T: Read>(r: &mut T, endian: &Endianness) -> io::Result<u16> {
     r.read_exact(&mut buffer)?;
     return Ok(match endian {
         Endianness::Little => short_from_bytes_little_endian(buffer[0], buffer[1]),
-        Endianness::Big => short_from_bytes_little_endian(buffer[1], buffer[0])
+        Endianness::Big => short_from_bytes_little_endian(buffer[1], buffer[0]),
     });
 }
 
@@ -267,14 +259,24 @@ pub fn read_u32<T: Read>(r: &mut T, endian: &Endianness) -> io::Result<u32> {
     r.read_exact(&mut buffer)?;
     return Ok(match endian {
         Endianness::Little => int_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3]),
-        Endianness::Big => int_from_bytes_little_endian(buffer[3], buffer[2], buffer[1], buffer[0])
+        Endianness::Big => int_from_bytes_little_endian(buffer[3], buffer[2], buffer[1], buffer[0]),
     });
 }
 
 pub fn write_u32<T: Write>(w: &mut T, data: u32, endian: &Endianness) -> io::Result<()> {
     let mut buf = match endian {
-        Endianness::Little => [(data & 0xFF) as u8, ((data >> 8) & 0xFF) as u8, ((data >> 16) & 0xFF) as u8, ((data >> 24) & 0xFF) as u8],
-        Endianness::Big => [((data >> 24) & 0xFF) as u8, ((data >> 16) & 0xFF) as u8, ((data >> 8) & 0xFF) as u8, (data & 0xFF) as u8]
+        Endianness::Little => [
+            (data & 0xFF) as u8,
+            ((data >> 8) & 0xFF) as u8,
+            ((data >> 16) & 0xFF) as u8,
+            ((data >> 24) & 0xFF) as u8,
+        ],
+        Endianness::Big => [
+            ((data >> 24) & 0xFF) as u8,
+            ((data >> 16) & 0xFF) as u8,
+            ((data >> 8) & 0xFF) as u8,
+            (data & 0xFF) as u8,
+        ],
     };
 
     return w.write_all(&mut buf);
@@ -284,7 +286,11 @@ pub fn read_u64<T: Read>(r: &mut T, endian: &Endianness) -> io::Result<u64> {
     let mut buffer = [0; 8];
     r.read_exact(&mut buffer)?;
     return Ok(match endian {
-        Endianness::Little => long_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7]),
-        Endianness::Big => long_from_bytes_little_endian(buffer[7], buffer[6], buffer[5], buffer[4], buffer[3], buffer[2], buffer[1], buffer[0])
+        Endianness::Little => long_from_bytes_little_endian(
+            buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7],
+        ),
+        Endianness::Big => long_from_bytes_little_endian(
+            buffer[7], buffer[6], buffer[5], buffer[4], buffer[3], buffer[2], buffer[1], buffer[0],
+        ),
     });
 }

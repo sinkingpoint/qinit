@@ -1,21 +1,24 @@
 extern crate breuer;
 extern crate libq;
 
-pub use {breuer::FreudianAPIResponseType as Status, breuer::FreudianAPIResponse as MessageResponse, breuer::UUID};
+pub use {breuer::FreudianAPIResponse as MessageResponse, breuer::FreudianAPIResponseType as Status, breuer::UUID};
 
-use libq::io::{Writable, write_u32, Endianness, read_u32, BufferReader};
-use breuer::{FreudianRequestHeader, FreudianTopicRequest, FreudianSubscriptionRequest, FreudianProduceMessageRequest, MessageType, FreudianAPIResponse};
-use std::os::unix::net::UnixStream;
+use breuer::{
+    FreudianAPIResponse, FreudianProduceMessageRequest, FreudianRequestHeader, FreudianSubscriptionRequest, FreudianTopicRequest,
+    MessageType,
+};
+use libq::io::{read_u32, write_u32, BufferReader, Endianness, Writable};
+use std::convert::TryInto;
 use std::io::{self, Read};
+use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::thread;
 use std::time;
-use std::convert::TryInto;
 
 /// FreudianClient represents a client interface to Freudian, the message bus daemon of qinit
 pub struct FreudianClient {
     /// The underlying socket connection to Freudian
-    socket: UnixStream
+    socket: UnixStream,
 }
 
 impl FreudianClient {
@@ -23,7 +26,7 @@ impl FreudianClient {
     /// returning the client, or an error if we couldn't connect to the socket for some reason
     pub fn new(socketfile: &Path) -> Result<FreudianClient, io::Error> {
         return Ok(FreudianClient {
-            socket: UnixStream::connect(socketfile)?
+            socket: UnixStream::connect(socketfile)?,
         });
     }
 
@@ -59,7 +62,7 @@ impl FreudianClient {
         self.send_topic_request(MessageType::CreateTopic, topic_name)?;
         return match self.read_response_from_socket() {
             Ok(resp) => Ok(resp.response_type),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         };
     }
 
@@ -68,7 +71,7 @@ impl FreudianClient {
         self.send_topic_request(MessageType::DeleteTopic, topic_name)?;
         return match self.read_response_from_socket() {
             Ok(resp) => Ok(resp.response_type),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         };
     }
 
@@ -85,7 +88,9 @@ impl FreudianClient {
             return Ok((None, Status::ServerError));
         }
 
-        let uuid = UUID { uuid: resp.message[..].try_into().unwrap() };
+        let uuid = UUID {
+            uuid: resp.message[..].try_into().unwrap(),
+        };
         return Ok((Some(uuid), Status::Ok));
     }
 
@@ -94,7 +99,7 @@ impl FreudianClient {
         self.send_subscription_request(MessageType::Unsubscribe, sub_id)?;
         return match self.read_response_from_socket() {
             Ok(resp) => Ok(resp.response_type),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         };
     }
 
@@ -103,7 +108,7 @@ impl FreudianClient {
         self.send_create_message_request(MessageType::ProduceMessage, topic_name, message)?;
         return match self.read_response_from_socket() {
             Ok(resp) => Ok(resp.response_type),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         };
     }
 
@@ -131,9 +136,9 @@ impl FreudianClient {
         let mut names = Vec::new();
         for _ in 0..num {
             let length = read_u32(&mut reader, &Endianness::Little)?;
-            let mut buffer = vec![0;length as usize];
+            let mut buffer = vec![0; length as usize];
             reader.read_exact(&mut buffer)?;
-            
+
             match String::from_utf8(buffer) {
                 Ok(s) => {
                     names.push(s);

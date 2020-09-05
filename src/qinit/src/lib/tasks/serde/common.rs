@@ -1,8 +1,8 @@
+use serde::de::{self, Deserialize, Deserializer, Visitor};
+use serde_derive::Deserialize;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt;
-use serde_derive::Deserialize;
-use serde::de::{self, Deserialize, Visitor, Deserializer};
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 /// Represents a User/Group Identifier in a config file
@@ -15,7 +15,7 @@ pub enum Identifier {
     NumericID(u64),
 
     /// Represents a User/Group Name
-    Name(String)
+    Name(String),
 }
 
 impl Default for Identifier {
@@ -79,7 +79,7 @@ pub enum RestartMode {
     /// stopped through QInit
     OnError,
     /// The Task should never be restarted, no matter how it exits
-    Never
+    Never,
 }
 
 impl Default for RestartMode {
@@ -96,15 +96,12 @@ pub struct DependencyDef {
 
     /// The args of the Sphere. This has different effects, depending on whether the sphere
     /// is exclusive (Tasks) or Inclusive (Stages)
-    pub args: Option<HashMap<String, String>>
+    pub args: Option<HashMap<String, String>>,
 }
 
 impl DependencyDef {
     pub fn new(name: String, args: Option<HashMap<String, String>>) -> DependencyDef {
-        return DependencyDef {
-            name: name,
-            args: args
-        }
+        return DependencyDef { name: name, args: args };
     }
 
     pub fn partial_match(&self, dep: &DependencyDef) -> bool {
@@ -121,10 +118,10 @@ impl DependencyDef {
                 }
 
                 return true;
-            },
+            }
             (None, None) | (None, Some(_)) => {
                 return true;
-            },
+            }
             (Some(_), None) => {
                 return false;
             }
@@ -170,7 +167,7 @@ impl fmt::Display for DependencyDef {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct UnixSocketStartCondition {
     /// The Path of the Unix Socket
-    pub path: String
+    pub path: String,
 }
 
 /// A FreudianTopicStartCondition represents a StartCondition that waits until the freudian topic with the given name
@@ -178,7 +175,7 @@ pub struct UnixSocketStartCondition {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct FreudianTopicStartCondition {
     /// The Name of the Freudian Topic
-    pub name: String
+    pub name: String,
 }
 
 /// Represents all the StartConditions of a given task
@@ -188,5 +185,5 @@ pub struct StartConditions {
     pub unixsocket: Option<Vec<UnixSocketStartCondition>>,
 
     /// The Freudian Topics we expect the task to create
-    pub freudian_topic: Option<Vec<FreudianTopicStartCondition>>
+    pub freudian_topic: Option<Vec<FreudianTopicStartCondition>>,
 }

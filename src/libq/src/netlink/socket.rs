@@ -1,28 +1,33 @@
-use nix::sys::socket::{socket, bind, SockAddr, AddressFamily, SockFlag, SockType, SockProtocol, NetlinkAddr, MsgFlags};
-use nix::unistd::{getpid, close};
 use super::error::NetLinkError;
 use io::RawFdReceiver;
+use nix::sys::socket::{bind, socket, AddressFamily, MsgFlags, NetlinkAddr, SockAddr, SockFlag, SockProtocol, SockType};
+use nix::unistd::{close, getpid};
 
-use std::os::unix::io::{RawFd};
 use std::io::{self, Read};
+use std::os::unix::io::RawFd;
 
 pub struct NetLinkSocket {
     socket_fd: RawFd,
     reader: RawFdReceiver,
     sequence_number: u32,
-    address: NetlinkAddr
+    address: NetlinkAddr,
 }
 
 impl NetLinkSocket {
     pub fn new() -> Result<NetLinkSocket, NetLinkError> {
-        let socket_fd = socket(AddressFamily::Netlink, SockType::Datagram, SockFlag::empty(), SockProtocol::NetlinkKObjectUEvent)?;
+        let socket_fd = socket(
+            AddressFamily::Netlink,
+            SockType::Datagram,
+            SockFlag::empty(),
+            SockProtocol::NetlinkKObjectUEvent,
+        )?;
         let address = NetlinkAddr::new(getpid().as_raw() as u32, 1);
         bind(socket_fd, &SockAddr::Netlink(address))?;
         return Ok(NetLinkSocket {
             socket_fd: socket_fd,
             reader: RawFdReceiver::new(socket_fd, MsgFlags::empty()),
             sequence_number: 1,
-            address: address
+            address: address,
         });
     }
 }

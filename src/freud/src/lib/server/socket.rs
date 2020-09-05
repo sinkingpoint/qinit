@@ -1,25 +1,28 @@
-use std::path::{Path};
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::os::unix::io::AsRawFd;
-use std::io::{self, Write};
 use std::fs::{create_dir_all, remove_file};
+use std::io::{self, Write};
+use std::mem::drop;
+use std::os::unix::io::AsRawFd;
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::park_timeout;
 use std::time::Duration;
-use std::mem::drop;
 
-use nix::sys::socket::sockopt::PeerCredentials;
 use nix::sys::socket::getsockopt;
+use nix::sys::socket::sockopt::PeerCredentials;
 
 use libq::io::{read_u32, Endianness, Writable};
 
-use super::api::{FreudianRequestHeader, MessageType, FreudianTopicRequest, FreudianSubscriptionRequest, FreudianProduceMessageRequest, FreudianAPIResponseType, FreudianAPIResponse, FreudianAPIError};
-use super::types::{FreudianResponse, FreudianError};
+use super::api::{
+    FreudianAPIError, FreudianAPIResponse, FreudianAPIResponseType, FreudianProduceMessageRequest, FreudianRequestHeader,
+    FreudianSubscriptionRequest, FreudianTopicRequest, MessageType,
+};
 use super::bus::FreudianBus;
+use super::types::{FreudianError, FreudianResponse};
 
 pub enum FreudianSocketError {
     ProcessAlreadyRunning,
-    IOError(io::Error)
+    IOError(io::Error),
 }
 
 impl From<io::Error> for FreudianSocketError {
@@ -29,17 +32,23 @@ impl From<io::Error> for FreudianSocketError {
 }
 
 pub struct FreudianSocket {
-    socket: UnixListener
+    socket: UnixListener,
 }
 
-fn process_request(socket: &mut UnixStream, bus_lock: &mut Arc<Mutex<FreudianBus>>, header: FreudianRequestHeader) -> Result<FreudianAPIResponse, FreudianAPIError> {
+fn process_request(
+    socket: &mut UnixStream,
+    bus_lock: &mut Arc<Mutex<FreudianBus>>,
+    header: FreudianRequestHeader,
+) -> Result<FreudianAPIResponse, FreudianAPIError> {
     let mut bus = bus_lock.lock().unwrap();
     let response = match header.message_type {
         MessageType::CreateTopic => bus.create_topic(FreudianTopicRequest::read(socket)?),
         MessageType::DeleteTopic => bus.delete_topic(FreudianTopicRequest::read(socket)?),
         MessageType::Subscribe => bus.subscribe(FreudianTopicRequest::read(socket)?),
         MessageType::Unsubscribe => bus.unsubscribe(FreudianSubscriptionRequest::read(socket)?),
-        MessageType::ProduceMessage => bus.produce_message(FreudianProduceMessageRequest::read(socket, header.message_length - header.size())?),
+        MessageType::ProduceMessage => {
+            bus.produce_message(FreudianProduceMessageRequest::read(socket, header.message_length - header.size())?)
+        }
         MessageType::GetTopics => bus.get_topics(),
         MessageType::GetNumSubscribers => bus.get_num_subscribers(FreudianTopicRequest::read(socket)?),
         MessageType::ConsumeMessage => {
@@ -52,10 +61,10 @@ fn process_request(socket: &mut UnixStream, bus_lock: &mut Arc<Mutex<FreudianBus
                 Err(FreudianError::NoNewMessages) => {
                     if max_wait_time == 0 {
                         Result::<FreudianResponse, FreudianError>::Err(FreudianError::NoNewMessages)
-                    }
-                    else {
+                    } else {
                         // Mark this thread as waiting on the given topic
-                        bus.mark_thread_waiting(sub_request.clone()).expect("Failed to mark thread as waiting");
+                        bus.mark_thread_waiting(sub_request.clone())
+                            .expect("Failed to mark thread as waiting");
 
                         // Manually release the lock before we sleep the thread
                         drop(bus);
@@ -69,11 +78,11 @@ fn process_request(socket: &mut UnixStream, bus_lock: &mut Arc<Mutex<FreudianBus
                             Ok(_) => Err(FreudianError::InvalidResponse),
                             Err(FreudianError::SubscriptionDoesntExist) => Err(FreudianError::SubscriptionDoesntExist),
                             Err(FreudianError::NoNewMessages) => Err(FreudianError::NoNewMessages),
-                            Err(e) => Err(e)
+                            Err(e) => Err(e),
                         }
                     }
-                },
-                Err(_) => Err(FreudianError::InvalidResponse)
+                }
+                Err(_) => Err(FreudianError::InvalidResponse),
             };
 
             result
@@ -86,9 +95,13 @@ fn process_request(socket: &mut UnixStream, bus_lock: &mut Arc<Mutex<FreudianBus
         Ok(FreudianResponse::Subscription(sub)) => Ok(FreudianAPIResponse::with_message(FreudianAPIResponseType::Ok, sub.uuid.to_vec())),
         Err(FreudianError::InvalidResponse) => Ok(FreudianAPIResponse::empty(FreudianAPIResponseType::ServerError)),
         Err(FreudianError::InvalidString(_)) => Ok(FreudianAPIResponse::empty(FreudianAPIResponseType::MalformedRequest)),
-        Err(FreudianError::NoNewMessages) | Err(FreudianError::NoSubscribers) | Err(FreudianError::TopicAlreadyExists) => Ok(FreudianAPIResponse::empty(FreudianAPIResponseType::NothingHappened)),
-        Err(FreudianError::SubscriptionDoesntExist) | Err(FreudianError::TopicDoesntExist) =>  Ok(FreudianAPIResponse::empty(FreudianAPIResponseType::DoesntExist)),
-    }
+        Err(FreudianError::NoNewMessages) | Err(FreudianError::NoSubscribers) | Err(FreudianError::TopicAlreadyExists) => {
+            Ok(FreudianAPIResponse::empty(FreudianAPIResponseType::NothingHappened))
+        }
+        Err(FreudianError::SubscriptionDoesntExist) | Err(FreudianError::TopicDoesntExist) => {
+            Ok(FreudianAPIResponse::empty(FreudianAPIResponseType::DoesntExist))
+        }
+    };
 }
 
 fn handle_client(mut socket: UnixStream, mut bus_lock: Arc<Mutex<FreudianBus>>) {
@@ -102,22 +115,27 @@ fn handle_client(mut socket: UnixStream, mut bus_lock: Arc<Mutex<FreudianBus>>) 
             Err(FreudianAPIError::IOError(_err)) => {
                 // We got an IO Error, kill the connection
                 break;
-            },
+            }
             Err(_err) => {
                 // send error
-                FreudianAPIResponse::empty(FreudianAPIResponseType::MalformedRequest).write(&mut socket).expect("Failed to write response");
+                FreudianAPIResponse::empty(FreudianAPIResponseType::MalformedRequest)
+                    .write(&mut socket)
+                    .expect("Failed to write response");
                 continue;
             }
         };
 
         match process_request(&mut socket, &mut bus_lock, header) {
             Ok(resp) => resp.write(&mut socket),
-            Err(FreudianAPIError::MalformedRequest) => FreudianAPIResponse::empty(FreudianAPIResponseType::MalformedRequest).write(&mut socket),
+            Err(FreudianAPIError::MalformedRequest) => {
+                FreudianAPIResponse::empty(FreudianAPIResponseType::MalformedRequest).write(&mut socket)
+            }
             Err(FreudianAPIError::IOError(_err)) => {
                 // We got an IO Error, kill the connection
                 break;
             }
-        }.expect("Failed to write response");
+        }
+        .expect("Failed to write response");
 
         socket.flush().expect("Failed to flush socket");
     }
@@ -130,23 +148,20 @@ impl FreudianSocket {
             match UnixStream::connect(socketfile) {
                 Ok(_) => {
                     return Err(FreudianSocketError::ProcessAlreadyRunning);
-                },
+                }
                 Err(_) => {
                     remove_file(socketfile)?;
                 }
             }
-        }
-        else {
+        } else {
             match socketfile.parent() {
-                Some(par) => {
-                    create_dir_all(par)?
-                },
+                Some(par) => create_dir_all(par)?,
                 None => {}
             }
         }
 
         return Ok(FreudianSocket {
-            socket: UnixListener::bind(socketfile)?
+            socket: UnixListener::bind(socketfile)?,
         });
     }
 
@@ -160,7 +175,7 @@ impl FreudianSocket {
                     std::thread::spawn(move || {
                         handle_client(stream, bus_ref);
                     })
-                },
+                }
                 Err(_e) => {
                     break;
                 }

@@ -1,17 +1,16 @@
-use nix::sys::inotify::{Inotify, InitFlags, AddWatchFlags, WatchDescriptor};
+use nix::sys::inotify::{AddWatchFlags, InitFlags, Inotify, WatchDescriptor};
+use patient::{FreudianClient, Status};
 use tasks::serde::DependencyDef;
-use patient::{Status, FreudianClient};
 
-use std::thread;
-use std::time::Duration;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 use super::registry::SphereRegistry;
 
-
-/// A Courthouse is responsible for using inotify to listen for a set of events to 
+/// A Courthouse is responsible for using inotify to listen for a set of events to
 /// occur on a set of files, and informing a given registry when all the changes have been seen
 pub struct Courthouse {
     /// The inotify client we use to listen for events
@@ -30,27 +29,30 @@ pub struct Courthouse {
     registry: Arc<Mutex<SphereRegistry>>,
 
     /// The DependencyDef that this Courthouse is waiting for filings for
-    dependency: DependencyDef
+    dependency: DependencyDef,
 }
 
 pub struct MonitorRequest {
     path: PathBuf,
-    events: AddWatchFlags
+    events: AddWatchFlags,
 }
 
 pub struct CourthouseBuilder {
     /// The registry that this courthouse will report its findings to
-    registry: Arc<Mutex<SphereRegistry>>
+    registry: Arc<Mutex<SphereRegistry>>,
 }
 
 impl CourthouseBuilder {
     pub fn new(registry: Arc<Mutex<SphereRegistry>>) -> CourthouseBuilder {
-        return CourthouseBuilder {
-            registry: registry
-        }
+        return CourthouseBuilder { registry: registry };
     }
 
-    pub fn build(&self, dep: DependencyDef, requests: Vec<MonitorRequest>, freudian_topics: HashSet<String>) -> Result<Courthouse, nix::Error> {
+    pub fn build(
+        &self,
+        dep: DependencyDef,
+        requests: Vec<MonitorRequest>,
+        freudian_topics: HashSet<String>,
+    ) -> Result<Courthouse, nix::Error> {
         return Courthouse::new(dep, requests, freudian_topics, self.registry.clone());
     }
 }
@@ -59,13 +61,18 @@ impl MonitorRequest {
     pub fn new(path: PathBuf, events: AddWatchFlags) -> MonitorRequest {
         return MonitorRequest {
             path: path,
-            events: events
-        }
+            events: events,
+        };
     }
 }
 
 impl Courthouse {
-    fn new(dep: DependencyDef, requests: Vec<MonitorRequest>, freudian_topics: HashSet<String>, registry: Arc<Mutex<SphereRegistry>>) -> Result<Courthouse, nix::Error> {
+    fn new(
+        dep: DependencyDef,
+        requests: Vec<MonitorRequest>,
+        freudian_topics: HashSet<String>,
+        registry: Arc<Mutex<SphereRegistry>>,
+    ) -> Result<Courthouse, nix::Error> {
         let mut req_map = HashMap::new();
         let mut watchers = HashMap::new();
 
@@ -82,14 +89,12 @@ impl Courthouse {
             watchers: watchers,
             registry: registry,
             freudian_topic_list: freudian_topics,
-            dependency: dep
+            dependency: dep,
         });
     }
 
     pub fn start(self) {
-        std::thread::spawn(move || {
-            self.main_loop()
-        });
+        std::thread::spawn(move || self.main_loop());
     }
 
     fn main_loop(mut self) {
@@ -111,7 +116,7 @@ impl Courthouse {
                             }
                         }
                     }
-                },
+                }
                 Err(_e) => {}
             }
         }
@@ -127,7 +132,7 @@ impl Courthouse {
                             }
 
                             // TODO: Handle this error - tell the registry that the courthouse says no
-                        },
+                        }
                         Err(_err) => {
                             // TODO: Handle this error - tell the registry that the courthouse says no
                         }

@@ -1,12 +1,12 @@
-use super::serde::{TaskDef, Stage, DependencyDef, RestartMode};
-use super::sphere::{SphereStatus, SphereType, SphereState, Startable};
-use super::court::CourthouseBuilder;
 use super::super::dtr::Graph;
+use super::court::CourthouseBuilder;
+use super::serde::{DependencyDef, RestartMode, Stage, TaskDef};
+use super::sphere::{SphereState, SphereStatus, SphereType, Startable};
+use libq::logger;
 use std::collections::HashMap;
-use std::fs::{File, read_dir};
+use std::fs::{read_dir, File};
 use std::io::{self, Read};
 use std::path::Path;
-use libq::logger;
 
 pub struct SphereRegistry {
     /// The templates that can be used to create new spheres using `start`
@@ -19,7 +19,7 @@ pub struct SphereRegistry {
     pending_graph: Graph<DependencyDef, u32>,
 
     /// The builder used to construct Courthouses for Start Conditions
-    courthouse_builder: Option<CourthouseBuilder>
+    courthouse_builder: Option<CourthouseBuilder>,
 }
 
 fn read_from_file(path: &Path) -> Result<String, io::Error> {
@@ -33,13 +33,13 @@ impl SphereRegistry {
     pub fn set_courthouse_builder(&mut self, builder: CourthouseBuilder) {
         self.courthouse_builder = Some(builder);
     }
-    
+
     pub fn start(&mut self, sphere: DependencyDef) {
         match self.plan(sphere) {
             Some(plan) => {
                 self.pending_graph.extend(plan);
                 self.leaf_sweep();
-            },
+            }
             None => {
                 // We hit an error during planning. Bail
             }
@@ -58,17 +58,24 @@ impl SphereRegistry {
         if let Some((def, state)) = self.running_spheres.iter().find(|(_, v)| v.pid == Some(pid)) {
             child_def = def.clone();
             child_state = state.clone();
-        }
-        else {
+        } else {
             // Unknown PID, maybe something reparented to us because of a naughty process. Our job is done just by `wait`ing it
-            logger.debug().with_u32("pid", pid).with_u32("exit_code", exit_code).smsg("Failed to find a record for exitted child");
+            logger
+                .debug()
+                .with_u32("pid", pid)
+                .with_u32("exit_code", exit_code)
+                .smsg("Failed to find a record for exitted child");
             return;
         }
 
         let sphere = match self.sphere_templates.get(&child_def.name.to_lowercase()) {
             Some(sphere) => sphere,
             None => {
-                logger.info().with_str("name", &child_def.name).with_map("args", &child_def.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to find matching sphere");
+                logger
+                    .info()
+                    .with_str("name", &child_def.name)
+                    .with_map("args", &child_def.args.as_ref().unwrap_or(&HashMap::new()))
+                    .smsg("Failed to find matching sphere");
                 return;
             }
         };
@@ -76,41 +83,41 @@ impl SphereRegistry {
         match child_state.state {
             SphereState::Stopping | SphereState::Started | SphereState::Starting => {
                 // If we're stopping or starting, then the child has exitted and we're now stopped or failed. We might need to restart
-                let state = if child_state.state == SphereState::Stopping { SphereState::Stopped } else { SphereState::Exited(exit_code) };
-                new_state = Some(SphereStatus {
-                    state: state,
-                    pid: None
-                });
+                let state = if child_state.state == SphereState::Stopping {
+                    SphereState::Stopped
+                } else {
+                    SphereState::Exited(exit_code)
+                };
+                new_state = Some(SphereStatus { state: state, pid: None });
 
                 match sphere.get_restart_mode() {
                     RestartMode::Always => {
                         needs_restart = true;
-                    },
+                    }
                     RestartMode::OnError if exit_code != 0 => {
                         needs_restart = true;
-                    },
+                    }
                     RestartMode::UnlessStopped if child_state.state != SphereState::Stopping => {
                         needs_restart = true;
-                    },
+                    }
                     _ => {}
                 }
-            },
+            }
             SphereState::PreStarting => {
                 if exit_code == 0 {
                     new_state = Some(SphereStatus {
                         state: SphereState::StartPending,
-                        pid: None
+                        pid: None,
                     });
 
                     needs_leafsweep = true;
-                }
-                else {
+                } else {
                     new_state = Some(SphereStatus {
                         state: SphereState::FailedToStart,
-                        pid: None
+                        pid: None,
                     });
                 }
-            },
+            }
             _ => {}
         }
 
@@ -138,8 +145,8 @@ impl SphereRegistry {
         }
     }
 
-    /// trim_pending_graph goes through the pending graph and removes all nodes 
-    /// that are no longer pending (i.e. they're started). If any nodes are removed, 
+    /// trim_pending_graph goes through the pending graph and removes all nodes
+    /// that are no longer pending (i.e. they're started). If any nodes are removed,
     /// we do another leaf sweep
     fn trim_pending_graph(&mut self) {
         let mut to_remove = Vec::new();
@@ -169,20 +176,37 @@ impl SphereRegistry {
 
         for leaf in self.pending_graph.iter_leaves() {
             let state = self.running_spheres.get(leaf).and_then(|state| Some(&state.state));
-            logger.debug().with_string("sphere_name", leaf.name.clone()).with_string("state", format!("{:?}", state)).smsg("Checking leaf");
+            logger
+                .debug()
+                .with_string("sphere_name", leaf.name.clone())
+                .with_string("state", format!("{:?}", state))
+                .smsg("Checking leaf");
             // If the leaf hasn't been marked as starting, then we need to start it
             match self.running_spheres.get(leaf).and_then(|state| Some(&state.state)) {
-                None | Some(SphereState::Exited(_)) | Some(SphereState::FailedToStart) | Some(SphereState::Stopped) | Some(SphereState::StartPending) => {
-                    logger.debug().with_string("sphere_name", leaf.name.clone()).with_string("state", format!("{:?}", state)).smsg("Starting leaf");
+                None
+                | Some(SphereState::Exited(_))
+                | Some(SphereState::FailedToStart)
+                | Some(SphereState::Stopped)
+                | Some(SphereState::StartPending) => {
+                    logger
+                        .debug()
+                        .with_string("sphere_name", leaf.name.clone())
+                        .with_string("state", format!("{:?}", state))
+                        .smsg("Starting leaf");
                     let sphere = match self.sphere_templates.get(&leaf.name.to_lowercase()) {
                         Some(sphere) => sphere,
                         None => {
-                            logger.info().with_str("name", &leaf.name).with_map("args", &leaf.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to find matching sphere");
+                            logger
+                                .info()
+                                .with_str("name", &leaf.name)
+                                .with_map("args", &leaf.args.as_ref().unwrap_or(&HashMap::new()))
+                                .smsg("Failed to find matching sphere");
                             continue;
                         }
                     };
 
-                    if let Some(mut state) = sphere.start(&leaf.args.as_ref(), self.running_spheres.get(leaf).and_then(|s| Some(&s.state))) {
+                    if let Some(mut state) = sphere.start(&leaf.args.as_ref(), self.running_spheres.get(leaf).and_then(|s| Some(&s.state)))
+                    {
                         logger.debug().msg(format!("Moved {} into state {:?}", leaf.name, state));
                         let (files, freud_topics) = sphere.get_monitor_requests(&leaf.args.as_ref());
                         match &state.state {
@@ -191,20 +215,26 @@ impl SphereRegistry {
                                 match self.courthouse_builder.as_ref().unwrap().build(leaf.clone(), files, freud_topics) {
                                     Ok(court) => court.start(),
                                     Err(err) => {
-                                        logger.debug().with_str("name", &leaf.name).with_string("error", err.to_string()).with_map("args", &leaf.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to hold court for sphere");
+                                        logger
+                                            .debug()
+                                            .with_str("name", &leaf.name)
+                                            .with_string("error", err.to_string())
+                                            .with_map("args", &leaf.args.as_ref().unwrap_or(&HashMap::new()))
+                                            .smsg("Failed to hold court for sphere");
                                         // TODO: Kill Child if we can't start a courthouse to monitor it for whatever reason
                                     }
                                 }
-                            },
+                            }
                             SphereState::Starting => {
                                 state.state = SphereState::Started;
-                            },
+                            }
                             _ => {}
                         }
                         self.running_spheres.insert(leaf.clone(), state);
                     }
-                },
-                Some(SphereState::Stopping) | Some(SphereState::PreStarting) | Some(SphereState::Starting) | Some(SphereState::Started) => {}
+                }
+                Some(SphereState::Stopping) | Some(SphereState::PreStarting) | Some(SphereState::Starting) | Some(SphereState::Started) => {
+                }
             }
         }
 
@@ -231,7 +261,11 @@ impl SphereRegistry {
             let sphere = match self.sphere_templates.get(&parent.name.to_lowercase()) {
                 Some(sphere) => sphere,
                 None => {
-                    logger.info().with_str("name", &parent.name).with_map("args", &parent.args.unwrap_or(HashMap::new())).smsg("Failed to find matching sphere");
+                    logger
+                        .info()
+                        .with_str("name", &parent.name)
+                        .with_map("args", &parent.args.unwrap_or(HashMap::new()))
+                        .smsg("Failed to find matching sphere");
                     return None;
                 }
             };
@@ -255,16 +289,26 @@ impl SphereRegistry {
             for child in children.iter() {
                 // Merge the parents arguments and the childs arguments (This means that arguments can propagate down the dependency chain)
                 let args = match (&parent.args, &child.args) {
-                    (Some(parent_args), Some(child_args)) => Some(parent_args.iter().chain(child_args.iter()).map(|(k, v)| (k.clone(), v.clone())).collect()),
+                    (Some(parent_args), Some(child_args)) => Some(
+                        parent_args
+                            .iter()
+                            .chain(child_args.iter())
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect(),
+                    ),
                     (Some(args), None) | (None, Some(args)) => Some(args.clone()),
-                    (None, None) => None
+                    (None, None) => None,
                 };
 
                 // Resolve the child name to a child sphere
                 let child_sphere = match self.sphere_templates.get(&child.name.to_lowercase()) {
                     Some(sphere) => sphere,
                     None => {
-                        logger.info().with_str("name", &parent.name).with_map("args", &parent.args.unwrap_or(HashMap::new())).smsg("Failed to find matching sphere");
+                        logger
+                            .info()
+                            .with_str("name", &parent.name)
+                            .with_map("args", &parent.args.unwrap_or(HashMap::new()))
+                            .smsg("Failed to find matching sphere");
                         return None;
                     }
                 };
@@ -278,13 +322,21 @@ impl SphereRegistry {
                 let new_dep = DependencyDef::new(child.name.clone(), args);
                 graph.add_node(new_dep.clone());
                 match graph.add_edge(&parent, &new_dep, 1) {
-                    Some(_) => {},
+                    Some(_) => {}
                     None => {
-                        logger.debug().with_str("parent", &parent.name).with_str("child", &new_dep.name).smsg("Failed to add dependency");
+                        logger
+                            .debug()
+                            .with_str("parent", &parent.name)
+                            .with_str("child", &new_dep.name)
+                            .smsg("Failed to add dependency");
                         return None;
                     }
                 }
-                logger.debug().with_str("parent", &parent.name).with_str("child", &new_dep.name).smsg("Adding Dependency");
+                logger
+                    .debug()
+                    .with_str("parent", &parent.name)
+                    .with_str("child", &new_dep.name)
+                    .smsg("Adding Dependency");
                 to_process.push(new_dep);
             }
         }
@@ -298,7 +350,11 @@ impl SphereRegistry {
             let child_index = match graph.find_node_index(|dep| child.partial_match(dep)) {
                 Some(idx) => idx,
                 None => {
-                    logger.debug().with_str("name", &child.name).with_map("args", &child.args.as_ref().unwrap_or(&HashMap::new())).smsg("Failed to find matching sphere for ambiguous dependency");
+                    logger
+                        .debug()
+                        .with_str("name", &child.name)
+                        .with_map("args", &child.args.as_ref().unwrap_or(&HashMap::new()))
+                        .smsg("Failed to find matching sphere for ambiguous dependency");
                     return None;
                 }
             };
@@ -309,20 +365,27 @@ impl SphereRegistry {
     }
 
     /// Reads Sphere Definitions from all the directories in the given Vec
-    pub fn read_from_disk(file_paths: Vec<&Path>) -> Result<SphereRegistry, io::Error>{
+    pub fn read_from_disk(file_paths: Vec<&Path>) -> Result<SphereRegistry, io::Error> {
         let mut sphere_templates = HashMap::new();
         let logger = logger::with_name_as_json("sphere_registry");
-        
+
         for dir in file_paths.iter() {
             if !dir.exists() || !dir.is_dir() {
-                logger.info().with_string("path", dir.to_string_lossy().to_string()).smsg("Failed to read directory. Skipping it.");
+                logger
+                    .info()
+                    .with_string("path", dir.to_string_lossy().to_string())
+                    .smsg("Failed to read directory. Skipping it.");
                 continue;
             }
 
             let iter = match read_dir(dir) {
                 Ok(iter) => iter,
                 Err(e) => {
-                    logger.info().with_string("error", e.to_string()).with_string("path", dir.to_string_lossy().to_string()).smsg("Failed to read directory. Skipping it");
+                    logger
+                        .info()
+                        .with_string("error", e.to_string())
+                        .with_string("path", dir.to_string_lossy().to_string())
+                        .smsg("Failed to read directory. Skipping it");
                     continue;
                 }
             };
@@ -331,37 +394,45 @@ impl SphereRegistry {
                 let file = file?;
                 let path = file.path();
                 match path.extension() {
-                    Some(ext) => {
-                        match ext.to_str() {
-                            Some("task") => {
-                                match toml::from_str::<TaskDef>(&read_from_file(&path)?) {
-                                    Ok(task) => {
-                                        logger.debug().with_str("name", &task.name).smsg("Loaded Task");
-                                        sphere_templates.insert(task.name.clone().to_lowercase(), SphereType::Task(task));
-                                    },
-                                    Err(e) => {
-                                        logger.info().with_string("error", e.to_string()).with_string("path", path.to_string_lossy().to_string()).smsg("Failed to read Task definition");
-                                    }
-                                }
-                            },
-                            Some("stage") => {
-                                match toml::from_str::<Stage>(&read_from_file(&path)?) {
-                                    Ok(stage) => {
-                                        logger.debug().with_str("name", &stage.name).smsg("Loaded Stage");
-                                        sphere_templates.insert(stage.name.clone().to_lowercase(), SphereType::Stage(stage));
-                                    },
-                                    Err(e) => {
-                                        logger.info().with_string("error", e.to_string()).with_string("path", path.to_string_lossy().to_string()).smsg("Failed to read Stage definition");
-                                    }
-                                }
+                    Some(ext) => match ext.to_str() {
+                        Some("task") => match toml::from_str::<TaskDef>(&read_from_file(&path)?) {
+                            Ok(task) => {
+                                logger.debug().with_str("name", &task.name).smsg("Loaded Task");
+                                sphere_templates.insert(task.name.clone().to_lowercase(), SphereType::Task(task));
                             }
-                            Some(_) | None => {
-                                logger.info().with_string("path", path.to_string_lossy().to_string()).smsg("Unknown Sphere Type");
+                            Err(e) => {
+                                logger
+                                    .info()
+                                    .with_string("error", e.to_string())
+                                    .with_string("path", path.to_string_lossy().to_string())
+                                    .smsg("Failed to read Task definition");
                             }
+                        },
+                        Some("stage") => match toml::from_str::<Stage>(&read_from_file(&path)?) {
+                            Ok(stage) => {
+                                logger.debug().with_str("name", &stage.name).smsg("Loaded Stage");
+                                sphere_templates.insert(stage.name.clone().to_lowercase(), SphereType::Stage(stage));
+                            }
+                            Err(e) => {
+                                logger
+                                    .info()
+                                    .with_string("error", e.to_string())
+                                    .with_string("path", path.to_string_lossy().to_string())
+                                    .smsg("Failed to read Stage definition");
+                            }
+                        },
+                        Some(_) | None => {
+                            logger
+                                .info()
+                                .with_string("path", path.to_string_lossy().to_string())
+                                .smsg("Unknown Sphere Type");
                         }
                     },
                     None => {
-                        logger.info().with_string("path", path.to_string_lossy().to_string()).smsg("Unknown Sphere Type");
+                        logger
+                            .info()
+                            .with_string("path", path.to_string_lossy().to_string())
+                            .smsg("Unknown Sphere Type");
                     }
                 }
             }
@@ -371,7 +442,7 @@ impl SphereRegistry {
             sphere_templates: sphere_templates,
             pending_graph: Graph::new(),
             running_spheres: HashMap::new(),
-            courthouse_builder: None
+            courthouse_builder: None,
         });
     }
 }

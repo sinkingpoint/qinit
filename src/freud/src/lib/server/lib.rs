@@ -1,12 +1,15 @@
-extern crate nix;
 extern crate libq;
+extern crate nix;
 
-mod socket;
 mod api;
 mod bus;
+mod socket;
 mod types;
 
-pub use api::{MessageType, FreudianRequestHeader, FreudianAPIResponseType, FreudianAPIResponse, FreudianTopicRequest, FreudianSubscriptionRequest, FreudianProduceMessageRequest};
-pub use socket::{FreudianSocket, FreudianSocketError};
+pub use api::{
+    FreudianAPIResponse, FreudianAPIResponseType, FreudianProduceMessageRequest, FreudianRequestHeader, FreudianSubscriptionRequest,
+    FreudianTopicRequest, MessageType,
+};
 pub use bus::FreudianBus;
+pub use socket::{FreudianSocket, FreudianSocketError};
 pub use types::{FreudianError, FreudianResponse, UUID};

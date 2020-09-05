@@ -6,7 +6,7 @@ use std::process;
 
 pub enum PidFileError {
     IOError(io::Error),
-    ProcessAlreadyRunning
+    ProcessAlreadyRunning,
 }
 
 pub fn write_pid_file(path: &Path) -> Result<(), PidFileError> {
@@ -42,7 +42,7 @@ pub fn write_pid_file(path: &Path) -> Result<(), PidFileError> {
     if let Some(parent_dir) = &path.parent() {
         if !parent_dir.exists() || !parent_dir.is_dir() {
             match create_dir(parent_dir) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => {
                     return Err(PidFileError::IOError(err));
                 }
@@ -58,7 +58,7 @@ pub fn write_pid_file(path: &Path) -> Result<(), PidFileError> {
     };
 
     match file.write_all(&format!("{}", process::id()).into_bytes()[..]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
             return Err(PidFileError::IOError(err));
         }

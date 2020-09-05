@@ -1,20 +1,20 @@
-use super::process::fork_process;
 use super::super::strings::do_string_replacement;
-use tasks::serde::{TaskDef, DependencyDef, Stage, RestartMode};
-use tasks::court::MonitorRequest;
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-use std::fs::remove_file;
+use super::process::fork_process;
 use nix::sys::inotify::AddWatchFlags;
-use nix::unistd::mkdir;
 use nix::sys::stat::Mode;
+use nix::unistd::mkdir;
+use std::collections::{HashMap, HashSet};
+use std::fs::remove_file;
+use std::path::PathBuf;
+use tasks::court::MonitorRequest;
+use tasks::serde::{DependencyDef, RestartMode, Stage, TaskDef};
 
 /// SphereType is an enum containing a generic interface over all the different types
 /// of sphere that exist. Why we do this over a trait and trait objects is a bit arbitrary
 #[derive(Debug)]
 pub enum SphereType {
     Task(TaskDef),
-    Stage(Stage)
+    Stage(Stage),
 }
 
 pub trait Startable {
@@ -25,8 +25,8 @@ impl Startable for SphereType {
     fn start(&self, args: &Option<&HashMap<String, String>>, current_state: Option<&SphereState>) -> Option<SphereStatus> {
         return match self {
             SphereType::Task(def) => def.start(args, current_state),
-            SphereType::Stage(def) => def.start(args, current_state)
-        }
+            SphereType::Stage(def) => def.start(args, current_state),
+        };
     }
 }
 
@@ -34,14 +34,14 @@ impl SphereType {
     pub fn get_deps(&self) -> Option<&Vec<DependencyDef>> {
         match self {
             SphereType::Task(def) => def.requires.as_ref(),
-            SphereType::Stage(def) => Some(def.tasks.as_ref())
+            SphereType::Stage(def) => Some(def.tasks.as_ref()),
         }
     }
 
     pub fn get_restart_mode(&self) -> RestartMode {
         match self {
             SphereType::Task(def) => def.restart_mode.unwrap_or(RestartMode::OnError),
-            SphereType::Stage(_def) => RestartMode::OnError
+            SphereType::Stage(_def) => RestartMode::OnError,
         }
     }
 
@@ -61,12 +61,12 @@ impl SphereType {
                                 // TODO: Handle this case better
                                 continue;
                             }
-                            
-                            if let Some(parent) = path.parent(){
+
+                            if let Some(parent) = path.parent() {
                                 if !parent.exists() {
                                     // TODO: Derive the bits here better
                                     match mkdir(parent, Mode::from_bits(0o755).unwrap()) {
-                                        Ok(_) => {},
+                                        Ok(_) => {}
                                         Err(_) => {
                                             continue;
                                         }
@@ -77,7 +77,7 @@ impl SphereType {
                             if path.exists() {
                                 // We need to kill the old, leftover socket
                                 match remove_file(&path) {
-                                    Ok(_) => {},
+                                    Ok(_) => {}
                                     Err(_) => {
                                         continue;
                                     }
@@ -97,8 +97,8 @@ impl SphereType {
                 }
 
                 return (requests, freudian_topics);
-            },
-            SphereType::Stage(_def) => (Vec::new(), HashSet::new())
+            }
+            SphereType::Stage(_def) => (Vec::new(), HashSet::new()),
         }
     }
 
@@ -109,26 +109,24 @@ impl SphereType {
             SphereType::Stage(_) => {
                 // Stages have no args
                 return dep.args == None;
-            },
-            SphereType::Task(def) => {
-                match (&def.args, &dep.args) {
-                    (None, None) => {
-                        return true;
-                    },
-                    (Some(_), None) | (None, Some(_)) => {
-                        return false;
-                    },
-                    (Some(self_args), Some(dep_args)) => {
-                        for arg in self_args.iter() {
-                            if !dep_args.contains_key(arg) {
-                                return false;
-                            }
-                        }
-
-                        return self_args.len() == dep_args.len();
-                    }
-                }
             }
+            SphereType::Task(def) => match (&def.args, &dep.args) {
+                (None, None) => {
+                    return true;
+                }
+                (Some(_), None) | (None, Some(_)) => {
+                    return false;
+                }
+                (Some(self_args), Some(dep_args)) => {
+                    for arg in self_args.iter() {
+                        if !dep_args.contains_key(arg) {
+                            return false;
+                        }
+                    }
+
+                    return self_args.len() == dep_args.len();
+                }
+            },
         }
     }
 }
@@ -136,7 +134,7 @@ impl SphereType {
 #[derive(Debug)]
 pub struct SphereStatus {
     pub state: SphereState,
-    pub pid: Option<u32>
+    pub pid: Option<u32>,
 }
 
 #[allow(dead_code)]
@@ -164,14 +162,14 @@ pub enum SphereState {
     Exited(u32),
 
     /// Indicates that the Sphere failed to start for some reason
-    FailedToStart
+    FailedToStart,
 }
 
 impl Startable for Stage {
     fn start(&self, _args: &Option<&HashMap<String, String>>, _current_state: Option<&SphereState>) -> Option<SphereStatus> {
         return Some(SphereStatus {
             state: SphereState::Started,
-            pid: None
+            pid: None,
         });
     }
 }
@@ -186,16 +184,27 @@ impl Startable for TaskDef {
                     // We haven't started anything, and there's an init command to run
                     pid = fork_process(&cmd.split_whitespace().map(|x| do_string_replacement(args, x)).collect());
                     new_state = SphereState::PreStarting;
-                }
-                else {
-                    pid = fork_process(&self.start_command.split_whitespace().map(|x| do_string_replacement(args, x)).collect());
+                } else {
+                    pid = fork_process(
+                        &self
+                            .start_command
+                            .split_whitespace()
+                            .map(|x| do_string_replacement(args, x))
+                            .collect(),
+                    );
                     new_state = SphereState::Starting;
                 }
-            },
+            }
             Some(SphereState::StartPending) => {
-                pid = fork_process(&self.start_command.split_whitespace().map(|x| do_string_replacement(args, x)).collect());
+                pid = fork_process(
+                    &self
+                        .start_command
+                        .split_whitespace()
+                        .map(|x| do_string_replacement(args, x))
+                        .collect(),
+                );
                 new_state = SphereState::Starting;
-            },
+            }
             Some(_) => {
                 return None;
             }
@@ -203,7 +212,7 @@ impl Startable for TaskDef {
 
         return Some(SphereStatus {
             pid: pid,
-            state: new_state
+            state: new_state,
         });
     }
 }

@@ -5,12 +5,12 @@ extern crate nix;
 use clap::{App, Arg};
 use libq::logger;
 use nix::kmod::{finit_module, ModuleInitFlags};
+use nix::sys::utsname::uname;
 use std::ffi::CString;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::process::exit;
-use nix::sys::utsname::uname;
 
 fn find_module_path(modname: &str) -> Result<Option<PathBuf>, io::Error> {
     let uname = uname();
@@ -57,12 +57,11 @@ fn main() {
     if !mod_path.exists() {
         if let Ok(Some(path)) = find_module_path(args.value_of("file").unwrap()) {
             mod_path = path;
-        }
-        else {
+        } else {
             logger
-            .info()
-            .with_str("path", args.value_of("file").unwrap())
-            .smsg("Path doesn't exist");
+                .info()
+                .with_str("path", args.value_of("file").unwrap())
+                .smsg("Path doesn't exist");
             exit(1);
         }
     }

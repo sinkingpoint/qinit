@@ -8,7 +8,7 @@ pub fn do_string_replacement(args: &Option<&HashMap<String, String>>, s: &str) -
     if let Some(args) = args {
         for (k, v) in args.iter() {
             build = build.replace(&format!("${{{}}}", k), v);
-        }    
+        }
     }
 
     return build;
