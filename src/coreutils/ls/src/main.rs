@@ -20,28 +20,44 @@ use std::fs;
 use std::process;
 use std::time::{Duration, UNIX_EPOCH};
 
+/// Represents the mode of ls we're running (Which files to include)
 enum LsAllMode {
+    /// Only non hidden files are shown
     None,
+
+    /// All hidden files, except for . and .. are shown
     AlmostAll,
+
+    /// All files are shown
     All,
 }
 
 impl LsAllMode {
+    /// Construct an LsAllMode based on the flags given
     fn from_flags(all: bool, almost_all: bool) -> LsAllMode {
         if all {
+            // If all is set, the result is all (No matter about almost_all)
             return LsAllMode::All;
         } else if almost_all {
+            // Otherwise if !all && almost_all, we're doing almost all
             return LsAllMode::AlmostAll;
         }
 
+        // Otherwise we do None
         return LsAllMode::None;
     }
 
+    /// Determins whether the given mode would accept the given path to be printed
     fn accept(&self, p: &PathBuf) -> bool {
         if let Some(name) = p.components().last() {
             return match self {
+                // All accepts everything
                 LsAllMode::All => true,
+
+                // AlmostAll accepts everything except . and ..
                 LsAllMode::AlmostAll => name != Component::CurDir && name != Component::ParentDir,
+
+                // None accepts everything not a hidden file
                 LsAllMode::None => match name {
                     Component::Prefix(_) | Component::CurDir | Component::ParentDir => false,
                     Component::RootDir => true,
@@ -54,10 +70,12 @@ impl LsAllMode {
     }
 }
 
+/// Returns a list of paths in a directory (returned by read_dir), alphabetically sorted by name
 fn get_children_sorted(path: &PathBuf) -> Result<Vec<PathBuf>, std::io::Error> {
     let mut children: Vec<PathBuf> = fs::read_dir(path)?
         .map(|c| c.expect("ls: failed to convert child into path").path())
         .collect();
+
     children.sort_by(|a, b| {
         a.file_name()
             .unwrap()
@@ -65,9 +83,14 @@ fn get_children_sorted(path: &PathBuf) -> Result<Vec<PathBuf>, std::io::Error> {
             .to_lowercase()
             .cmp(&b.file_name().unwrap().to_string_lossy().to_lowercase())
     });
+
     return Ok(children);
 }
 
+/// Transforms the entry into a String, formatting it based on the context
+/// If it's a parent dir (. or ..), then we just return that
+/// If we've ls'd inside a dir e.g. `ls dir/`, then we prefix everything with the full path
+/// Otherwise (e.g. if we're doing a recursive print), we return the 
 fn format_file_name(entry: &LsResult) -> String {
     let full_path_str = entry.path.to_string_lossy();
     if full_path_str == "." || full_path_str == ".." {
@@ -79,16 +102,32 @@ fn format_file_name(entry: &LsResult) -> String {
 }
 
 struct LsMode {
+    /// Whether we're doing extended stat output
     long: bool,
+
+    /// The mode to determine which files we're printing
     all_mode: LsAllMode,
+
+    /// Whether we will recurse into the directories we find
     recursive: bool,
+
+    /// Whether we're just printing the directory listing, or the files inside it
     directory: bool,
 }
 
+/// An Iterator that allows iterating over a file tree, optionally recursing into directories we find
+/// or only giving the given directory back
 struct LsIter {
+    /// Whethe to recurse into directories we find
     recurse: bool,
+
+    /// Whether to just return the given dir
     directory: bool,
+
+    /// A list of files still to return in the current directory
     current_directory: VecDeque<PathBuf>,
+
+    /// The list of directories we have not yet processed, e.g. if we're recursing
     to_process_directories: VecDeque<PathBuf>,
 }
 
@@ -101,14 +140,13 @@ struct LsResult {
 }
 
 impl LsResult {
-    fn print(&self, mode: &LsMode, user_map: &HashMap<u32, String>, group_map: &HashMap<u32, String>) {
+    fn to_string(&self, mode: &LsMode, user_map: &HashMap<u32, String>, group_map: &HashMap<u32, String>) -> String {
         if self.is_new_dir && mode.recursive {
-            println!("{}: ", self.path.display());
-            return;
+            return format!("{}: \n", self.path.display());
         }
 
         if !mode.long {
-            print!("{} ", format_file_name(self));
+            return format!("{} ", format_file_name(self));
         } else {
             let sr = &self.stat_result;
             let d = UNIX_EPOCH + Duration::from_secs(sr.st_ctime as u64);
@@ -129,8 +167,8 @@ impl LsResult {
             let gid_str = format!("{}", sr.st_gid);
             let user = user_map.get(&sr.st_uid).unwrap_or(&uid_str);
             let group = group_map.get(&sr.st_gid).unwrap_or(&gid_str);
-            println!(
-                "{}. {} {} {} {} {} {}",
+            return format!(
+                "{}. {} {} {} {} {} {}\n",
                 format_file_mode(sr.st_mode),
                 sr.st_nlink,
                 user,
@@ -217,8 +255,17 @@ fn do_ls(path: &PathBuf, mode: &LsMode, user_map: &HashMap<u32, String>, group_m
     let ls_iter = LsIter::new(path, mode.recursive, mode.directory);
 
     let mut printed_something = false;
+
+    // If we aren't ls'ing in long mode, then we will buffer the results and print them in a grid
+    // for each dir we go into
+    let mut to_print_buffer = Vec::new();
     for result in ls_iter {
         if result.is_new_dir && printed_something {
+            // For every new directory, if we have a buffer
+            if to_print_buffer.len() > 0 {
+                print_as_grid(&to_print_buffer, 80);
+                to_print_buffer.clear();
+            }
             // Print a seperator
             println!("\n");
         } else if result.is_new_dir && !mode.recursive && !mode.directory {
@@ -228,9 +275,19 @@ fn do_ls(path: &PathBuf, mode: &LsMode, user_map: &HashMap<u32, String>, group_m
 
         // Second condition overrides the -a parameter if we're printing the current dir in directory mode
         if mode.all_mode.accept(&result.path) || (!printed_something && mode.directory) {
-            result.print(mode, user_map, group_map);
+            if !mode.long && !result.is_new_dir {
+                to_print_buffer.push(result.to_string(mode, user_map, group_map))
+            }
+            else {
+                print!("{}", result.to_string(mode, user_map, group_map));
+            }
             printed_something = true;
         }
+    }
+
+    if to_print_buffer.len() > 0 {
+        print_as_grid(&to_print_buffer, 238);
+        to_print_buffer.clear();
     }
 
     if !mode.long && printed_something {
@@ -241,6 +298,64 @@ fn do_ls(path: &PathBuf, mode: &LsMode, user_map: &HashMap<u32, String>, group_m
         true => Ok(()),
         false => Err(()),
     };
+}
+
+/// Calculates an optimal grid size to organise the given strings into an (n x m) grid, 
+/// with each column padded to the maximum width of it's entries, such that no row exceeds
+/// some maximum length
+fn organise_into_grid(items: &Vec<String>, max_width: usize) -> (usize, usize) {
+    let mut num_columns = items.len();
+    let mut num_rows = ((items.len() as f64) / (num_columns as f64)).floor() as usize;
+    let lengths: Vec<usize> = items.iter().map(|x| x.len()).collect();
+
+    // The width of each row is the maximum width in each column + 2 (spaces for padding) for each column
+    // TODO: A Binary search is probably more efficient here
+    while {
+        let row_width: usize = (0..num_columns).map(|i| lengths[i * num_rows..(i + 1) * num_rows].iter().max().unwrap_or(&0)).sum::<usize>() + (num_columns - 1) * 2;
+        row_width > max_width && num_columns > 1
+    } {
+        num_columns -= 1;
+        num_rows = ((items.len() as f64) / (num_columns as f64)).floor() as usize;
+    }
+
+    return (num_columns, num_rows);
+}
+
+/// prints the given items as an (n x m) grid, such that no row is greater than max_width characters wide
+/// Currently this is arranged in columnular order, i.e. subsequent values go down the column rather than along the row
+/// This is useful when formatting directories when there are lots of children
+fn print_as_grid(items: &Vec<String>, max_width: usize) {
+    // calculate the optimal shape of the grid
+    let (ncols, nrows) = organise_into_grid(items, max_width);
+
+    // calculate the lengths of each string, and the resulting size of each column
+    let lengths: Vec<usize> = items.iter().map(|x| x.len()).collect();
+    let col_widths = (0..ncols).map(|i| *lengths[i * nrows..(i + 1) * nrows].iter().max().unwrap_or(&0)).collect::<Vec<usize>>();
+
+    for y in 0..nrows {
+        // This gets a bit complicated, so a diagram may be helpful:
+        // Consider a grid (where the given number is the index into items)
+        // 0 2 4 6
+        // 1 3 5 7
+        // The following for loop loops over a tuple of the column index, and the items index
+        // So for row 0, it would be (0, 0), (1, 2), (2, 4), (3, 6)
+        // And for row 1 it would be (0, 1), (1, 3), (2, 5), (3, 7)
+        for (x, i) in (y..(ncols * nrows + y - 1)).step_by(nrows).enumerate() {
+            print!("{}", items[i]);
+            
+            if items[i].len() != col_widths[x] {
+                // We need to pad if the item isn't the biggest
+                let padding = col_widths[x] - items[i].len();
+                print!("{}", (0..padding).map(|_| " ").collect::<String>());
+            }
+
+            if x == ncols - 1 {
+                print!("\n");
+            } else {
+                print!("  ");
+            }
+        }
+    }
 }
 
 fn main() {
