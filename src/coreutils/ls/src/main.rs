@@ -6,6 +6,7 @@ extern crate nix;
 use libq::io::FileType;
 use libq::passwd;
 use libq::strings::format_file_mode;
+use libq::terminal::get_window_size;
 
 use clap::{App, Arg};
 use nix::fcntl::readlink;
@@ -90,7 +91,7 @@ fn get_children_sorted(path: &PathBuf) -> Result<Vec<PathBuf>, std::io::Error> {
 /// Transforms the entry into a String, formatting it based on the context
 /// If it's a parent dir (. or ..), then we just return that
 /// If we've ls'd inside a dir e.g. `ls dir/`, then we prefix everything with the full path
-/// Otherwise (e.g. if we're doing a recursive print), we return the 
+/// Otherwise (e.g. if we're doing a recursive print), we return the
 fn format_file_name(entry: &LsResult) -> String {
     let full_path_str = entry.path.to_string_lossy();
     if full_path_str == "." || full_path_str == ".." {
@@ -251,7 +252,13 @@ impl Iterator for LsIter {
     }
 }
 
-fn do_ls(path: &PathBuf, mode: &LsMode, user_map: &HashMap<u32, String>, group_map: &HashMap<u32, String>) -> Result<(), ()> {
+fn do_ls(
+    path: &PathBuf,
+    mode: &LsMode,
+    user_map: &HashMap<u32, String>,
+    group_map: &HashMap<u32, String>,
+    window_width: usize,
+) -> Result<(), ()> {
     let ls_iter = LsIter::new(path, mode.recursive, mode.directory);
 
     let mut printed_something = false;
@@ -263,7 +270,7 @@ fn do_ls(path: &PathBuf, mode: &LsMode, user_map: &HashMap<u32, String>, group_m
         if result.is_new_dir && printed_something {
             // For every new directory, if we have a buffer
             if to_print_buffer.len() > 0 {
-                print_as_grid(&to_print_buffer, 80);
+                print_as_grid(&to_print_buffer, window_width);
                 to_print_buffer.clear();
             }
             // Print a seperator
@@ -277,8 +284,7 @@ fn do_ls(path: &PathBuf, mode: &LsMode, user_map: &HashMap<u32, String>, group_m
         if mode.all_mode.accept(&result.path) || (!printed_something && mode.directory) {
             if !mode.long && !result.is_new_dir {
                 to_print_buffer.push(result.to_string(mode, user_map, group_map))
-            }
-            else {
+            } else {
                 print!("{}", result.to_string(mode, user_map, group_map));
             }
             printed_something = true;
@@ -286,7 +292,7 @@ fn do_ls(path: &PathBuf, mode: &LsMode, user_map: &HashMap<u32, String>, group_m
     }
 
     if to_print_buffer.len() > 0 {
-        print_as_grid(&to_print_buffer, 238);
+        print_as_grid(&to_print_buffer, window_width);
         to_print_buffer.clear();
     }
 
@@ -300,7 +306,7 @@ fn do_ls(path: &PathBuf, mode: &LsMode, user_map: &HashMap<u32, String>, group_m
     };
 }
 
-/// Calculates an optimal grid size to organise the given strings into an (n x m) grid, 
+/// Calculates an optimal grid size to organise the given strings into an (n x m) grid,
 /// with each column padded to the maximum width of it's entries, such that no row exceeds
 /// some maximum length
 fn organise_into_grid(items: &Vec<String>, max_width: usize) -> (usize, usize) {
@@ -311,7 +317,10 @@ fn organise_into_grid(items: &Vec<String>, max_width: usize) -> (usize, usize) {
     // The width of each row is the maximum width in each column + 2 (spaces for padding) for each column
     // TODO: A Binary search is probably more efficient here
     while {
-        let row_width: usize = (0..num_columns).map(|i| lengths[i * num_rows..(i + 1) * num_rows].iter().max().unwrap_or(&0)).sum::<usize>() + (num_columns - 1) * 2;
+        let row_width: usize = (0..num_columns)
+            .map(|i| lengths[i * num_rows..(i + 1) * num_rows].iter().max().unwrap_or(&0))
+            .sum::<usize>()
+            + (num_columns - 1) * 2;
         row_width > max_width && num_columns > 1
     } {
         num_columns -= 1;
@@ -330,7 +339,9 @@ fn print_as_grid(items: &Vec<String>, max_width: usize) {
 
     // calculate the lengths of each string, and the resulting size of each column
     let lengths: Vec<usize> = items.iter().map(|x| x.len()).collect();
-    let col_widths = (0..ncols).map(|i| *lengths[i * nrows..(i + 1) * nrows].iter().max().unwrap_or(&0)).collect::<Vec<usize>>();
+    let col_widths = (0..ncols)
+        .map(|i| *lengths[i * nrows..(i + 1) * nrows].iter().max().unwrap_or(&0))
+        .collect::<Vec<usize>>();
 
     for y in 0..nrows {
         // This gets a bit complicated, so a diagram may be helpful:
@@ -342,7 +353,7 @@ fn print_as_grid(items: &Vec<String>, max_width: usize) {
         // And for row 1 it would be (0, 1), (1, 3), (2, 5), (3, 7)
         for (x, i) in (y..(ncols * nrows + y - 1)).step_by(nrows).enumerate() {
             print!("{}", items[i]);
-            
+
             if items[i].len() != col_widths[x] {
                 // We need to pad if the item isn't the biggest
                 let padding = col_widths[x] - items[i].len();
@@ -360,7 +371,7 @@ fn print_as_grid(items: &Vec<String>, max_width: usize) {
 
 fn main() {
     let args = App::new("ls")
-        .version("0.1")
+        .version("0.2")
         .author("Colin D. <colin@quirl.co.nz>")
         .about("Create the DIRECTORY(ies), if they do not already exist.")
         .arg(Arg::with_name("long").short("l").help("Use long listing format"))
@@ -408,9 +419,12 @@ fn main() {
         gid_map.insert(group.gid, group.name);
     }
 
+    // Get the window width, defaulting to 80 chars wide because 1980 was cool
+    let window_width = get_window_size().and_then(|x| Ok(x.ws_col.into())).unwrap_or(80);
+
     let mut exit_code = 0;
     for file in files.iter() {
-        match do_ls(file, &mode, &uid_map, &gid_map) {
+        match do_ls(file, &mode, &uid_map, &gid_map, window_width) {
             Ok(_) => {}
             Err(_) => {
                 exit_code = 1;
