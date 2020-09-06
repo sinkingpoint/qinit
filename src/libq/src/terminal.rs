@@ -6,7 +6,7 @@ use super::io::STDIN_FD;
 use nix::libc::c_int;
 use nix::pty::Winsize;
 use nix::sys::termios::{ControlFlags, InputFlags, LocalFlags, OutputFlags, SpecialCharacterIndices, Termios};
-use nix::{ioctl_none, ioctl_read, ioctl_write_ptr};
+use nix::{ioctl_none_bad, ioctl_read_bad, ioctl_write_ptr_bad};
 
 const ESC: &str = "\x1b[";
 
@@ -228,17 +228,17 @@ pub fn reset_virtual_console(settings: &mut Termios, keep_cflags: bool, utf8_sup
     settings.control_chars[SpecialCharacterIndices::VEOL2 as usize] = 0;
 }
 
-ioctl_read! {
+ioctl_read_bad! {
     /// Make the given terminal the controlling terminal of the calling process. The calling
     /// process must be a session leader and not have a controlling terminal already. If the
     /// terminal is already the controlling terminal of a different session group then the
     /// ioctl will fail with **EPERM**, unless the caller is root (more precisely: has the
     /// **CAP_SYS_ADMIN** capability) and arg equals 1, in which case the terminal is stolen
     /// and all processes that had it as controlling terminal lose it.
-    tiocsctty, b'T', 0x0E, c_int
+    tiocsctty, 0x540E, c_int
 }
 
-ioctl_none! {
+ioctl_none_bad! {
     // Detach the calling process from its controlling terminal.
 
     // If the process is the session leader, then SIGHUP and SIGCONT signals
@@ -251,15 +251,15 @@ ioctl_none! {
     // open succeeds, it detaches itself from the terminal by using
     // TIOCNOTTY, while if the open fails, it is obviously not attached to a
     // terminal and does not need to detach itself.
-    tiocnotty, b'T', 0x22
+    tiocnotty, 0x5422
 }
 
-ioctl_read! {
+ioctl_read_bad! {
     /// get the status of modem bits.
-    tiocmget, b'T', 0x0E, c_int
+    tiocmget, 0x5415, c_int
 }
 
-ioctl_read! {
+ioctl_read_bad! {
     /// Gets current keyboard mode.  argp points to a long which is
     /// set to one of these:
     ///
@@ -268,12 +268,12 @@ ioctl_read! {
     /// K_MEDIUMRAW   0x02  /* Medium raw (scancode) mode */
     /// K_UNICODE     0x03  /* Unicode mode */
     /// K_OFF         0x04  /* Disabled mode; since Linux 2.6.39 */
-    kdgkbmode, b'K', 0x44, c_int
+    kdgkbmode, 0x4B44, c_int
 }
 
-ioctl_read! {
+ioctl_read_bad! {
     /// Get window size
-    tiocgwinsz, b'T', 0x13, Winsize
+    tiocgwinsz, 0x5413, Winsize
 }
 
 pub fn get_window_size() -> Result<Winsize, nix::Error> {
@@ -285,7 +285,7 @@ pub fn get_window_size() -> Result<Winsize, nix::Error> {
     };
 
     unsafe {
-        match tiocgwinsz(STDIN_FD, &mut winsize) {
+        match tiocgwinsz(0, &mut winsize) {
             Ok(_) => {
                 return Ok(winsize);
             }
@@ -296,9 +296,9 @@ pub fn get_window_size() -> Result<Winsize, nix::Error> {
     }
 }
 
-ioctl_write_ptr! {
+ioctl_write_ptr_bad! {
     /// Set window size
-    tiocswinsz, b'T', 0x14, Winsize
+    tiocswinsz, 0x5414, Winsize
 }
 
 #[derive(Debug)]
