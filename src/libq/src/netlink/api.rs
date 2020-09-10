@@ -1,11 +1,11 @@
-use io::{read_u16, read_u32, Endianness};
+use io::{read_u16, read_u32, write_u16, write_u32, BufferReader, Endianness};
 use nix::unistd::getpid;
 use num_enum::TryFromPrimitive;
 
 use super::error::NetLinkError;
 
 use std::convert::TryFrom;
-use std::io::Read;
+use std::io::{Read, Write};
 
 libc_bitflags! {
     #[allow(non_camel_case_types, dead_code)]
@@ -21,95 +21,6 @@ libc_bitflags! {
         NLM_F_EXCL as u16;
         NLM_F_CREATE as u16;
         NLM_F_APPEND as u16;
-    }
-}
-
-libc_bitflags! {
-    #[allow(non_camel_case_types, dead_code)]
-    pub struct InterfaceFlags : u32 {
-        IFF_UP as u32;
-        IFF_BROADCAST as u32;
-        IFF_DEBUG as u32;
-        IFF_LOOPBACK as u32;
-        IFF_POINTOPOINT as u32;
-        IFF_RUNNING as u32;
-        IFF_NOARP as u32;
-        IFF_PROMISC as u32;
-        IFF_NOTRAILERS as u32;
-        IFF_ALLMULTI as u32;
-        IFF_MASTER as u32;
-        IFF_SLAVE as u32;
-        IFF_MULTICAST as u32;
-        IFF_PORTSEL as u32;
-        IFF_AUTOMEDIA as u32;
-        IFF_DYNAMIC as u32;
-        IFF_LOWER_UP as u32;
-        IFF_DORMANT as u32;
-        IFF_ECHO as u32;
-    }
-}
-
-libc_enum! {
-    #[allow(non_camel_case_types, dead_code)]
-    #[derive(TryFromPrimitive)]
-    #[repr(u16)]
-    pub enum InterfaceType {
-        ARPHRD_NETROM as u16,
-        ARPHRD_ETHER as u16,
-        ARPHRD_EETHER as u16,
-        ARPHRD_AX25 as u16,
-        ARPHRD_PRONET as u16,
-        ARPHRD_CHAOS as u16,
-        ARPHRD_IEEE802 as u16,
-        ARPHRD_ARCNET as u16,
-        ARPHRD_APPLETLK as u16,
-        ARPHRD_DLCI as u16,
-        ARPHRD_ATM as u16,
-        ARPHRD_METRICOM as u16,
-        ARPHRD_IEEE1394 as u16,
-        ARPHRD_EUI64 as u16,
-        ARPHRD_INFINIBAND as u16,
-        ARPHRD_SLIP as u16,
-        ARPHRD_CSLIP as u16,
-        ARPHRD_SLIP6 as u16,
-        ARPHRD_CSLIP6 as u16,
-        ARPHRD_RSRVD as u16,
-        ARPHRD_ADAPT as u16,
-        ARPHRD_ROSE as u16,
-        ARPHRD_X25 as u16,
-        ARPHRD_HWX25 as u16,
-        ARPHRD_PPP as u16,
-        ARPHRD_CISCO as u16,
-        ARPHRD_LAPB as u16,
-        ARPHRD_DDCMP as u16,
-        ARPHRD_RAWHDLC as u16,
-        ARPHRD_TUNNEL as u16,
-        ARPHRD_TUNNEL6 as u16,
-        ARPHRD_FRAD as u16,
-        ARPHRD_SKIP as u16,
-        ARPHRD_LOOPBACK as u16,
-        ARPHRD_LOCALTLK as u16,
-        ARPHRD_FDDI as u16,
-        ARPHRD_BIF as u16,
-        ARPHRD_SIT as u16,
-        ARPHRD_IPDDP as u16,
-        ARPHRD_IPGRE as u16,
-        ARPHRD_PIMREG as u16,
-        ARPHRD_HIPPI as u16,
-        ARPHRD_ASH as u16,
-        ARPHRD_ECONET as u16,
-        ARPHRD_IRDA as u16,
-        ARPHRD_FCPP as u16,
-        ARPHRD_FCAL as u16,
-        ARPHRD_FCPL as u16,
-        ARPHRD_FCFABRIC as u16,
-        ARPHRD_IEEE802_TR as u16,
-        ARPHRD_IEEE80211 as u16,
-        ARPHRD_IEEE80211_PRISM as u16,
-        ARPHRD_IEEE80211_RADIOTAP as u16,
-        ARPHRD_IEEE802154 as u16,
-        ARPHRD_VOID as u16,
-        ARPHRD_NONE as u16,
     }
 }
 
@@ -174,7 +85,6 @@ libc_enum! {
 }
 
 #[derive(Debug)]
-#[repr(C)]
 pub struct NetLinkMessageHeader {
     pub length: u32,                /* Length of message including header */
     pub msg_type: MessageType,      /* Type of message content */
@@ -184,6 +94,11 @@ pub struct NetLinkMessageHeader {
 }
 
 impl NetLinkMessageHeader {
+    /// Gets the size of a NetLinkMessageHeader (16 bytes)
+    pub fn size() -> u32 {
+        return 16;
+    }
+
     pub fn new(msg_type: MessageType, sequence_number: u32, length: u32, flags: NetLinkMessageFlags) -> NetLinkMessageHeader {
         return NetLinkMessageHeader {
             length: length,
@@ -194,8 +109,21 @@ impl NetLinkMessageHeader {
         };
     }
 
-    pub fn read<T: Read>(mut reader: &mut T) -> Result<NetLinkMessageHeader, NetLinkError> {
+    pub fn write<T: Write>(&self, writer: &mut T) -> Result<(), NetLinkError> {
+        write_u32(writer, self.length, &Endianness::Little)?;
+        write_u16(writer, self.msg_type as u16, &Endianness::Little)?;
+        write_u16(writer, self.flags.bits(), &Endianness::Little)?;
+        write_u32(writer, self.sequence_number, &Endianness::Little)?;
+        write_u32(writer, self.pid, &Endianness::Little)?;
+
+        return Ok(());
+    }
+
+    pub fn read<T: Read>(reader: &mut T) -> Result<NetLinkMessageHeader, NetLinkError> {
         let endianness = &Endianness::Little;
+        let mut buffer = vec![0; Self::size() as usize];
+        reader.read(&mut buffer);
+        let mut reader = BufferReader::new(&buffer);
         return Ok(NetLinkMessageHeader {
             length: read_u32(&mut reader, endianness)?,
             msg_type: MessageType::try_from(read_u16(&mut reader, endianness)?)?,

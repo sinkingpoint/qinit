@@ -53,6 +53,12 @@ pub struct RawFdReader {
     fd: RawFd,
 }
 
+impl RawFdReader {
+    pub fn new(fd: RawFd) -> Self {
+        return Self { fd };
+    }
+}
+
 impl FromRawFd for RawFdReader {
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
         Self { fd }
@@ -111,6 +117,10 @@ pub struct BufferReader<'a> {
 impl<'a> BufferReader<'a> {
     pub fn new(buffer: &'a [u8]) -> BufferReader<'a> {
         return BufferReader { buffer: buffer, offset: 0 };
+    }
+
+    pub fn has_more(&self) -> bool {
+        return self.offset < self.buffer.len();
     }
 }
 
@@ -261,6 +271,21 @@ pub fn read_u32<T: Read>(r: &mut T, endian: &Endianness) -> io::Result<u32> {
         Endianness::Little => int_from_bytes_little_endian(buffer[0], buffer[1], buffer[2], buffer[3]),
         Endianness::Big => int_from_bytes_little_endian(buffer[3], buffer[2], buffer[1], buffer[0]),
     });
+}
+
+pub fn write_u8<T: Write>(w: &mut T, data: u8) -> io::Result<()> {
+    let mut buf = [data];
+
+    return w.write_all(&mut buf);
+}
+
+pub fn write_u16<T: Write>(w: &mut T, data: u16, endian: &Endianness) -> io::Result<()> {
+    let mut buf = match endian {
+        Endianness::Little => [(data & 0xFF) as u8, ((data >> 8) & 0xFF) as u8],
+        Endianness::Big => [((data >> 8) & 0xFF) as u8, (data & 0xFF) as u8],
+    };
+
+    return w.write_all(&mut buf);
 }
 
 pub fn write_u32<T: Write>(w: &mut T, data: u32, endian: &Endianness) -> io::Result<()> {

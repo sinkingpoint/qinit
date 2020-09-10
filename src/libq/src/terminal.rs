@@ -285,7 +285,7 @@ pub fn get_window_size() -> Result<Winsize, nix::Error> {
     };
 
     unsafe {
-        match tiocgwinsz(0, &mut winsize) {
+        match tiocgwinsz(STDIN_FD, &mut winsize) {
             Ok(_) => {
                 return Ok(winsize);
             }

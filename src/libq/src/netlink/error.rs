@@ -12,6 +12,7 @@ pub enum NetLinkError {
     IncorrectBufferSize,
     InvalidString,
     InvalidMessageType,
+    InvalidEnumPrimitive(u64),
 }
 
 impl From<io::Error> for NetLinkError {
