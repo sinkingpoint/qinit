@@ -122,7 +122,7 @@ impl NetLinkMessageHeader {
     pub fn read<T: Read>(reader: &mut T) -> Result<NetLinkMessageHeader, NetLinkError> {
         let endianness = &Endianness::Little;
         let mut buffer = vec![0; Self::size() as usize];
-        reader.read(&mut buffer);
+        reader.read(&mut buffer)?;
         let mut reader = BufferReader::new(&buffer);
         return Ok(NetLinkMessageHeader {
             length: read_u32(&mut reader, endianness)?,

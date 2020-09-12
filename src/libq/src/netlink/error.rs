@@ -1,4 +1,3 @@
-use super::api::MessageType;
 use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use std::array::TryFromSliceError;
 use std::ffi::FromBytesWithNulError;
@@ -9,6 +8,7 @@ use std::str::Utf8Error;
 pub enum NetLinkError {
     IOError(io::Error),
     NixError(nix::Error),
+    InvalidNetlinkProtocol,
     IncorrectBufferSize,
     InvalidString,
     InvalidEnumPrimitive(u64),
@@ -46,7 +46,7 @@ impl From<TryFromSliceError> for NetLinkError {
 }
 
 impl<T: TryFromPrimitive> From<TryFromPrimitiveError<T>> for NetLinkError {
-    fn from(e: TryFromPrimitiveError<T>) -> NetLinkError {
+    fn from(_e: TryFromPrimitiveError<T>) -> NetLinkError {
         return NetLinkError::InvalidEnumPrimitive(0);
     }
 }

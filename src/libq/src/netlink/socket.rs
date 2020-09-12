@@ -10,8 +10,7 @@ pub struct NetLinkSocket {
     socket_fd: RawFd,
     reader: BufReader<RawFdReceiver>,
     sequence_number: u32,
-    address: NetlinkAddr,
-    protocol: SockProtocol,
+    pub protocol: SockProtocol,
 }
 
 impl NetLinkSocket {
@@ -27,7 +26,6 @@ impl NetLinkSocket {
             reader: BufReader::new(RawFdReceiver::new(socket_fd, MsgFlags::empty())),
             sequence_number: 1,
             protocol: protocol,
-            address: address,
         });
     }
 

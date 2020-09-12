@@ -1,8 +1,9 @@
-use super::types::{Interface, InterfaceInfoMessage, InterfaceRoutingAttributes};
+use super::link_types::{Interface, InterfaceInfoMessage, InterfaceRoutingAttributes};
 use io::BufferReader;
 use netlink::api::{MessageType, NetLinkMessageFlags, NetLinkMessageHeader};
 use netlink::error::NetLinkError;
 use netlink::NetLinkSocket;
+use nix::sys::socket::SockProtocol;
 use std::io::{Read, Write};
 
 pub struct Links<'a> {
@@ -89,6 +90,10 @@ pub trait RTNetlink {
 
 impl RTNetlink for NetLinkSocket {
     fn get_links(&mut self) -> Result<Links, NetLinkError> {
+        if self.protocol != SockProtocol::NetlinkRoute {
+            return Err(NetLinkError::InvalidNetlinkProtocol);
+        }
+
         return Links::new(self);
     }
 }

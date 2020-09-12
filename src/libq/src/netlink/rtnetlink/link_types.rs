@@ -1,4 +1,4 @@
-use io::{read_u16, read_u32, read_u64, read_u8, write_u16, write_u32, write_u8, BufferReader, Endianness};
+use io::{read_u16, read_u32, read_u64, read_u8, write_u16, write_u32, BufferReader, Endianness};
 use netlink::error::NetLinkError;
 use num_enum::TryFromPrimitive;
 
@@ -87,7 +87,7 @@ impl InterfaceFlags {
 
         return str_map
             .into_iter()
-            .filter(|(k, v)| self.contains(*k))
+            .filter(|(k, _)| self.contains(*k))
             .map(|(_, v)| v)
             .collect::<Vec<&str>>()
             .join(",");
@@ -800,14 +800,6 @@ pub struct InterfaceRoutingAttributes {
     pub perm_address: Option<MacAddress>,
 
     pub unknowns: Vec<(u16, Vec<u8>)>,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum RAttrType {
-    TopLevelValue,
-    LinkInfoValue,
-    InfoDataValue,
-    InfoSlaveDataValue,
 }
 
 impl InterfaceRoutingAttributes {

@@ -1,4 +1,4 @@
 mod api;
-mod types;
+mod link_types;
 
 pub use self::api::RTNetlink;
