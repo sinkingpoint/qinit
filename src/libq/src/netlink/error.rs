@@ -1,5 +1,5 @@
 use super::api::MessageType;
-use num_enum::TryFromPrimitiveError;
+use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use std::array::TryFromSliceError;
 use std::ffi::FromBytesWithNulError;
 use std::io;
@@ -11,8 +11,8 @@ pub enum NetLinkError {
     NixError(nix::Error),
     IncorrectBufferSize,
     InvalidString,
-    InvalidMessageType,
     InvalidEnumPrimitive(u64),
+    UnknownRoutingAttribute(u16),
 }
 
 impl From<io::Error> for NetLinkError {
@@ -45,9 +45,8 @@ impl From<TryFromSliceError> for NetLinkError {
     }
 }
 
-impl From<TryFromPrimitiveError<MessageType>> for NetLinkError {
-    fn from(e: TryFromPrimitiveError<MessageType>) -> NetLinkError {
-        println!("{:?}", e);
-        return NetLinkError::InvalidMessageType;
+impl<T: TryFromPrimitive> From<TryFromPrimitiveError<T>> for NetLinkError {
+    fn from(e: TryFromPrimitiveError<T>) -> NetLinkError {
+        return NetLinkError::InvalidEnumPrimitive(0);
     }
 }

@@ -3,21 +3,26 @@ use netlink::error::NetLinkError;
 use num_enum::TryFromPrimitive;
 
 use std::collections::HashMap;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::ffi::CStr;
 use std::fmt;
 use std::io::{Read, Write};
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct MacAddress(pub [u8; 6]);
 
-impl fmt::Display for MacAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        return write!(
-            f,
+impl MacAddress {
+    fn to_string(&self) -> String {
+        return format!(
             "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
             self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
         );
+    }
+}
+
+impl fmt::Display for MacAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        return write!(f, "{}", self.to_string());
     }
 }
 
@@ -89,6 +94,12 @@ impl InterfaceFlags {
     }
 }
 
+impl fmt::Display for InterfaceFlags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        return write!(f, "{}", self.to_string());
+    }
+}
+
 libc_enum! {
     #[allow(non_camel_case_types, dead_code)]
     #[derive(TryFromPrimitive)]
@@ -153,44 +164,94 @@ libc_enum! {
     }
 }
 
+impl InterfaceType {
+    pub fn to_string(&self) -> String {
+        return match self {
+            InterfaceType::ARPHRD_NETROM => "netrom",
+            InterfaceType::ARPHRD_ETHER => "ether",
+            InterfaceType::ARPHRD_EETHER => "eether",
+            InterfaceType::ARPHRD_AX25 => "ax25",
+            InterfaceType::ARPHRD_PRONET => "pronet",
+            InterfaceType::ARPHRD_CHAOS => "chaos",
+            InterfaceType::ARPHRD_IEEE802 => "ieee802",
+            InterfaceType::ARPHRD_ARCNET => "arcnet",
+            InterfaceType::ARPHRD_APPLETLK => "appletk",
+            InterfaceType::ARPHRD_DLCI => "dlci",
+            InterfaceType::ARPHRD_ATM => "atm",
+            InterfaceType::ARPHRD_METRICOM => "metricom",
+            InterfaceType::ARPHRD_IEEE1394 => "ieee1394",
+            InterfaceType::ARPHRD_EUI64 => "eui64",
+            InterfaceType::ARPHRD_INFINIBAND => "infiniband",
+            InterfaceType::ARPHRD_SLIP => "slip",
+            InterfaceType::ARPHRD_CSLIP => "cslip",
+            InterfaceType::ARPHRD_SLIP6 => "slip6",
+            InterfaceType::ARPHRD_CSLIP6 => "cslip6",
+            InterfaceType::ARPHRD_RSRVD => "rsrvd",
+            InterfaceType::ARPHRD_ADAPT => "adapt",
+            InterfaceType::ARPHRD_ROSE => "rose",
+            InterfaceType::ARPHRD_X25 => "x25",
+            InterfaceType::ARPHRD_HWX25 => "hwx25",
+            InterfaceType::ARPHRD_PPP => "ppp",
+            InterfaceType::ARPHRD_CISCO => "cisco",
+            InterfaceType::ARPHRD_LAPB => "lapb",
+            InterfaceType::ARPHRD_DDCMP => "ddcmp",
+            InterfaceType::ARPHRD_RAWHDLC => "rawhdlc",
+            InterfaceType::ARPHRD_TUNNEL => "tunnel",
+            InterfaceType::ARPHRD_TUNNEL6 => "tunnel6",
+            InterfaceType::ARPHRD_FRAD => "frad",
+            InterfaceType::ARPHRD_SKIP => "skip",
+            InterfaceType::ARPHRD_LOOPBACK => "loopback",
+            InterfaceType::ARPHRD_LOCALTLK => "localtlk",
+            InterfaceType::ARPHRD_FDDI => "fddi",
+            InterfaceType::ARPHRD_BIF => "bif",
+            InterfaceType::ARPHRD_SIT => "sit",
+            InterfaceType::ARPHRD_IPDDP => "ipddp",
+            InterfaceType::ARPHRD_IPGRE => "ipgre",
+            InterfaceType::ARPHRD_PIMREG => "pimreg",
+            InterfaceType::ARPHRD_HIPPI => "hippi",
+            InterfaceType::ARPHRD_ASH => "ash",
+            InterfaceType::ARPHRD_ECONET => "econet",
+            InterfaceType::ARPHRD_IRDA => "irda",
+            InterfaceType::ARPHRD_FCPP => "fccp",
+            InterfaceType::ARPHRD_FCAL => "fcal",
+            InterfaceType::ARPHRD_FCPL => "fcpl",
+            InterfaceType::ARPHRD_FCFABRIC => "fcfabric",
+            InterfaceType::ARPHRD_IEEE802_TR => "ieee802_tr",
+            InterfaceType::ARPHRD_IEEE80211 => "ieee80211",
+            InterfaceType::ARPHRD_IEEE80211_PRISM => "ieee80211_prism",
+            InterfaceType::ARPHRD_IEEE80211_RADIOTAP => "ieee80211_radiotap",
+            InterfaceType::ARPHRD_IEEE802154 => "ieee802154",
+            InterfaceType::ARPHRD_VOID => "void",
+            InterfaceType::ARPHRD_NONE => "none",
+        }
+        .to_owned();
+    }
+}
+
+impl fmt::Display for InterfaceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        return write!(f, "{}", self.to_string());
+    }
+}
+
 #[derive(Debug)]
 pub struct Interface {
     pub interface_type: InterfaceType,   /* Device type */
     pub interface_index: u32,            /* Interface index */
     pub interface_flags: InterfaceFlags, /* Device flags  */
     pub change_mask: u32,
-    pub rattrs: Vec<RoutingAttribute>,
+    pub rtattrs: InterfaceRoutingAttributes,
 }
 
 impl Interface {
-    pub fn from_raw_messages(info_msg: InterfaceInfoMessage, rattrs: Vec<RoutingAttribute>) -> Interface {
+    pub fn from_raw_messages(info_msg: InterfaceInfoMessage, rtattrs: InterfaceRoutingAttributes) -> Interface {
         return Interface {
             interface_type: info_msg.interface_type,
             interface_index: info_msg.interface_index,
             interface_flags: info_msg.interface_flags,
             change_mask: info_msg.change_mask,
-            rattrs: rattrs,
+            rtattrs: rtattrs,
         };
-    }
-
-    pub fn get_name(&self) -> Option<&str> {
-        for attr in self.rattrs.iter() {
-            if let RoutingAttribute::InterfaceName(name) = attr {
-                return Some(&name);
-            }
-        }
-
-        return None;
-    }
-
-    pub fn get_mtu(&self) -> Option<u32> {
-        for attr in self.rattrs.iter() {
-            if let RoutingAttribute::Mtu(mtu) = attr {
-                return Some(*mtu);
-            }
-        }
-
-        return None;
     }
 }
 
@@ -257,7 +318,7 @@ impl InterfaceInfoMessage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct LinkStats {
     rx_packets: u32, /* total packets received	*/
     u16tx_packets: u32,
@@ -324,7 +385,7 @@ impl LinkStats {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct LinkStats64 {
     rx_packets: u64, /* total packets received	*/
     u16tx_packets: u64,
@@ -391,140 +452,435 @@ impl LinkStats64 {
     }
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
-pub enum RoutingAttribute {
-    Unknown(u16, Vec<u8>),
-    Address(MacAddress),
-    Broadcast(MacAddress),
-    InterfaceName(String),
-    Mtu(u32),
-    Link(u32),
-    QDisc(String),
-    Stats(LinkStats),
-    Cost(Vec<u8>),
-    Priority(Vec<u8>),
-    Master(u32),
-    Wireless(Vec<u8>),
-    ProtInfo(Vec<u8>),
-    TXQLen(u32),
-    Map(Vec<u8>),
-    Weight(u32),
-    OperationalState(u8),
-    LinkMode(u8),
-    LinkInfo(Vec<u8>),
-    NetNSPid(Vec<u8>),
-    Alias(String),
-    NumVfs(Vec<u8>),
-    VfInfoList(Vec<u8>),
-    Stats64(LinkStats64),
-    VfPorts(Vec<u8>),
-    PortSelf(Vec<u8>),
-    AfSpec(Vec<u8>),
-    Group(IPv4Addr),
-    NetNsFd(Vec<u8>),
-    ExtMask(Vec<u8>),
-    Promiscuity(u32),
-    NumTxQueues(u32),
-    NumRxQueues(u32),
-    Carrier(u8),
-    PhysPortId(Vec<u8>),
-    CarrierChanges(u32),
-    PhysSwitchId(Vec<u8>),
-    LinkNetNsId(Vec<u8>),
-    PhysPortName(Vec<u8>),
-    ProtoDown(u8),
-    GsoMaxSegs(u32),
-    GsoMaxSize(u32),
-    Pad(Vec<u8>),
-    Xdp(Vec<u8>),
-    Event(Vec<u8>),
-    NewNetNsId(Vec<u8>),
-    IfNetNsId(Vec<u8>),
-    CarrierUpCount(u32),
-    CarrierDownCount(u32),
-    NewIfIndex(Vec<u8>),
-    MinMtu(u32),
-    MaxMtu(u32),
-    PropList(Vec<u8>),
-    AltIfName(Vec<u8>),
-    PermAddress(Vec<u8>),
+#[derive(TryFromPrimitive, Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum OperationalState {
+    Unknown,        // IF_OPER_UNKNOWN
+    NotPresent,     // IF_OPER_NOTPRESENT
+    Down,           // IF_OPER_DOWN
+    LowerLayerDown, // IF_OPER_LOWERLAYERDOWN
+    Testing,        // IF_OPER_TESTING
+    Dormant,        // IF_OPER_DORMANT
+    Up,             // IF_OPER_UP
 }
 
-impl RoutingAttribute {
-    pub fn read<T: Read>(data: &mut T) -> Result<(RoutingAttribute, u32), NetLinkError> {
-        let length: u16 = read_u16(data, &Endianness::Little)?;
-        let attr_type: u16 = read_u16(data, &Endianness::Little)?;
-        const ALIGN_TO: u16 = 4;
-        let padding_length: u32 = (((length + ALIGN_TO - 1) & !(ALIGN_TO - 1)) - length) as u32;
+impl OperationalState {
+    fn to_string(&self) -> String {
+        return match self {
+            OperationalState::Unknown => "UNKNOWN",
+            OperationalState::NotPresent => "NOTPRESENT",
+            OperationalState::Down => "DOWN",
+            OperationalState::LowerLayerDown => "LOWERLAYERDOWN",
+            OperationalState::Testing => "TESTING",
+            OperationalState::Dormant => "DORMANT",
+            OperationalState::Up => "UP",
+        }
+        .to_owned();
+    }
+}
 
-        let mut data_buffer = vec![0; length as usize - 4];
-        data.read_exact(&mut data_buffer)?;
+impl fmt::Display for OperationalState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        return write!(f, "{}", self.to_string());
+    }
+}
 
+#[derive(TryFromPrimitive, Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum LinkMode {
+    Default, // IF_LINK_MODE_DEFAULT
+    Dormant, // IF_LINK_MODE_DORMANT
+    Testing, // IF_LINK_MODE_TESTING
+}
+
+impl LinkMode {
+    fn to_string(&self) -> String {
+        return match self {
+            LinkMode::Default => "DEFAULT",
+            LinkMode::Dormant => "DORMANT",
+            LinkMode::Testing => "TESTING",
+        }
+        .to_owned();
+    }
+}
+
+impl fmt::Display for LinkMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        return write!(f, "{}", self.to_string());
+    }
+}
+
+#[derive(Clone, Debug, Copy, Default)]
+pub struct BridgeID {
+    id: u16,
+    addr: MacAddress,
+}
+
+impl BridgeID {
+    fn to_string(&self) -> String {
+        return format!("{:02o}.{}", self.id, self.addr);
+    }
+}
+
+impl From<[u8; 8]> for BridgeID {
+    fn from(data: [u8; 8]) -> Self {
+        return BridgeID {
+            id: (data[1] as u16) << 8 | (data[0] as u16),
+            addr: MacAddress(data[2..8].try_into().unwrap()),
+        };
+    }
+}
+
+impl TryFrom<&[u8]> for BridgeID {
+    type Error = NetLinkError;
+    fn try_from(data: &[u8]) -> Result<BridgeID, Self::Error> {
+        let data: [u8; 8] = data.try_into()?;
+        return Ok(BridgeID::from(data));
+    }
+}
+
+impl fmt::Display for BridgeID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        return write!(f, "{}", self.to_string());
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct BridgeLinkData {
+    forward_delay: Option<u32>,
+    hello_time: Option<u32>,
+    max_age: Option<u32>,
+    ageing_time: Option<u32>,
+    stp_state: Option<u32>,
+    priority: Option<u16>,
+    vlan_filtering: Option<bool>,
+    vlan_protocol: Option<u16>, // TODO: Make this an enum
+    group_fwd_mask: Option<u16>,
+    root_id: Option<BridgeID>,
+    bridge_id: Option<BridgeID>,
+    root_port: Option<u16>,
+    root_path_cost: Option<u32>,
+    topology_change: Option<bool>,
+    topology_change_detected: Option<bool>,
+    hello_timer: Option<u64>,
+    tcn_timer: Option<u64>,
+    topology_change_timer: Option<u64>,
+    gc_timer: Option<u64>,
+    group_address: Option<MacAddress>,
+    fdb_flush: Option<bool>,
+    multicast_router: Option<u8>,
+    multicast_snooping: Option<u8>,
+    multicast_query_use_ifaddr: Option<u8>,
+    multicast_querier: Option<u8>,
+    multicast_hash_elasticity: Option<u32>,
+    multicast_hash_max: Option<u32>,
+    multicast_last_member_count: Option<u32>,
+    multicast_startup_query_count: Option<u32>,
+    multicast_last_member_interval: Option<u64>,
+    multicast_membership_interval: Option<u64>,
+    multicast_querier_interval: Option<u64>,
+    multicast_query_interval: Option<u64>,
+    multicast_query_response_interval: Option<u64>,
+    multicast_startup_query_interval: Option<u64>,
+    nf_call_iptables: Option<u8>,
+    nf_call_ip6tables: Option<u8>,
+    nf_call_arptables: Option<u8>,
+    vlan_default_pvid: Option<u16>,
+    //Pad
+    vlan_stats_enabled: Option<bool>,
+    multicast_stats_enabled: Option<bool>,
+    multicast_igmp_version: Option<u8>,
+    multicast_mld_version: Option<u8>,
+    multicast_vlan_stats_per_port: Option<u8>,
+    multicast_multi_boolopt: Option<u64>,
+}
+
+impl BridgeLinkData {
+    pub fn new() -> Self {
+        return Self::default();
+    }
+
+    pub fn read_new_attr(&mut self, data_reader: &mut BufferReader) -> Result<(), NetLinkError> {
+        let (attr_type, data_buffer) = read_new_attr(data_reader)?;
         let mut data_reader = BufferReader::new(&data_buffer);
 
-        let mut padding_buffer = vec![0; padding_length as usize];
-        data.read_exact(&mut padding_buffer)?;
+        match attr_type {
+            1 => self.forward_delay = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_BR_FORWARD_DELAY
+            2 => self.hello_time = Some(read_u32(&mut data_reader, &Endianness::Little)?),    // IFLA_BR_HELLO_TIME
+            3 => self.max_age = Some(read_u32(&mut data_reader, &Endianness::Little)?),       // IFLA_BR_MAX_AGE
+            4 => self.ageing_time = Some(read_u32(&mut data_reader, &Endianness::Little)?),   // IFLA_BR_AGEING_TIME
+            5 => self.stp_state = Some(read_u32(&mut data_reader, &Endianness::Little)?),     // IFLA_BR_STP_STATE
+            6 => self.priority = Some(read_u16(&mut data_reader, &Endianness::Little)?),      // IFLA_BR_PRIORITY
+            7 => self.vlan_filtering = Some(read_u8(&mut data_reader)? != 0),                 // IFLA_BR_VLAN_FILTERING
+            8 => self.vlan_protocol = Some(read_u16(&mut data_reader, &Endianness::Little)?), // IFLA_BR_VLAN_PROTOCOL
+            9 => self.group_fwd_mask = Some(read_u16(&mut data_reader, &Endianness::Little)?), // IFLA_BR_GROUP_FWD_MASK
+            10 => self.root_id = Some(data_buffer[..].try_into()?),                           // IFLA_BR_ROOT_ID
+            11 => self.bridge_id = Some(data_buffer[..].try_into()?),                         // IFLA_BR_BRIDGE_ID
+            12 => self.root_port = Some(read_u16(&mut data_reader, &Endianness::Little)?),    // IFLA_BR_ROOT_PORT
+            13 => self.root_path_cost = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_BR_ROOT_PATH_COST
+            14 => self.topology_change = Some(read_u8(&mut data_reader)? != 0),               // IFLA_BR_TOPOLOGY_CHANGE
+            15 => self.topology_change_detected = Some(read_u8(&mut data_reader)? != 0),      // IFLA_BR_TOPOLOGY_CHANGE_DETECTED
+            16 => self.hello_timer = Some(read_u64(&mut data_reader, &Endianness::Little)?),  // IFLA_BR_HELLO_TIMER
+            17 => self.tcn_timer = Some(read_u64(&mut data_reader, &Endianness::Little)?),    // IFLA_BR_TCN_TIMER
+            18 => self.topology_change_timer = Some(read_u64(&mut data_reader, &Endianness::Little)?), // IFLA_BR_TOPOLOGY_CHANGE_TIMER
+            19 => self.gc_timer = Some(read_u64(&mut data_reader, &Endianness::Little)?),     // IFLA_BR_GC_TIMER
+            20 => self.group_address = Some(MacAddress(data_buffer[..].try_into()?)),         // IFLA_BR_GROUP_ADDR
+            21 => self.fdb_flush = Some(read_u8(&mut data_reader)? != 0),                     // IFLA_BR_FDB_FLUSH
+            22 => self.multicast_router = Some(read_u8(&mut data_reader)?),                   // IFLA_BR_MCAST_ROUTER
+            23 => self.multicast_snooping = Some(read_u8(&mut data_reader)?),                 // IFLA_BR_MCAST_SNOOPING
+            24 => self.multicast_query_use_ifaddr = Some(read_u8(&mut data_reader)?),         // IFLA_BR_MCAST_QUERY_USE_IFADDR
+            25 => self.multicast_querier = Some(read_u8(&mut data_reader)?),                  // IFLA_BR_MCAST_QUERIER
+            26 => self.multicast_hash_elasticity = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MCAST_HASH_ELASTICITY
+            27 => self.multicast_hash_max = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MCAST_HASH_MAX
+            28 => self.multicast_last_member_count = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MCAST_LAST_MEMBER_CNT
+            29 => self.multicast_startup_query_count = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MCAST_STARTUP_QUERY_CNT
+            30 => self.multicast_last_member_interval = Some(read_u64(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MCAST_LAST_MEMBER_INTVL
+            31 => self.multicast_membership_interval = Some(read_u64(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MCAST_MEMBERSHIP_INTVL
+            32 => self.multicast_querier_interval = Some(read_u64(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MCAST_QUERIER_INTVL
+            33 => self.multicast_query_interval = Some(read_u64(&mut data_reader, &Endianness::Little)?),   // IFLA_BR_MCAST_QUERY_INTVL
+            34 => self.multicast_query_response_interval = Some(read_u64(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MCAST_QUERY_RESPONSE_INTVL
+            35 => self.multicast_startup_query_interval = Some(read_u64(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MCAST_STARTUP_QUERY_INTVL
+            36 => self.nf_call_iptables = Some(read_u8(&mut data_reader)?), // IFLA_BR_NF_CALL_IPTABLES
+            37 => self.nf_call_ip6tables = Some(read_u8(&mut data_reader)?), // IFLA_BR_NF_CALL_IP6TABLES
+            38 => self.nf_call_arptables = Some(read_u8(&mut data_reader)?), // IFLA_BR_NF_CALL_ARPTABLES,
+            39 => self.vlan_default_pvid = Some(read_u16(&mut data_reader, &Endianness::Little)?), // IFLA_BR_VLAN_DEFAULT_PVID
+            // Pad
+            41 => self.vlan_stats_enabled = Some(read_u8(&mut data_reader)? != 0), // IFLA_BR_VLAN_STATS_ENABLED
+            42 => self.multicast_stats_enabled = Some(read_u8(&mut data_reader)? != 0), // IFLA_BR_MCAST_STATS_ENABLED
+            43 => self.multicast_igmp_version = Some(read_u8(&mut data_reader)?),  // IFLA_BR_MCAST_IGMP_VERSION
+            44 => self.multicast_mld_version = Some(read_u8(&mut data_reader)?),   // IFLA_BR_MCAST_MLD_VERSION
+            45 => self.multicast_vlan_stats_per_port = Some(read_u8(&mut data_reader)?), // IFLA_BR_VLAN_STATS_PER_PORT
+            46 => self.multicast_multi_boolopt = Some(read_u64(&mut data_reader, &Endianness::Little)?), // IFLA_BR_MULTI_BOOLOPT
+            _ => {
+                return Err(NetLinkError::InvalidEnumPrimitive(attr_type as u64));
+            }
+        }
 
-        return Ok((
-            match attr_type {
-                1 => RoutingAttribute::Address(MacAddress(data_buffer[..].try_into()?)),
-                2 => RoutingAttribute::Broadcast(MacAddress(data_buffer[..].try_into()?)),
-                3 => RoutingAttribute::InterfaceName(CStr::from_bytes_with_nul(&data_buffer)?.to_str()?.to_owned()),
-                4 => RoutingAttribute::Mtu(read_u32(&mut data_reader, &Endianness::Little)?),
-                5 => RoutingAttribute::Link(read_u32(&mut data_reader, &Endianness::Little)?),
-                6 => RoutingAttribute::QDisc(CStr::from_bytes_with_nul(&data_buffer)?.to_str()?.to_owned()),
-                7 => RoutingAttribute::Stats(LinkStats::read(&mut data_reader)?),
-                8 => RoutingAttribute::Cost(data_buffer),
-                9 => RoutingAttribute::Priority(data_buffer),
-                10 => RoutingAttribute::Master(read_u32(&mut data_reader, &Endianness::Little)?),
-                11 => RoutingAttribute::Wireless(data_buffer),
-                12 => RoutingAttribute::ProtInfo(data_buffer),
-                13 => RoutingAttribute::TXQLen(read_u32(&mut data_reader, &Endianness::Little)?),
-                14 => RoutingAttribute::Map(data_buffer),
-                15 => RoutingAttribute::Weight(read_u32(&mut data_reader, &Endianness::Little)?),
-                16 => RoutingAttribute::OperationalState(data_buffer[0]),
-                17 => RoutingAttribute::LinkMode(data_buffer[0]),
-                18 => RoutingAttribute::LinkInfo(data_buffer),
-                19 => RoutingAttribute::NetNSPid(data_buffer),
-                20 => RoutingAttribute::Alias(CStr::from_bytes_with_nul(&data_buffer)?.to_str()?.to_owned()),
-                21 => RoutingAttribute::NumVfs(data_buffer),
-                22 => RoutingAttribute::VfInfoList(data_buffer),
-                23 => RoutingAttribute::Stats64(LinkStats64::read(&mut data_reader)?),
-                24 => RoutingAttribute::VfPorts(data_buffer),
-                25 => RoutingAttribute::PortSelf(data_buffer),
-                26 => RoutingAttribute::AfSpec(data_buffer),
-                27 => RoutingAttribute::Group(IPv4Addr(data_buffer[0..4].try_into()?)),
-                28 => RoutingAttribute::NetNsFd(data_buffer),
-                29 => RoutingAttribute::ExtMask(data_buffer),
-                30 => RoutingAttribute::Promiscuity(read_u32(&mut data_reader, &Endianness::Little)?),
-                31 => RoutingAttribute::NumTxQueues(read_u32(&mut data_reader, &Endianness::Little)?),
-                32 => RoutingAttribute::NumRxQueues(read_u32(&mut data_reader, &Endianness::Little)?),
-                33 => RoutingAttribute::Carrier(data_buffer[0]),
-                34 => RoutingAttribute::PhysPortId(data_buffer),
-                35 => RoutingAttribute::CarrierChanges(read_u32(&mut data_reader, &Endianness::Little)?),
-                36 => RoutingAttribute::PhysSwitchId(data_buffer),
-                37 => RoutingAttribute::LinkNetNsId(data_buffer),
-                38 => RoutingAttribute::PhysPortName(data_buffer),
-                39 => RoutingAttribute::ProtoDown(data_buffer[0]),
-                40 => RoutingAttribute::GsoMaxSegs(read_u32(&mut data_reader, &Endianness::Little)?),
-                41 => RoutingAttribute::GsoMaxSize(read_u32(&mut data_reader, &Endianness::Little)?),
-                42 => RoutingAttribute::Pad(data_buffer),
-                43 => RoutingAttribute::Xdp(data_buffer),
-                44 => RoutingAttribute::Event(data_buffer),
-                45 => RoutingAttribute::NewNetNsId(data_buffer),
-                46 => RoutingAttribute::IfNetNsId(data_buffer),
-                47 => RoutingAttribute::CarrierUpCount(read_u32(&mut data_reader, &Endianness::Little)?),
-                48 => RoutingAttribute::CarrierDownCount(read_u32(&mut data_reader, &Endianness::Little)?),
-                49 => RoutingAttribute::NewIfIndex(data_buffer),
-                50 => RoutingAttribute::MinMtu(read_u32(&mut data_reader, &Endianness::Little)?),
-                51 => RoutingAttribute::MaxMtu(read_u32(&mut data_reader, &Endianness::Little)?),
-                52 => RoutingAttribute::PropList(data_buffer),
-                53 => RoutingAttribute::AltIfName(data_buffer),
-                54 => RoutingAttribute::PermAddress(data_buffer),
-                _ => RoutingAttribute::Unknown(attr_type, data_buffer),
-            },
-            length as u32 + padding_length,
-        ));
+        return Ok(());
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TunnelLinkData {
+    // TODO: Figure out whether these are actually u32s
+    owner: Option<u32>,
+    group: Option<u32>,
+    tun_type: Option<u8>, // TODO: Make this an Enum
+    pi: Option<bool>,
+    vnet_hdr: Option<bool>,
+    persist: Option<bool>,
+    multi_queue: Option<bool>,
+    num_queues: Option<u32>,
+    num_disabled_queues: Option<u32>,
+}
+
+impl TunnelLinkData {
+    pub fn new() -> Self {
+        return Self::default();
+    }
+
+    pub fn read_new_attr(&mut self, data_reader: &mut BufferReader) -> Result<(), NetLinkError> {
+        let (attr_type, data_buffer) = read_new_attr(data_reader)?;
+        let mut data_reader = BufferReader::new(&data_buffer);
+
+        match attr_type {
+            0 => {}                                                                                 // IFLA_TUN_UNSPEC
+            1 => self.owner = Some(read_u32(&mut data_reader, &Endianness::Little)?),               // IFLA_TUN_OWNER
+            2 => self.group = Some(read_u32(&mut data_reader, &Endianness::Little)?),               // IFLA_TUN_GROUP
+            3 => self.tun_type = Some(read_u8(&mut data_reader)?),                                  // IFLA_TUN_TYPE
+            4 => self.pi = Some(read_u8(&mut data_reader)? != 0),                                   // IFLA_TUN_PI
+            5 => self.vnet_hdr = Some(read_u8(&mut data_reader)? != 0),                             // IFLA_TUN_VNET_HDR
+            6 => self.persist = Some(read_u8(&mut data_reader)? != 0),                              // IFLA_TUN_PERSIST
+            7 => self.multi_queue = Some(read_u8(&mut data_reader)? != 0),                          // IFLA_TUN_MULTI_QUEUE
+            8 => self.num_queues = Some(read_u32(&mut data_reader, &Endianness::Little)?),          // IFLA_TUN_NUM_QUEUES
+            9 => self.num_disabled_queues = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_TUN_NUM_DISABLED_QUEUES
+            _ => {
+                return Err(NetLinkError::InvalidEnumPrimitive(attr_type as u64));
+            }
+        }
+
+        return Ok(());
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LinkInfo {
+    pub kind: Option<String>,
+    pub slave_kind: Option<String>,
+
+    pub bridge_link_data: Option<BridgeLinkData>,
+    pub bridge_slave_data: Option<BridgeLinkData>,
+
+    pub tunnel_link_data: Option<TunnelLinkData>,
+    pub tunnel_slave_data: Option<TunnelLinkData>,
+}
+
+impl LinkInfo {
+    pub fn new() -> LinkInfo {
+        return Self::default();
+    }
+
+    pub fn read_new_attr(&mut self, data_reader: &mut BufferReader) -> Result<(), NetLinkError> {
+        let (attr_type, data_buffer) = read_new_attr(data_reader)?;
+        let mut data_reader = BufferReader::new(&data_buffer);
+        match attr_type {
+            libc::IFLA_INFO_UNSPEC => {}
+            libc::IFLA_INFO_KIND => self.kind = Some(CStr::from_bytes_with_nul(&data_buffer)?.to_str()?.to_owned()),
+            libc::IFLA_INFO_SLAVE_KIND => self.slave_kind = Some(CStr::from_bytes_with_nul(&data_buffer)?.to_str()?.to_owned()),
+            libc::IFLA_INFO_XSTATS => {} // TODO
+            libc::IFLA_INFO_DATA => match self.kind.as_deref() {
+                Some("bridge") => {
+                    if self.bridge_link_data.is_none() {
+                        self.bridge_link_data = Some(BridgeLinkData::new());
+                    }
+
+                    if let Some(link_data) = self.bridge_link_data.as_mut() {
+                        while data_reader.has_more() {
+                            link_data.read_new_attr(&mut data_reader)?;
+                        }
+                    }
+                }
+                Some("tun") => {
+                    if self.tunnel_link_data.is_none() {
+                        self.tunnel_link_data = Some(TunnelLinkData::new());
+                    }
+
+                    if let Some(link_data) = self.tunnel_link_data.as_mut() {
+                        while data_reader.has_more() {
+                            link_data.read_new_attr(&mut data_reader)?;
+                        }
+                    }
+                }
+                Some(kind) => {
+                    println!("Unhandled link type: {}", kind);
+                }
+                _ => {}
+            },
+            libc::IFLA_INFO_SLAVE_DATA => {} // TODO: Parse this
+            _ => {
+                println!("{} {:?}", attr_type, data_buffer);
+            }
+        }
+
+        return Ok(());
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct InterfaceRoutingAttributes {
+    pub address: Option<MacAddress>,
+    pub broadcast: Option<MacAddress>,
+    pub interface_name: Option<String>,
+    pub mtu: Option<u32>,
+    pub link: Option<u32>,
+    pub qdisc: Option<String>,
+    pub stats: Option<LinkStats>,
+    pub master_id: Option<u32>,
+    pub txqueue_len: Option<u32>,
+    pub oper_state: Option<OperationalState>,
+    pub link_mode: Option<LinkMode>,
+    pub stats64: Option<LinkStats64>,
+    pub group: Option<u32>,
+    pub promiscuity: Option<u32>,
+    pub num_tx_queues: Option<u32>,
+    pub num_rx_queues: Option<u32>,
+    pub carrier: Option<bool>,
+    pub carrier_changes: Option<u32>,
+    pub net_ns_id: Option<u32>,
+    pub proto_down: Option<bool>,
+    pub gso_max_segs: Option<u32>,
+    pub gso_max_size: Option<u32>,
+    pub xdp: Option<u64>,
+    pub carrier_up_count: Option<u32>,
+    pub carrier_down_count: Option<u32>,
+    pub min_mtu: Option<u32>,
+    pub max_mtu: Option<u32>,
+
+    pub link_info: Option<LinkInfo>,
+    pub perm_address: Option<MacAddress>,
+
+    pub unknowns: Vec<(u16, Vec<u8>)>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum RAttrType {
+    TopLevelValue,
+    LinkInfoValue,
+    InfoDataValue,
+    InfoSlaveDataValue,
+}
+
+impl InterfaceRoutingAttributes {
+    pub fn new() -> InterfaceRoutingAttributes {
+        return Self::default();
+    }
+
+    pub fn read_new_attr<T: Read>(&mut self, reader: &mut T) -> Result<(), NetLinkError> {
+        let (attr_type, data_buffer) = read_new_attr(reader)?;
+        let mut data_reader = BufferReader::new(&data_buffer);
+        match attr_type {
+            libc::IFLA_UNSPEC => {}
+            libc::IFLA_ADDRESS => self.address = Some(MacAddress(data_buffer[..].try_into()?)),
+            libc::IFLA_BROADCAST => self.broadcast = Some(MacAddress(data_buffer[..].try_into()?)),
+            libc::IFLA_IFNAME => self.interface_name = Some(CStr::from_bytes_with_nul(&data_buffer)?.to_str()?.to_owned()),
+            libc::IFLA_MTU => self.mtu = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_LINK => self.link = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_QDISC => self.qdisc = Some(CStr::from_bytes_with_nul(&data_buffer)?.to_str()?.to_owned()),
+            libc::IFLA_STATS => self.stats = Some(LinkStats::read(&mut data_reader)?),
+            libc::IFLA_MASTER => self.master_id = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_TXQLEN => self.txqueue_len = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_OPERSTATE => self.oper_state = Some(read_u8(&mut data_reader)?.try_into()?),
+            libc::IFLA_LINKMODE => self.link_mode = Some(read_u8(&mut data_reader)?.try_into()?),
+            libc::IFLA_MAP => {} // Explicitly Drop these ones for now... Handling them is more difficult
+            libc::IFLA_LINKINFO => {
+                if self.link_info.is_none() {
+                    self.link_info = Some(LinkInfo::new());
+                }
+
+                if let Some(link_info) = self.link_info.as_mut() {
+                    while data_reader.has_more() {
+                        link_info.read_new_attr(&mut data_reader)?;
+                    }
+                }
+            }
+            libc::IFLA_STATS64 => self.stats64 = Some(LinkStats64::read(&mut data_reader)?),
+            libc::IFLA_AF_SPEC => {} // TODO: Parse this (VLAN Info)
+            libc::IFLA_GROUP => self.group = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_PROMISCUITY => self.promiscuity = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_NUM_TX_QUEUES => self.num_tx_queues = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_NUM_RX_QUEUES => self.num_rx_queues = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_CARRIER => self.carrier = Some(read_u8(&mut data_reader)? != 0),
+            libc::IFLA_CARRIER_CHANGES => self.carrier_changes = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_LINK_NETNSID => self.net_ns_id = Some(read_u32(&mut data_reader, &Endianness::Little)?),
+            libc::IFLA_PROTO_DOWN => self.proto_down = Some(read_u8(&mut data_reader)? != 0),
+            40 => self.gso_max_segs = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_GSO_MAX_SEGS
+            41 => self.gso_max_size = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_GSO_MAX_SIZE
+            43 => self.xdp = Some(read_u64(&mut data_reader, &Endianness::Little)?),          // IFLA_XDP
+            47 => self.carrier_up_count = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_CARRIER_UP_COUNT
+            48 => self.carrier_down_count = Some(read_u32(&mut data_reader, &Endianness::Little)?), // IFLA_CARRIER_DOWN_COUNT
+            50 => self.min_mtu = Some(read_u32(&mut data_reader, &Endianness::Little)?),      // IFLA_MIN_MTU
+            51 => self.max_mtu = Some(read_u32(&mut data_reader, &Endianness::Little)?),      // IFLA_MAX_MTU
+            54 => self.perm_address = Some(MacAddress(data_buffer[..].try_into()?)),          // IFLA_PERM_ADDR
+            _ => {
+                self.unknowns.push((attr_type, data_buffer));
+            }
+        };
+
+        return Ok(());
+    }
+}
+
+fn read_new_attr<T: Read>(reader: &mut T) -> Result<(u16, Vec<u8>), NetLinkError> {
+    let length: u16 = read_u16(reader, &Endianness::Little)?;
+    let attr_type: u16 = read_u16(reader, &Endianness::Little)?;
+    const ALIGN_TO: u16 = 4;
+    let padding_length: u32 = (((length + ALIGN_TO - 1) & !(ALIGN_TO - 1)) - length) as u32;
+
+    let mut data_buffer = vec![0; length as usize - 4];
+    reader.read_exact(&mut data_buffer)?;
+
+    let mut _padding_buffer = vec![0; padding_length as usize];
+    reader.read_exact(&mut _padding_buffer)?;
+
+    return Ok((attr_type, data_buffer));
 }

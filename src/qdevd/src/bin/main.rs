@@ -157,7 +157,7 @@ fn main() {
 
     let logger = logger::with_name_as_json("qdevd");
     logger.info().smsg("Starting QDevD");
-    let socket = NetLinkSocket::new().unwrap();
+    let socket = NetLinkSocket::new_uevent().unwrap();
     let reader = BufReader::new(socket);
     let freud_socket = match init_freudian(socket_file) {
         Ok(socket) => socket,

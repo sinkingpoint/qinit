@@ -1,4 +1,4 @@
-use super::types::{Interface, InterfaceInfoMessage, RoutingAttribute};
+use super::types::{Interface, InterfaceInfoMessage, InterfaceRoutingAttributes};
 use io::BufferReader;
 use netlink::api::{MessageType, NetLinkMessageFlags, NetLinkMessageHeader};
 use netlink::error::NetLinkError;
@@ -68,18 +68,15 @@ impl Iterator for Links<'_> {
         }
 
         let mut reader = BufferReader::new(&buffer);
-        let mut rattrs = Vec::new();
+        let mut rattrs = InterfaceRoutingAttributes::new();
 
         while reader.has_more() {
-            let rattr = match RoutingAttribute::read(&mut reader) {
-                Ok(msg) => msg,
-                Err(e) => {
-                    return Some(Err(e));
+            match rattrs.read_new_attr(&mut reader) {
+                Ok(_) => {}
+                Err(err) => {
+                    return Some(Err(err));
                 }
             }
-            .0;
-
-            rattrs.push(rattr);
         }
 
         return Some(Ok(Interface::from_raw_messages(interface_message, rattrs)));
