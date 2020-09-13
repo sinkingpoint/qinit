@@ -13,10 +13,6 @@ pub unsafe fn read_struct<T, R: Read>(read: &mut R) -> io::Result<T> {
     }
 }
 
-pub unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
-    ::std::slice::from_raw_parts((p as *const T) as *const u8, ::std::mem::size_of::<T>())
-}
-
 #[inline]
 pub fn short_from_bytes_little_endian(a: u8, b: u8) -> u16 {
     return ((b as u16) << 8) | a as u16;

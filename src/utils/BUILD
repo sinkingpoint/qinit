@@ -100,9 +100,9 @@ rust_test(
 )
 
 rust_binary(
-    name = "ip",
+    name = "netc",
     srcs = [
-        "ip/src/main.rs"
+        "netc/src/main.rs"
     ],
     visibility = ["//visibility:public",],
     deps = [

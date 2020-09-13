@@ -25,7 +25,7 @@ initramfs(
         "//src/utils:clear",
         "//src/utils:shutdown",
         "//src/utils:id",
-        "//src/utils:ip",
+        "//src/utils:netc",
         "//src/utils:sudo",
         "//src/utils:readelf",
         "//src/utils:modinfo",
