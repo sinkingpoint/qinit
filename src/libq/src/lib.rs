@@ -19,5 +19,5 @@ pub mod passwd;
 pub mod qnix;
 pub mod rand;
 pub mod strings;
-pub mod terminal;
 pub mod tabulate;
+pub mod terminal;

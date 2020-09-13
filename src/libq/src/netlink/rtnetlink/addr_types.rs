@@ -1,16 +1,16 @@
-use io::{Writable, Readable, write_u8, write_u32, Endianness, read_u8, read_u32, BufferReader};
-use std::io::{self, Write, Read};
 use super::super::error::NetLinkError;
+use super::routing_attrs::read_new_attr;
+use io::{read_u32, read_u8, write_u32, write_u8, BufferReader, Endianness, Readable, Writable};
 use num_enum::TryFromPrimitive;
 use std::convert::TryInto;
 use std::ffi::CStr;
-use super::routing_attrs::read_new_attr;
+use std::io::{self, Read, Write};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, TryFromPrimitive)]
 enum AddressType {
-    IPv4 = 2, // AF_INET
-    IPv6 = 10 // AF_INET6
+    IPv4 = 2,  // AF_INET
+    IPv6 = 10, // AF_INET6
 }
 
 libc_bitflags! {
@@ -66,7 +66,7 @@ impl Readable for InterfaceAddrMessage {
                 }
             },
             scope: read_u8(reader)?,
-            interface_index: read_u32(reader, &Endianness::Little)?
+            interface_index: read_u32(reader, &Endianness::Little)?,
         });
     }
 }
@@ -82,26 +82,24 @@ impl InterfaceAddrMessage {
             prefix_len: 0,
             flags: AddressFlags::empty(),
             scope: 0,
-            interface_index: 10
-        }
+            interface_index: 10,
+        };
     }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum AddressBytes {
-    IPv4([u8;4]),
-    IPv6([u8;8]),
+    IPv4([u8; 4]),
+    IPv6([u8; 8]),
 }
 
 impl AddressBytes {
     fn new(buffer: Vec<u8>) -> Result<AddressBytes, NetLinkError> {
         if buffer.len() == 4 {
             return Ok(AddressBytes::IPv4(buffer[..].try_into()?));
-        }
-        else if buffer.len() == 6 {
+        } else if buffer.len() == 6 {
             return Ok(AddressBytes::IPv6(buffer[..].try_into()?));
-        }
-        else {
+        } else {
             return Err(NetLinkError::UnknownRoutingAttribute(buffer.len() as u16));
         }
     }
@@ -150,18 +148,21 @@ impl AddressRoutingAttributes {
         let mut data_reader = BufferReader::new(&data_buffer);
         match attr_type {
             1 => self.address = Some(AddressBytes::new(data_buffer)?), // IFA_ADDRESS
-            2 => self.local = Some(AddressBytes::new(data_buffer)?), // IFA_LOCAL
+            2 => self.local = Some(AddressBytes::new(data_buffer)?),   // IFA_LOCAL
             3 => self.label = Some(CStr::from_bytes_with_nul(&data_buffer)?.to_str()?.to_owned()), // IFA_LABEL
             4 => self.broadcast = Some(AddressBytes::new(data_buffer)?), // IFA_BROADCAST
             5 => self.anycast = Some(AddressBytes::new(data_buffer)?), // IFA_ANYCAST
             6 => self.cache_info = Some(CacheInfo::read(&mut data_reader)?), // IFA_CACHE_INFO
             7 => self.muiticast = Some(AddressBytes::new(data_buffer)?), // IFA_MULTICAST
-            8 => self.flags = match AddressFlags::from_bits(read_u32(&mut data_reader, &Endianness::Little)?) { // IFA_FLAGS
-                Some(flags) => Some(flags),
-                None => {
-                    return Err(NetLinkError::InvalidEnumPrimitive(0));
+            8 => {
+                self.flags = match AddressFlags::from_bits(read_u32(&mut data_reader, &Endianness::Little)?) {
+                    // IFA_FLAGS
+                    Some(flags) => Some(flags),
+                    None => {
+                        return Err(NetLinkError::InvalidEnumPrimitive(0));
+                    }
                 }
-            },
+            }
             _ => {
                 return Err(NetLinkError::UnknownRoutingAttribute(attr_type));
             }
@@ -178,7 +179,7 @@ pub struct Address {
     flags: AddressFlags,
     scope: u8, // TODO: Make this an enum
     interface_index: u32,
-    rtattrs: AddressRoutingAttributes
+    rtattrs: AddressRoutingAttributes,
 }
 
 impl Address {
@@ -189,7 +190,7 @@ impl Address {
             flags: info_msg.flags,
             scope: info_msg.scope,
             interface_index: info_msg.interface_index,
-            rtattrs: rtattrs
-        }
+            rtattrs: rtattrs,
+        };
     }
 }

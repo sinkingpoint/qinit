@@ -1,11 +1,11 @@
-use io::{read_u16, read_u32, read_u64, read_u8, write_u16, write_u32, BufferReader, Endianness};
+use super::routing_attrs::{read_new_attr, write_routing_attribute};
+use io::{read_u16, read_u32, read_u64, read_u8, write_u16, write_u32, write_u8, BufferReader, Endianness, Writable};
 use netlink::error::NetLinkError;
 use num_enum::TryFromPrimitive;
-use super::routing_attrs::read_new_attr;
 
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::fmt;
 use std::io::{Read, Write};
 
@@ -18,6 +18,10 @@ impl MacAddress {
             "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
             self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
         );
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        return self.0.to_vec();
     }
 }
 
@@ -235,6 +239,19 @@ pub struct Interface {
     pub rtattrs: InterfaceRoutingAttributes,
 }
 
+impl Writable for Interface {
+    type Error = NetLinkError;
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), Self::Error> {
+        write_u16(writer, 0, &Endianness::Little)?; // AF_UNSPEC
+        write_u16(writer, self.interface_type as u16, &Endianness::Little)?;
+        write_u32(writer, self.interface_index, &Endianness::Little)?;
+        write_u32(writer, self.interface_flags.bits(), &Endianness::Little)?;
+        write_u32(writer, self.change_mask, &Endianness::Little)?;
+
+        return Ok(());
+    }
+}
+
 impl Interface {
     pub fn from_raw_messages(info_msg: InterfaceInfoMessage, rtattrs: InterfaceRoutingAttributes) -> Interface {
         return Interface {
@@ -244,6 +261,10 @@ impl Interface {
             change_mask: info_msg.change_mask,
             rtattrs: rtattrs,
         };
+    }
+
+    pub fn clear(&mut self) {
+        self.rtattrs = InterfaceRoutingAttributes::new();
     }
 }
 
@@ -792,6 +813,18 @@ pub struct InterfaceRoutingAttributes {
     pub perm_address: Option<MacAddress>,
 
     pub unknowns: Vec<(u16, Vec<u8>)>,
+}
+
+impl Writable for InterfaceRoutingAttributes {
+    type Error = NetLinkError;
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), Self::Error> {
+        // TODO: Handle everything here
+        if self.oper_state.is_some() {
+            write_routing_attribute(writer, libc::IFLA_OPERSTATE, &vec![self.oper_state.unwrap() as u8])?;
+        }
+
+        return Ok(());
+    }
 }
 
 impl InterfaceRoutingAttributes {

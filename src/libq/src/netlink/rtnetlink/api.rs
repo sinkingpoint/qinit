@@ -1,6 +1,6 @@
+use super::addr_types::{Address, AddressRoutingAttributes, InterfaceAddrMessage};
 use super::link_types::{Interface, InterfaceInfoMessage, InterfaceRoutingAttributes};
-use super::addr_types::{InterfaceAddrMessage, AddressRoutingAttributes, Address};
-use io::{BufferReader, Writable, Readable};
+use io::{BufferReader, Readable, Writable};
 use netlink::api::{MessageType, NetLinkMessageFlags, NetLinkMessageHeader};
 use netlink::error::NetLinkError;
 use netlink::NetLinkSocket;
@@ -160,24 +160,47 @@ impl Iterator for Links<'_> {
 }
 
 pub trait RTNetlink {
-    fn get_links(&mut self) -> Result<Links, NetLinkError>;
-    fn get_addrs(&mut self) -> Result<Addrs, NetLinkError>;
+    fn get_links(&mut self) -> Result<Vec<Interface>, NetLinkError>;
+    fn get_addrs(&mut self) -> Result<Vec<Address>, NetLinkError>;
+    fn set_link(&mut self, interface: &Interface) -> Result<(), NetLinkError>;
 }
 
 impl RTNetlink for NetLinkSocket {
-    fn get_links(&mut self) -> Result<Links, NetLinkError> {
+    fn get_links(&mut self) -> Result<Vec<Interface>, NetLinkError> {
         if self.protocol != SockProtocol::NetlinkRoute {
             return Err(NetLinkError::InvalidNetlinkProtocol);
         }
 
-        return Links::new(self);
+        return Links::new(self)?.collect();
     }
 
-    fn get_addrs(&mut self) -> Result<Addrs, NetLinkError> {
+    fn get_addrs(&mut self) -> Result<Vec<Address>, NetLinkError> {
         if self.protocol != SockProtocol::NetlinkRoute {
             return Err(NetLinkError::InvalidNetlinkProtocol);
         }
 
-        return Addrs::new(self);
+        return Addrs::new(self)?.collect();
+    }
+
+    fn set_link(&mut self, interface: &Interface) -> Result<(), NetLinkError> {
+        let mut cmd = Vec::new();
+
+        let mut rtattrs = Vec::new();
+        interface.rtattrs.write(&mut rtattrs);
+
+        let header = NetLinkMessageHeader::new(
+            MessageType::RTM_NEWLINK,
+            self.get_next_sequence_number(),
+            NetLinkMessageHeader::size() + InterfaceInfoMessage::size() + (rtattrs.len() as u32),
+            NetLinkMessageFlags::NLM_F_ACK | NetLinkMessageFlags::NLM_F_REQUEST,
+        );
+
+        header.write(&mut cmd);
+        interface.write(&mut cmd);
+        cmd.append(&mut rtattrs);
+
+        self.write_all(&cmd)?;
+
+        return Ok(());
     }
 }

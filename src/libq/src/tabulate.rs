@@ -4,12 +4,12 @@ use std::fmt;
 pub struct Table {
     headers: Vec<String>,
     values: Vec<Vec<String>>,
-    widths: Vec<usize>
+    widths: Vec<usize>,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub enum TableError {
-    InvalidValues
+    InvalidValues,
 }
 
 const BAR: char = '｜';
@@ -21,15 +21,15 @@ impl Table {
             widths: headers.iter().map(|s| s.len()).collect(),
             headers: headers,
             values: Vec::new(),
-        }
+        };
     }
 
     pub fn new(headers: &[&str]) -> Table {
         return Table {
             headers: headers.iter().map(|&s| s.to_owned()).collect(),
             values: Vec::new(),
-            widths: headers.iter().map(|s| s.len()).collect()
-        }
+            widths: headers.iter().map(|s| s.len()).collect(),
+        };
     }
 
     pub fn add_values(&mut self, values: Vec<String>) -> Result<(), TableError> {
@@ -62,7 +62,7 @@ impl Table {
         build.push(BAR);
 
         for w in self.widths.iter() {
-            build.push_str(&(0..*w+2).map(|_| UNDERSCORE).collect::<String>());
+            build.push_str(&(0..*w + 2).map(|_| UNDERSCORE).collect::<String>());
             build.push(BAR);
         }
         build.push('\n');

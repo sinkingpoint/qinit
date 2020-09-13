@@ -25,7 +25,10 @@ impl Writable for Vec<u8> {
     }
 }
 
-pub trait Readable where Self: Sized {
+pub trait Readable
+where
+    Self: Sized,
+{
     type Error;
     fn read<T: Read>(reader: &mut T) -> Result<Self, Self::Error>;
 }
