@@ -1,10 +1,85 @@
 use super::link_types::{Interface, InterfaceInfoMessage, InterfaceRoutingAttributes};
-use io::BufferReader;
+use super::addr_types::{InterfaceAddrMessage, AddressRoutingAttributes, Address};
+use io::{BufferReader, Writable, Readable};
 use netlink::api::{MessageType, NetLinkMessageFlags, NetLinkMessageHeader};
 use netlink::error::NetLinkError;
 use netlink::NetLinkSocket;
 use nix::sys::socket::SockProtocol;
 use std::io::{Read, Write};
+
+pub struct Addrs<'a> {
+    socket: &'a mut NetLinkSocket,
+    done: bool,
+}
+
+impl<'a> Addrs<'a> {
+    fn new(socket: &'a mut NetLinkSocket) -> Result<Addrs<'a>, NetLinkError> {
+        let request = InterfaceAddrMessage::empty();
+        let header = NetLinkMessageHeader::new(
+            MessageType::RTM_GETADDR,
+            socket.get_next_sequence_number(),
+            NetLinkMessageHeader::size() + InterfaceAddrMessage::size(),
+            NetLinkMessageFlags::NLM_F_REQUEST | NetLinkMessageFlags::NLM_F_MATCH,
+        );
+        let mut buffer = Vec::new();
+        header.write(&mut buffer)?;
+        request.write(&mut buffer)?;
+
+        socket.write_all(&mut buffer)?;
+
+        return Ok(Addrs {
+            socket: socket,
+            done: false,
+        });
+    }
+}
+
+impl Iterator for Addrs<'_> {
+    type Item = Result<Address, NetLinkError>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let header = match NetLinkMessageHeader::read(self.socket) {
+            Ok(header) => header,
+            Err(e) => {
+                return Some(Err(e));
+            }
+        };
+
+        if header.msg_type == MessageType::NLMSG_DONE {
+            self.done = true;
+            return None;
+        }
+
+        let interface_message = match InterfaceAddrMessage::read(self.socket) {
+            Ok(msg) => msg,
+            Err(e) => {
+                return Some(Err(e));
+            }
+        };
+
+        let rtinfo_length = (header.length - NetLinkMessageHeader::size() - InterfaceAddrMessage::size()) as usize;
+        let mut buffer = vec![0; rtinfo_length];
+        match self.socket.read_exact(&mut buffer) {
+            Ok(()) => {}
+            Err(err) => {
+                return Some(Err(err.into()));
+            }
+        }
+
+        let mut reader = BufferReader::new(&buffer);
+        let mut rattrs = AddressRoutingAttributes::new();
+
+        while reader.has_more() {
+            match rattrs.read_new_attr(&mut reader) {
+                Ok(_) => {}
+                Err(err) => {
+                    return Some(Err(err));
+                }
+            }
+        }
+
+        return Some(Ok(Address::from_raw_messages(interface_message, rattrs)));
+    }
+}
 
 pub struct Links<'a> {
     socket: &'a mut NetLinkSocket,
@@ -86,6 +161,7 @@ impl Iterator for Links<'_> {
 
 pub trait RTNetlink {
     fn get_links(&mut self) -> Result<Links, NetLinkError>;
+    fn get_addrs(&mut self) -> Result<Addrs, NetLinkError>;
 }
 
 impl RTNetlink for NetLinkSocket {
@@ -95,5 +171,13 @@ impl RTNetlink for NetLinkSocket {
         }
 
         return Links::new(self);
+    }
+
+    fn get_addrs(&mut self) -> Result<Addrs, NetLinkError> {
+        if self.protocol != SockProtocol::NetlinkRoute {
+            return Err(NetLinkError::InvalidNetlinkProtocol);
+        }
+
+        return Addrs::new(self);
     }
 }

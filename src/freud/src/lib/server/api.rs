@@ -136,6 +136,7 @@ impl FreudianAPIResponse {
 }
 
 impl Writable for FreudianAPIResponse {
+    type Error = io::Error;
     fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
         let endianness = &Endianness::Little;
         write_u32(writer, self.response_type.into(), endianness)?;
@@ -180,6 +181,7 @@ impl FreudianRequestHeader {
 }
 
 impl Writable for FreudianRequestHeader {
+    type Error = io::Error;
     fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
         let endianness = &Endianness::Little;
         write_u32(writer, self.message_type.as_u32(), endianness)?;
@@ -220,6 +222,7 @@ impl FreudianTopicRequest {
 }
 
 impl Writable for FreudianTopicRequest {
+    type Error = io::Error;
     fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
         let endian = &Endianness::Little;
 
@@ -264,6 +267,7 @@ impl FreudianProduceMessageRequest {
 }
 
 impl Writable for FreudianProduceMessageRequest {
+    type Error = io::Error;
     fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
         self.topic_request.write(writer)?;
         let mut buffer = self.message.clone();
@@ -301,6 +305,7 @@ impl From<UUID> for FreudianSubscriptionRequest {
 }
 
 impl Writable for FreudianSubscriptionRequest {
+    type Error = io::Error;
     fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
         let mut data = self.subscription_id.clone();
         return writer.write_all(&mut data);

@@ -13,14 +13,21 @@ pub const STDOUT_FD: RawFd = 1;
 pub const STDERR_FD: RawFd = 2;
 
 pub trait Writable {
-    fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error>;
+    type Error;
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), Self::Error>;
 }
 
 impl Writable for Vec<u8> {
-    fn write<T: Write>(&self, writer: &mut T) -> Result<(), io::Error> {
+    type Error = io::Error;
+    fn write<T: Write>(&self, writer: &mut T) -> Result<(), Self::Error> {
         writer.write_all(self)?;
         return Ok(());
     }
+}
+
+pub trait Readable where Self: Sized {
+    type Error;
+    fn read<T: Read>(reader: &mut T) -> Result<Self, Self::Error>;
 }
 
 pub fn full_write_bytes(fd: RawFd, buf: &[u8]) -> nix::Result<usize> {

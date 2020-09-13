@@ -6,21 +6,7 @@ use libq::netlink::rtnetlink::RTNetlink;
 use libq::netlink::{NetLinkSocket, SockProtocol};
 use libq::tabulate::Table;
 
-fn main() {
-    let args = App::new("netc")
-        .version("0.1")
-        .author("Colin D. <colin@quirl.co.nz>")
-        .about("Show and Change Networking Info")
-        .setting(AppSettings::SubcommandRequired)
-        .subcommand(
-            SubCommand::with_name("link")
-                .about("Show/Change Information about Links")
-                .setting(AppSettings::SubcommandRequired)
-                .subcommand(SubCommand::with_name("show").about("Show Interface details")),
-        )
-        .get_matches();
-
-    let mut socket = NetLinkSocket::new(SockProtocol::NetlinkRoute).unwrap();
+fn print_links(mut socket: NetLinkSocket) {
     let links = socket.get_links().unwrap();
     let mut table = Table::new(&["Index", "Name", "Flags", "MTU", "QDisc", "Master", "State", "Mode", "Group", "QLen", "Type", "Address", "Broadcast"]);
 
@@ -43,4 +29,49 @@ fn main() {
     }
 
     println!("{}", table);
+}
+
+fn print_addrs(mut socket: NetLinkSocket) {
+    let addrs = socket.get_addrs().unwrap();
+    for addr in addrs {
+        println!("{:?}", addr);
+    }
+}
+
+fn main() {
+    let args = App::new("netc")
+        .version("0.1")
+        .author("Colin D. <colin@quirl.co.nz>")
+        .about("Show and Change Networking Info")
+        .setting(AppSettings::SubcommandRequired)
+        .subcommand(
+            SubCommand::with_name("link")
+                .about("Show/Change Information about Links")
+                .setting(AppSettings::SubcommandRequired)
+                .subcommand(SubCommand::with_name("show").about("Show Interface details")),
+        )
+        .subcommand(
+            SubCommand::with_name("addr")
+                .about("Show/Change Information about Addresses")
+                .setting(AppSettings::SubcommandRequired)
+                .subcommand(SubCommand::with_name("show").about("Show Address details")),
+        )
+        .get_matches();
+
+    let socket = NetLinkSocket::new(SockProtocol::NetlinkRoute).unwrap();
+    match args.subcommand() {
+        ("link", Some(matches)) => match matches.subcommand() {
+            ("show", Some(matches)) => {
+                print_links(socket);
+            },
+            _ => {}
+        },
+        ("addr", Some(matches)) => match matches.subcommand() {
+            ("show", Some(matches)) => {
+                print_addrs(socket);
+            },
+            _ => {}
+        },
+        _ => {}
+    }
 }

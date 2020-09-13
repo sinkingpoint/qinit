@@ -1,6 +1,7 @@
 use io::{read_u16, read_u32, read_u64, read_u8, write_u16, write_u32, BufferReader, Endianness};
 use netlink::error::NetLinkError;
 use num_enum::TryFromPrimitive;
+use super::routing_attrs::read_new_attr;
 
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -23,15 +24,6 @@ impl MacAddress {
 impl fmt::Display for MacAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         return write!(f, "{}", self.to_string());
-    }
-}
-
-#[derive(Debug)]
-pub struct IPv4Addr(pub [u8; 4]);
-
-impl fmt::Display for IPv4Addr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        return write!(f, "{}.{}.{}.{}", self.0[0], self.0[1], self.0[2], self.0[3]);
     }
 }
 
@@ -860,19 +852,4 @@ impl InterfaceRoutingAttributes {
 
         return Ok(());
     }
-}
-
-fn read_new_attr<T: Read>(reader: &mut T) -> Result<(u16, Vec<u8>), NetLinkError> {
-    let length: u16 = read_u16(reader, &Endianness::Little)?;
-    let attr_type: u16 = read_u16(reader, &Endianness::Little)?;
-    const ALIGN_TO: u16 = 4;
-    let padding_length: u32 = (((length + ALIGN_TO - 1) & !(ALIGN_TO - 1)) - length) as u32;
-
-    let mut data_buffer = vec![0; length as usize - 4];
-    reader.read_exact(&mut data_buffer)?;
-
-    let mut _padding_buffer = vec![0; padding_length as usize];
-    reader.read_exact(&mut _padding_buffer)?;
-
-    return Ok((attr_type, data_buffer));
 }

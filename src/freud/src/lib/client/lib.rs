@@ -30,7 +30,7 @@ impl FreudianClient {
         });
     }
 
-    fn send_to_socket<T: Writable>(&mut self, header: FreudianRequestHeader, body: T) -> Result<(), io::Error> {
+    fn send_to_socket<T: Writable<Error=io::Error>>(&mut self, header: FreudianRequestHeader, body: T) -> Result<(), io::Error> {
         header.write(&mut self.socket)?;
         return body.write(&mut self.socket);
     }
