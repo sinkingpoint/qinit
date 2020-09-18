@@ -8,9 +8,18 @@ use std::io::{self, Read, Write};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, TryFromPrimitive)]
-enum AddressType {
+pub enum AddressType {
     IPv4 = 2,  // AF_INET
     IPv6 = 10, // AF_INET6
+}
+
+impl AddressType {
+    pub fn to_str(&self) -> &str {
+        match self {
+            IPv4 => "inet",
+            IPv6 => "inet6"
+        }
+    }
 }
 
 libc_bitflags! {
@@ -78,7 +87,7 @@ impl InterfaceAddrMessage {
 
     pub fn empty() -> Self {
         return InterfaceAddrMessage {
-            addr_type: AddressType::IPv4,
+            addr_type: AddressType::IPv6,
             prefix_len: 0,
             flags: AddressFlags::empty(),
             scope: 0,
@@ -90,27 +99,63 @@ impl InterfaceAddrMessage {
 #[derive(Clone, Copy, Debug)]
 pub enum AddressBytes {
     IPv4([u8; 4]),
-    IPv6([u8; 8]),
+    IPv6([u8; 16]),
 }
 
 impl AddressBytes {
     fn new(buffer: Vec<u8>) -> Result<AddressBytes, NetLinkError> {
         if buffer.len() == 4 {
             return Ok(AddressBytes::IPv4(buffer[..].try_into()?));
-        } else if buffer.len() == 6 {
+        } else if buffer.len() == 16 {
             return Ok(AddressBytes::IPv6(buffer[..].try_into()?));
         } else {
             return Err(NetLinkError::UnknownRoutingAttribute(buffer.len() as u16));
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        return match self {
+            AddressBytes::IPv4(bytes) => format!("{}.{}.{}.{}", bytes[0], bytes[1], bytes[2], bytes[3]),
+            AddressBytes::IPv6(bytes) => {
+                let mut collecting = false;
+
+                let mut build = String::new();
+                for i in (0..bytes.len()).step_by(2) {
+                    let byte = ((bytes[i] as u32) << 8) | (bytes[i+1] as u32);
+                    if byte == 0 {
+                        collecting = true;
+                        continue;
+                    }
+                    else {
+                        if collecting {
+                            build.push_str("::");
+                            collecting = false;
+                        }
+                        else if i != 0 {
+                            build.push(':');
+                        }
+                        
+                        build.push_str(&format!("{:x}", byte));
+                    }
+                }
+
+                if collecting {
+                    build.push_str("::");
+                    collecting = false;
+                }
+
+                build
+            }
         }
     }
 }
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct CacheInfo {
-    preferred: u32,
-    valid: u32,
-    cstamp: u32,
-    tstamp: u32,
+    pub preferred: u32,
+    pub valid: u32,
+    pub cstamp: u32,
+    pub tstamp: u32,
 }
 
 impl Readable for CacheInfo {
@@ -127,15 +172,15 @@ impl Readable for CacheInfo {
 
 #[derive(Default, Debug, Clone)]
 pub struct AddressRoutingAttributes {
-    address: Option<AddressBytes>,
-    local: Option<AddressBytes>,
-    label: Option<String>,
-    broadcast: Option<AddressBytes>,
-    anycast: Option<AddressBytes>,
-    cache_info: Option<CacheInfo>,
-    muiticast: Option<AddressBytes>,
-    flags: Option<AddressFlags>,
-    unknowns: Vec<(u16, Vec<u8>)>,
+    pub address: Option<AddressBytes>,
+    pub local: Option<AddressBytes>,
+    pub label: Option<String>,
+    pub broadcast: Option<AddressBytes>,
+    pub anycast: Option<AddressBytes>,
+    pub cache_info: Option<CacheInfo>,
+    pub muiticast: Option<AddressBytes>,
+    pub flags: Option<AddressFlags>,
+    pub unknowns: Vec<(u16, Vec<u8>)>,
 }
 
 impl AddressRoutingAttributes {
@@ -174,12 +219,12 @@ impl AddressRoutingAttributes {
 
 #[derive(Clone, Debug)]
 pub struct Address {
-    addr_type: AddressType,
-    prefix_len: u8,
-    flags: AddressFlags,
-    scope: u8, // TODO: Make this an enum
-    interface_index: u32,
-    rtattrs: AddressRoutingAttributes,
+    pub addr_type: AddressType,
+    pub prefix_len: u8,
+    pub flags: AddressFlags,
+    pub scope: u8, // TODO: Make this an enum
+    pub interface_index: u32,
+    pub rtattrs: AddressRoutingAttributes,
 }
 
 impl Address {

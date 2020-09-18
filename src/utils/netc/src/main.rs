@@ -50,9 +50,33 @@ fn print_links(mut socket: NetLinkSocket) {
 
 fn print_addrs(mut socket: NetLinkSocket) {
     let addrs = socket.get_addrs().unwrap();
+    let mut table = Table::new(&[
+        "Interface",
+        "Family",
+        "Address",
+        "Local",
+        "Broadcast",
+        "Scope",
+        "Label",
+        "Valid",
+        "Preferred"
+    ]);
+
     for addr in addrs {
-        println!("{:?}", addr);
+        let interface_index = format!("{}", addr.interface_index);
+        let family = addr.addr_type.to_str().to_owned();
+        let address = addr.rtattrs.address.and_then(|x| Some(x.to_string())).unwrap_or(String::new());
+        let local = addr.rtattrs.local.and_then(|x| Some(x.to_string())).unwrap_or(String::new());
+        let broadcast = addr.rtattrs.broadcast.and_then(|x| Some(x.to_string())).unwrap_or(String::new());
+        let scope = format!("{}", addr.scope);
+        let label = addr.rtattrs.label.unwrap_or(String::new());
+        let valid = format!("{}", addr.rtattrs.cache_info.and_then(|x| Some(x.valid)).unwrap_or(0));
+        let preferred = format!("{}", addr.rtattrs.cache_info.and_then(|x| Some(x.preferred)).unwrap_or(0));
+
+        table.add_values(vec![interface_index, family, address, local, broadcast, scope, label, valid, preferred]).unwrap();
     }
+
+    println!("{}", table);
 }
 
 fn set_link_state(mut socket: NetLinkSocket, link_name: &str, state: bool) {
